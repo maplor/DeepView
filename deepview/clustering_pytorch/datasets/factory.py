@@ -1,0 +1,236 @@
+#
+# DeepLabCut Toolbox (deeplabcut.org)
+# © A. & M.W. Mathis Labs
+# https://github.com/DeepLabCut/DeepLabCut
+#
+# Please see AUTHORS for contributors.
+# https://github.com/DeepLabCut/DeepLabCut/blob/master/AUTHORS
+#
+# Adapted from DeeperCut by Eldar Insafutdinov
+# https://github.com/eldar/pose-tensorflow
+#
+# Licensed under GNU Lesser General Public License v3.0
+#
+
+
+import warnings
+import os
+import torch
+import numpy as np
+from torch.utils.data import Dataset, DataLoader
+import pickle
+import pandas as pd
+
+
+class DatasetFactory:
+    _datasets = dict()
+
+    @classmethod
+    def register(cls, type_):
+        def wrapper(dataset):
+            if type_ in cls._datasets:
+                warnings.warn("Overwriting existing dataset {}.")
+            cls._datasets[type_] = dataset
+            return dataset
+
+        return wrapper
+
+    @classmethod
+    def create(cls, cfg):
+        dataset_type = cfg["dataset_type"]
+        dataset = cls._datasets.get(dataset_type)
+        if dataset is None:
+            raise ValueError(f"Unsupported dataset of type {dataset_type}")
+        return dataset(cfg)
+
+
+# --------step1_SSL.py, by xia----------
+
+def sliding_window(data, len_sw):
+    # input is a segment of data
+    # output is data, timestamp, domain(filename), label
+    # sampling rate = 25Hz
+    # window size = 900, step = window size/2
+    # for umineko data, 目前只处理有标签的data，用slidewin取segment时，保证最后一块segment一定取到。
+    # 同时，以每个单独的标签（起止时间）为单位，不要把其他时间的不同label的segment混在一起。
+
+    # batch_size = 512
+    # len_sw = 90
+    step = int(len_sw / 2)
+
+    if isinstance(data, pd.DataFrame):
+        data1 = data.copy()
+        datanp = data1.values
+    else:
+        datanp = data.copy()
+
+    # generate batch of data by overlapping the training set
+    data_batch = []
+    for idx in range(0, datanp.shape[0] - len_sw - step, step): #step10
+        data_batch.append(datanp[idx: idx+len_sw, :])
+    data_batch.append(datanp[-1 - len_sw: -1, :])  # last batch
+    xlist = np.stack(data_batch, axis=0)  # [B, Len90, dim6]
+    # [samples, timestamps, labels] = xlist
+    # x_win_train = xlist.reshape((batch_size, xlist.shape[1], xlist.shape[-1]))  # [B, Len, dim]
+    # print(" ..after sliding window: train inputs {0}".format(xlist.shape))
+    return xlist
+
+
+def prep_dataset_umineko(data_path, data_path_new):
+    # ['logger_id', 'animal_tag', 'timestamp', 'acc_x', 'acc_y', 'acc_z',
+    #        'latitude', 'longitude', 'gyro_x', 'gyro_y', 'gyro_z', 'mag_x', 'mag_y',
+    #        'mag_z', 'illumination', 'pressure', 'temperature', 'labelid',
+    #        'velocity']
+    # sampling rate: look back to \seabird\export\masterLabelsByOtsuka\animal_id.csv
+
+    # root_path = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
+    # batch_data = 32  # args.batch_data
+    # num_channel = 3  # args.n
+
+    if not os.path.exists(data_path_new):
+        # the pickle file is a list of dataframes, each dataframe is a segment with a label
+        # datapath = os.path.join(data_path)
+        print('path to load pkl data: ' + data_path)
+        with open(data_path, 'rb') as f:
+            datalist = pickle.load(f)  # 2634 labeled segments (dataframe)
+
+        print('generating segment batch data...')
+        # sliding window length
+        len_sw = 90
+        data, timestamps, labels, domains, timestr = [], [], [], [], []
+        for d in [datalist]:
+            tmp = sliding_window(d[['acc_x', 'acc_y', 'acc_z', 'time', 'labelid', 'domainid', 'timestamp']], len_sw)  # temp:['acc_x', 'acc_y', 'acc_z', 'timestamp', 'labelid', 'domain']
+            if tmp.shape[1] != len_sw:
+                continue
+            data.append(tmp[:,:,:3])
+            timestamps.append(tmp[:,:,3:4])
+            labels.append(tmp[:,:,4:5])
+            domains.append(tmp[:,:,5:6])
+            # timestr.append(tmp[:,:,6:7])
+            # todo, 在这里增加数据column
+            # ...
+
+        with open(data_path_new, 'wb') as f:
+            pickle.dump([data, timestamps, labels, domains], f)
+
+    print('load segment batch data...')
+    with open(data_path_new, 'rb') as f:
+        [data, timestamps, labels, domains] = pickle.load(f)  # return list of batch(,,)
+        # print(timestamps.shape)  # acc+gyro (15961, 90, 1)
+    # set args.num_channel
+    # num_channel = data[0].shape[-1]
+    return data, timestamps, labels, domains
+
+def prep_dataset_umineko_single(data_path):
+
+    with open(data_path, 'rb') as f:
+        datalist = pickle.load(f)  # 2634 labeled segments (dataframe)
+
+    print('generating segment batch data...')
+    # sliding window length
+    len_sw = 90
+    data, timestamps, labels, domains, timestr = [], [], [], [], []
+    for d in [datalist]:
+        tmp = sliding_window(d[['acc_x', 'acc_y', 'acc_z', 'time', 'labelid', 'domainid']], len_sw)  # temp:['acc_x', 'acc_y', 'acc_z', 'timestamp', 'labelid', 'domain']
+        if tmp.shape[1] != len_sw:
+            continue
+        data.append(tmp[:,:,:3])
+        timestamps.append(tmp[:,:,3:4])
+        labels.append(tmp[:,:,4:5])
+        domains.append(tmp[:,:,5:6])
+        timestr.append(tmp[:,:,6:7])
+        # todo, 在这里增加数据column
+
+    return data, timestamps, labels, domains, timestr
+
+
+class base_loader(Dataset):
+    def __init__(self, samples, labels, domains, timestamps, timestr):
+        self.samples = torch.tensor(samples.astype(float))  # acceleration data [x,y,z]
+        # self.samples = torch.from_numpy(samples.astype(float))  # acceleration data [x,y,z]
+        # self.timestamps = timestamps  # timestamp of each sample
+        self.timestamps = torch.tensor(timestamps.astype(float))  # timestamp of each sample
+        self.labels = torch.tensor(labels.astype(int))  # activity label of the sensor segment
+        self.domains = torch.tensor(domains.astype(int))  # filename of the data belongs to
+        self.timestr = timestr  # filename of the data belongs to
+
+    def __getitem__(self, index):
+        sample, label, domain, timestamp = self.samples[index], self.labels[index], self.domains[index], self.timestamps[index]
+        timestr = self.timestr[index]
+        return sample, timestamp, label, domain, timestr
+
+    def __len__(self):
+        return len(self.samples)
+
+class data_loader_umineko(Dataset):
+    def __init__(self, samples, labels, domains, timestamps):
+        # super().__init__(samples, labels, domains, timestamps)
+        # super(data_loader_umineko, self).__init__(samples, labels, domains, timestamps)
+        # self.samples = torch.tensor(samples)
+        # self.labels = torch.tensor(labels)
+        # self.domains = torch.tensor(domains)
+        # self.timestamps = torch.tensor(timestamps)
+        self.samples = torch.tensor(torch.from_numpy(samples.astype(float)))
+        self.labels = torch.tensor(labels.astype(int))
+        self.domains = torch.tensor(domains.astype(int))
+        self.timestamps = torch.tensor(timestamps.astype(float))
+
+    def __getitem__(self, index):
+        sample, target, domain = self.samples[index], self.labels[index], self.domains[index]
+        timestamp = self.timestamps[index]
+        # timestr = self.timestr[index]
+        return sample, timestamp, target, domain
+
+    def __len__(self):
+        return len(self.samples)
+
+
+def generate_dataloader(data, target, domains, timestamps):
+    batch_size = 512
+    # dataloader
+    train_set_r = data_loader_umineko(data, target, domains, timestamps)
+    train_loader_r = DataLoader(train_set_r, batch_size=batch_size,
+                                shuffle=False, drop_last=False)
+    return train_loader_r
+
+
+def prepare_all_data(data_path, data_path_new):  # todo, 传args，以后改成从model_cfg.yaml中读取
+    '''
+    主要是训练集，需要全部数据做训练
+    :param data_path:
+    :param data_path_new:
+    :return:
+    '''
+    # if args.seabird_name == 'umineko':
+    data, timestamps, labels, domains = prep_dataset_umineko(data_path, data_path_new)  # return dict: key=filename, value=[data, timestamps, labels]
+
+    # concatenate list
+    # todo, 根据数据重新选择哪几个columns
+    data_b = np.concatenate(data, axis=0)  # [B, Len, dim]
+    timestamp_b = np.concatenate(timestamps, axis=0)  # [B, Len, dim]
+    # timestr_b = np.concatenate(timestr, axis=0)  # [B, Len, dim]
+    label_b = np.concatenate(labels, axis=0)  # [B, Len, dim]
+    domain_b = np.concatenate(domains, axis=0)  # [B, Len, dim]
+
+    # # Convert float timestamp to Timestamp, because timestrb cannot apply to dataloader
+    # ## remember this relationship to get timestr!!!
+    # timestamp1 = pd.Timestamp(timestamp_b[0,0,0], unit='us')
+    # groundtp1 = timestr_b[0,0,0]
+
+    # train_loader = generate_dataloader_overlap(data, labels, domains, timestamps)
+    train_loader = generate_dataloader(data_b, label_b, domain_b, timestamp_b)
+
+    return train_loader  # return train_loader
+    # return [train_loader]  # return train_loader list
+
+def prepare_single_data(data_path):
+    data, timestamps, labels, domains, timestr = prep_dataset_umineko_single(data_path)  # return dict: key=filename, value=[data, timestamps, labels]
+    data_b = np.concatenate(data, axis=0)  # [B, Len, dim]
+    timestamp_b = np.concatenate(timestamps, axis=0)  # [B, Len, dim]
+    label_b = np.concatenate(labels, axis=0)  # [B, Len, dim]
+    domain_b = np.concatenate(domains, axis=0)  # [B, Len, dim]
+
+    # train_loader = generate_dataloader_overlap(data, labels, domains, timestamps)
+    train_loader = generate_dataloader(data_b, label_b, domain_b, timestamp_b)
+
+    return train_loader  # return train_loader

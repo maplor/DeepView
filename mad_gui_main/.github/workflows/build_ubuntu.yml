@@ -1,0 +1,59 @@
+# This workflows will create a standalone executable for Ubuntu.
+
+name: Create Standalone (Ubuntu)
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.8'
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        python -m pip install --upgrade pip
+        pip install poetry
+        sudo apt-get autoclean
+        sudo apt-get install -y --no-install-recommends qtbase5-dev-tools xvfb libegl1-mesa x11-xserver-utils libxkbcommon-x11-0 x11-utils
+        sudo apt-get clean
+        sudo apt-get purge -y build-essential
+        sudo apt-get purge -y cmake
+        sudo apt-get install -y build-essential libgl1-mesa-dev
+        sudo apt-get install -y libxcb-xinerama0
+        sudo apt-get install -y libpulse-dev
+        sudo apt-get install -y tk
+        sudo apt-get install -y libqt5gstreamer-dev
+        sudo apt-get install -y libgssapi-krb5-2
+        sudo apt-get install -y libqt5multimedia5-plugins
+        sudo apt-get install -y libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-doc gstreamer1.0-tools gstreamer1.0-x gstreamer1.0-alsa gstreamer1.0-pulseaudio
+        sudo apt-get -y install git
+        sudo apt-get -y install libpulse-mainloop-glib0
+    - name: Create executable
+      run: |
+        python -m venv .venv
+        . .venv/bin/activate
+        python -m pip install --upgrade pip
+        pip install .
+        pip install pyinstaller doit pillow
+        doit prepare_build
+        pyinstaller pyinstaller.spec --onefile
+        ls dist
+        
+      
+    - uses: actions/upload-artifact@v2
+      with:
+        name: ubuntu_executable
+        path: /home/runner/work/mad-gui/mad-gui/dist/mad_gui
+        
+
+

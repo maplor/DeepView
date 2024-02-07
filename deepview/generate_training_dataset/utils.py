@@ -1,0 +1,25 @@
+
+label_str2num = {}
+label_str2num['stationary'] = 100
+label_str2num['ground_stationary'] = 100
+label_str2num['preening'] = 100
+label_str2num['ground_active'] = 200
+label_str2num['bathing'] = 300
+label_str2num['bathing_poss'] = 300
+label_str2num['flying_active'] = 400
+label_str2num['flying_passive'] = 400
+label_str2num['foraging_poss'] = 500
+label_str2num['poss_foraging'] = 500
+label_str2num['foraging_fish_poss'] = 600
+label_str2num['foraging_fish_poss'] = 600
+label_str2num['foraging_insect_poss'] = 700
+label_str2num['forgaing_insect'] = 700
+label_str2num['foraging_non'] = 700
+label_str2num['foraging_steal'] = 700
+label_str2num['body_shaking'] = 700
+label_str2num['unknown'] = 700
+label_str2num['nan'] = 0
+label_str_list = list(label_str2num.keys())
+GRAVITATIONAL_ACCELERATION = 9.80665
+date_format = '%Y-%m-%dT%H:%M:%S.%fZ'
+GYROSCOPE_SCALE = 10
