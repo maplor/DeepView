@@ -1,5 +1,5 @@
-from PySide6.QtWidgets import QApplication, QWidget, QHBoxLayout, QPushButton
-from PySide6.QtCore import QTimer, QRectF
+from PySide6.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QCheckBox
+from PySide6.QtCore import QTimer, QRectF, Qt
 import numpy as np
 import pandas as pd
 import pyqtgraph as pg
@@ -13,12 +13,22 @@ class PlotWithInteraction(QWidget):
     def __init__(self) -> None:
         super().__init__()
 
-        self.main_layout = QHBoxLayout()
+        self.main_layout = QVBoxLayout()
 
         self.setLayout(self.main_layout)
 
-        # 模拟计算时间
+        self.top_layout = QHBoxLayout()
+        self.bottom_layout = QHBoxLayout()
+
+        self.main_layout.addLayout(self.top_layout)
+        self.main_layout.addLayout(self.bottom_layout)
+
+        # TODO 模拟计算时间，完成正常逻辑后删除
         self.computeTimer = QTimer()
+
+        self.columnList = ['AAA', 'BBB', 'CCC']
+        self.columnCheckStateList = list(map(lambda _x: False, self.columnList))
+        self.selectColumn = []
 
         # 缓存框选区域
         self.selectRect = QRectF(0, 0, 1, 1)
@@ -26,8 +36,30 @@ class PlotWithInteraction(QWidget):
         # 缓存改变的点
         self.lastChange = []
 
+        self.createCheckBoxList()
+
         # 创建图形元素
         self.createPlot()
+
+    def createCheckBoxList(self):
+        self.checkboxList = []
+        for column in self.columnList:
+            cb = QCheckBox(column)
+            self.top_layout.addWidget(cb)
+            self.checkboxList.append(cb)
+            cb.stateChanged.connect(self.handleCheckBoxStateChange)
+
+        self.top_layout.addStretch()
+
+    def handleCheckBoxStateChange(self, state: Qt.CheckState):
+        # print([cb.isChecked() for cb in self.checkboxList])
+        # self.columnCheckStateList[index] = state == Qt.CheckState.Checked
+        newSelectColumn = []
+        for i, column in enumerate(self.columnList):
+            if self.checkboxList[i].isChecked():
+                newSelectColumn.append(column)
+        self.selectColumn = newSelectColumn
+        print('selectColumn: %s'%(newSelectColumn))
     
     def createPlot(self):
         # 左边的列
@@ -46,13 +78,13 @@ class PlotWithInteraction(QWidget):
         p3.setXLink(p1)
         p3.setYLink(p1)
 
-        self.main_layout.addWidget(viewL)
+        self.bottom_layout.addWidget(viewL)
 
         # 中间按钮
         btn = QPushButton('计算')
         btn.setFixedWidth(100)
         btn.clicked.connect(self.handleCompute)
-        self.main_layout.addWidget(btn)
+        self.bottom_layout.addWidget(btn)
         self.btn = btn
 
         # 右侧结果
@@ -95,7 +127,7 @@ class PlotWithInteraction(QWidget):
 
         self.handleROIChange(roi)
 
-        self.main_layout.addWidget(viewR)
+        self.bottom_layout.addWidget(viewR)
 
     def handleCompute(self):
         print('开始计算...')
