@@ -7,9 +7,6 @@ import pyqtgraph as pg
 np.random.seed(0)
 df = pd.DataFrame({'Col ' + str(i + 1): np.random.rand(30) for i in range(6)})  # 随机生成2组30以内的数
 
-rDataX = np.random.normal(size=100)
-rDataY = np.random.normal(size=100)
-
 clickedPen = pg.mkPen('b', width=2)
 
 class PlotWithInteraction(QWidget):
@@ -20,15 +17,17 @@ class PlotWithInteraction(QWidget):
 
         self.setLayout(self.main_layout)
 
-        self.createPlot()
-
         # 模拟计算时间
         self.computeTimer = QTimer()
 
         # 缓存框选区域
         self.selectRect = QRectF(0, 0, 1, 1)
 
+        # 缓存改变的点
         self.lastChange = []
+
+        # 创建图形元素
+        self.createPlot()
     
     def createPlot(self):
         # 左边的列
@@ -58,10 +57,9 @@ class PlotWithInteraction(QWidget):
 
         # 右侧结果
         viewR = pg.PlotWidget()
-        # self.plotR = viewR.plot(rDataX, rDataY, pen=None, symbolBrush=(255,255,255), symbol='o')
         self.viewR = viewR
 
-        n = 300
+        n = 100
         scatterItem = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
         pos = np.random.normal(size=(2,n), scale=100)
         spots = [{'pos': pos[:,i], 'data': i} for i in range(n)]
@@ -93,7 +91,9 @@ class PlotWithInteraction(QWidget):
 
         viewR.addItem(roi)
 
-        roi.sigRegionChangeFinished.connect(self.handleROIChange)
+        roi.sigRegionChanged.connect(self.handleROIChange)
+
+        self.handleROIChange(roi)
 
         self.main_layout.addWidget(viewR)
 
@@ -111,20 +111,18 @@ class PlotWithInteraction(QWidget):
         self.btn.setEnabled(True)
 
     def handleROIChange(self, roi: pg.ROI):
-        # region = roi.getArrayRegion(rData, self.plotR)
-        # region = roi.viewRect()
         pos: pg.Point = roi.pos()
         size: pg.Point = roi.size()
 
-
         self.selectRect.setRect(pos.x(), pos.y(), size.x(), size.y())
         points = self.scatterItem.pointsAt(self.selectRect)
-        print('pos: %s size: %s, points: %s'%(roi.pos(), roi.size(), [i.data() for i in points]))
-        # print(roi.size())
+        print('points: %s'%([i.data() for i in points]))
 
+        # 重置上次点的状态
         for p in self.lastChange:
             p.resetPen()
 
+        # 修改点状态，并记录点
         for p in points:
             p.setPen(clickedPen)
         self.lastChange = points
