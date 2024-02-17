@@ -13,6 +13,31 @@ class PlotWithInteraction(QWidget):
     def __init__(self) -> None:
         super().__init__()
 
+        # 初始化布局
+        self.initLayout()
+
+        # TODO 模拟计算时间，完成正常逻辑后删除
+        self.computeTimer = QTimer()
+
+        self.columnList = ['AAA', 'BBB', 'CCC']
+        # self.columnCheckStateList = list(map(lambda _x: False, self.columnList))
+        self.selectColumn = []
+
+        # 缓存框选区域
+        self.selectRect = QRectF(0, 0, 1, 1)
+
+        # 缓存改变的点
+        self.lastChange = []
+
+        # 创建顶部多选框
+        self.createCheckBoxList()
+
+        # 创建下方界面
+        self.createLeftPlot()
+        self.createCenterBtn()
+        self.createRightPlot()
+
+    def initLayout(self):
         self.main_layout = QVBoxLayout()
 
         self.setLayout(self.main_layout)
@@ -23,24 +48,12 @@ class PlotWithInteraction(QWidget):
         self.main_layout.addLayout(self.top_layout)
         self.main_layout.addLayout(self.bottom_layout)
 
-        # TODO 模拟计算时间，完成正常逻辑后删除
-        self.computeTimer = QTimer()
-
-        self.columnList = ['AAA', 'BBB', 'CCC']
-        self.columnCheckStateList = list(map(lambda _x: False, self.columnList))
-        self.selectColumn = []
-
-        # 缓存框选区域
-        self.selectRect = QRectF(0, 0, 1, 1)
-
-        # 缓存改变的点
-        self.lastChange = []
-
-        self.createCheckBoxList()
-
-        # 创建图形元素
-        self.createPlot()
-
+    '''
+    ==================================================
+    顶部多选框
+    self.checkboxList list(QCheckBox)
+    ==================================================
+    '''
     def createCheckBoxList(self):
         self.checkboxList = []
         for column in self.columnList:
@@ -49,6 +62,7 @@ class PlotWithInteraction(QWidget):
             self.checkboxList.append(cb)
             cb.stateChanged.connect(self.handleCheckBoxStateChange)
 
+        # 添加一个伸缩体，填满剩余区域，让选项居左
         self.top_layout.addStretch()
 
     def handleCheckBoxStateChange(self, state: Qt.CheckState):
@@ -60,34 +74,95 @@ class PlotWithInteraction(QWidget):
                 newSelectColumn.append(column)
         self.selectColumn = newSelectColumn
         print('selectColumn: %s'%(newSelectColumn))
+
+        self.renderLeftPlot()
     
-    def createPlot(self):
-        # 左边的列
+    '''
+    ==================================================
+    左侧图表区域
+    self.viewL GraphicsLayoutWidget
+    self.leftPlotList list(PlotItem)
+    ==================================================
+    '''
+    def createLeftPlot(self):
         viewL = pg.GraphicsLayoutWidget()
-        p2 = viewL.addPlot(row=1, col=0)
-        p3 = viewL.addPlot(row=2, col=0)
-        p1 = viewL.addPlot(row=0, col=0)
+        self.viewL = viewL
 
-        p1.plot(df['Col 1'], df['Col 2'], pen=None, symbol='o', symbolBrush=pg.mkBrush(255, 0, 0))
-        p2.plot(df['Col 3'], df['Col 4'], pen=None, symbol='o', symbolBrush=pg.mkBrush(0, 255, 0))
-        p3.plot(df['Col 5'], df['Col 6'], pen=None, symbol='o', symbolBrush=pg.mkBrush(0, 0, 255))
+        self.leftPlotList = []
+        for column in self.columnList:
+            plot = pg.PlotItem(title=column, name=column)
+            index = len(self.leftPlotList)
+            
+            plot.plot(df['Col ' + str(index * 2 + 1)], df['Col ' + str(index * 2 + 2)], symbol='o', pen=pg.mkPen(index))
+            # 可选 - 除了第一个plot，都 link 第一个 plot，让可视区域同步
+            # if index > 0:
+            #     plot.setXLink(self.leftPlotList[0])
+            #     plot.setYLink(self.leftPlotList[0])
+            self.leftPlotList.append(plot)
 
-        p2.setXLink(p1)
-        p2.setYLink(p1)
+        # p1 = viewL.addPlot(row=0, col=0)
+        # p2 = viewL.addPlot(row=1, col=0)
+        # p3 = viewL.addPlot(row=2, col=0)
 
-        p3.setXLink(p1)
-        p3.setYLink(p1)
+        # p1.plot(df['Col 1'], df['Col 2'], pen=None, symbol='o', symbolBrush=pg.mkBrush(255, 0, 0))
+        # p2.plot(df['Col 3'], df['Col 4'], pen=None, symbol='o', symbolBrush=pg.mkBrush(0, 255, 0))
+        # p3.plot(df['Col 5'], df['Col 6'], pen=None, symbol='o', symbolBrush=pg.mkBrush(0, 0, 255))
+
+        # p2.setXLink(p1)
+        # p2.setYLink(p1)
+
+        # p3.setXLink(p1)
+        # p3.setYLink(p1)
 
         self.bottom_layout.addWidget(viewL)
 
-        # 中间按钮
+    def renderLeftPlot(self):
+        # 清空已有 item
+        self.viewL.clear()
+
+        # hasFirstPlot = False
+        
+        for i in range(len(self.columnList)):
+            if self.checkboxList[i].isChecked():
+                self.viewL.addItem(self.leftPlotList[i])
+                self.viewL.nextRow()
+                # if not hasFirstPlot:
+                self.leftPlotList[i].autoRange()
+                # hasFirstPlot = True
+
+    '''
+    ==================================================
+    中间按钮
+    self.computeBtn QPushButton
+    ==================================================
+    '''
+    def createCenterBtn(self):
         btn = QPushButton('计算')
         btn.setFixedWidth(100)
         btn.clicked.connect(self.handleCompute)
         self.bottom_layout.addWidget(btn)
-        self.btn = btn
+        self.computeBtn = btn
 
-        # 右侧结果
+    def handleCompute(self):
+        print('开始计算...')
+        self.computeBtn.setText('计算中...')
+        self.computeBtn.setEnabled(False)
+
+        # 模拟计算时间
+        self.computeTimer.singleShot(1500, self.handleComputeFinish)
+
+    def handleComputeFinish(self):
+        print('计算完成')
+        self.computeBtn.setText('计算')
+        self.computeBtn.setEnabled(True)
+
+    '''
+    ==================================================
+    右侧结果
+    self.viewR PlotWidget
+    ==================================================
+    '''
+    def createRightPlot(self):
         viewR = pg.PlotWidget()
         self.viewR = viewR
 
@@ -99,7 +174,6 @@ class PlotWithInteraction(QWidget):
         self.scatterItem = scatterItem
 
         viewR.addItem(scatterItem)
-
 
         rect = viewR.viewRect()
         w = rect.width()
@@ -128,19 +202,6 @@ class PlotWithInteraction(QWidget):
         self.handleROIChange(roi)
 
         self.bottom_layout.addWidget(viewR)
-
-    def handleCompute(self):
-        print('开始计算...')
-        self.btn.setText('计算中...')
-        self.btn.setEnabled(False)
-
-        # 模拟计算时间
-        self.computeTimer.singleShot(1500, self.handleComputeFinish)
-
-    def handleComputeFinish(self):
-        print('计算完成')
-        self.btn.setText('计算')
-        self.btn.setEnabled(True)
 
     def handleROIChange(self, roi: pg.ROI):
         pos: pg.Point = roi.pos()
