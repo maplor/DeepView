@@ -29,6 +29,9 @@ class PlotWithInteraction(QWidget):
         # 缓存改变的点
         self.lastChange = []
 
+        # status
+        self.isTarining = False
+
         # 创建顶部多选框
         self.createCheckBoxList()
 
@@ -36,6 +39,9 @@ class PlotWithInteraction(QWidget):
         self.createLeftPlot()
         self.createCenterBtn()
         self.createRightPlot()
+
+        self.renderLeftPlot()
+        self.updateBtn()
 
     def initLayout(self):
         self.main_layout = QVBoxLayout()
@@ -65,9 +71,7 @@ class PlotWithInteraction(QWidget):
         # 添加一个伸缩体，填满剩余区域，让选项居左
         self.top_layout.addStretch()
 
-    def handleCheckBoxStateChange(self, state: Qt.CheckState):
-        # print([cb.isChecked() for cb in self.checkboxList])
-        # self.columnCheckStateList[index] = state == Qt.CheckState.Checked
+    def handleCheckBoxStateChange(self):
         newSelectColumn = []
         for i, column in enumerate(self.columnList):
             if self.checkboxList[i].isChecked():
@@ -76,6 +80,7 @@ class PlotWithInteraction(QWidget):
         print('selectColumn: %s'%(newSelectColumn))
 
         self.renderLeftPlot()
+        self.updateBtn()
     
     '''
     ==================================================
@@ -100,35 +105,21 @@ class PlotWithInteraction(QWidget):
             #     plot.setYLink(self.leftPlotList[0])
             self.leftPlotList.append(plot)
 
-        # p1 = viewL.addPlot(row=0, col=0)
-        # p2 = viewL.addPlot(row=1, col=0)
-        # p3 = viewL.addPlot(row=2, col=0)
-
-        # p1.plot(df['Col 1'], df['Col 2'], pen=None, symbol='o', symbolBrush=pg.mkBrush(255, 0, 0))
-        # p2.plot(df['Col 3'], df['Col 4'], pen=None, symbol='o', symbolBrush=pg.mkBrush(0, 255, 0))
-        # p3.plot(df['Col 5'], df['Col 6'], pen=None, symbol='o', symbolBrush=pg.mkBrush(0, 0, 255))
-
-        # p2.setXLink(p1)
-        # p2.setYLink(p1)
-
-        # p3.setXLink(p1)
-        # p3.setYLink(p1)
-
         self.bottom_layout.addWidget(viewL)
 
     def renderLeftPlot(self):
         # 清空已有 item
         self.viewL.clear()
 
-        # hasFirstPlot = False
-        
+        # 添加选中项对应图形
         for i in range(len(self.columnList)):
             if self.checkboxList[i].isChecked():
                 self.viewL.addItem(self.leftPlotList[i])
                 self.viewL.nextRow()
-                # if not hasFirstPlot:
                 self.leftPlotList[i].autoRange()
-                # hasFirstPlot = True
+
+        if len(self.selectColumn) == 0:
+            self.viewL.addLabel('Please select the column of interest above')
 
     '''
     ==================================================
@@ -137,24 +128,38 @@ class PlotWithInteraction(QWidget):
     ==================================================
     '''
     def createCenterBtn(self):
-        btn = QPushButton('计算')
+        btn = QPushButton('Train')
         btn.setFixedWidth(100)
+        btn.setEnabled(False)
         btn.clicked.connect(self.handleCompute)
         self.bottom_layout.addWidget(btn)
         self.computeBtn = btn
 
     def handleCompute(self):
-        print('开始计算...')
-        self.computeBtn.setText('计算中...')
-        self.computeBtn.setEnabled(False)
+        print('start train...')
+        self.isTarining = True
+        self.updateBtn()
 
         # 模拟计算时间
         self.computeTimer.singleShot(1500, self.handleComputeFinish)
 
     def handleComputeFinish(self):
-        print('计算完成')
-        self.computeBtn.setText('计算')
-        self.computeBtn.setEnabled(True)
+        print('finish train')
+        self.isTarining = False
+        self.updateBtn()
+
+    def updateBtn(self):
+        # enabled
+        if len(self.selectColumn) == 0 or self.isTarining:
+            self.computeBtn.setEnabled(False)
+        else:
+            self.computeBtn.setEnabled(True)
+        
+        # text
+        if self.isTarining:
+            self.computeBtn.setText('Training...')
+        else:
+            self.computeBtn.setText('Train')
 
     '''
     ==================================================
