@@ -139,6 +139,8 @@ class PlotWithInteraction(QWidget):
         self.isTarining = False
         self.updateBtn()
 
+        self.renderRightPlot()
+
     def updateBtn(self):
         # enabled
         if len(self.selectColumn) == 0 or self.isTarining:
@@ -165,6 +167,8 @@ class PlotWithInteraction(QWidget):
         self.viewR = viewR
         self.bottom_layout.addWidget(viewR)
 
+    def renderRightPlot(self):
+    
         n = 100
         scatterItem = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
         pos = np.random.normal(size=(2,n), scale=100)
@@ -172,9 +176,9 @@ class PlotWithInteraction(QWidget):
         scatterItem.addPoints(spots)
         self.scatterItem = scatterItem
 
-        viewR.addItem(scatterItem)
+        self.viewR.addItem(scatterItem)
 
-        rect = viewR.viewRect()
+        rect = self.viewR.viewRect()
         w = rect.width()
         h = rect.height()
         x = rect.x()
@@ -195,7 +199,7 @@ class PlotWithInteraction(QWidget):
         # 左上 - 旋转
         # roi.addRotateHandle([0, 1], [0.5, 0.5])
 
-        viewR.addItem(roi)
+        self.viewR.addItem(roi)
 
         # cache select region
         self.selectRect = QRectF(0, 0, 1, 1)
