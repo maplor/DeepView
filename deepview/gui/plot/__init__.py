@@ -13,29 +13,20 @@ class PlotWithInteraction(QWidget):
     def __init__(self) -> None:
         super().__init__()
 
-        # 初始化布局
+        # init main_layout & top_layout & bottom_layout
         self.initLayout()
 
-        # TODO 模拟计算时间，完成正常逻辑后删除
+        # TODO simulation training time, delete it after finish
         self.computeTimer = QTimer()
 
         self.columnList = ['AAA', 'BBB', 'CCC']
-        # self.columnCheckStateList = list(map(lambda _x: False, self.columnList))
         self.selectColumn = []
-
-        # 缓存框选区域
-        self.selectRect = QRectF(0, 0, 1, 1)
-
-        # 缓存改变的点
-        self.lastChange = []
 
         # status
         self.isTarining = False
 
-        # 创建顶部多选框
         self.createCheckBoxList()
 
-        # 创建下方界面
         self.createLeftPlot()
         self.createCenterBtn()
         self.createRightPlot()
@@ -56,8 +47,8 @@ class PlotWithInteraction(QWidget):
 
     '''
     ==================================================
-    顶部多选框
-    self.checkboxList list(QCheckBox)
+    top area checkbox: list
+    - self.checkboxList list(QCheckBox)
     ==================================================
     '''
     def createCheckBoxList(self):
@@ -68,7 +59,7 @@ class PlotWithInteraction(QWidget):
             self.checkboxList.append(cb)
             cb.stateChanged.connect(self.handleCheckBoxStateChange)
 
-        # 添加一个伸缩体，填满剩余区域，让选项居左
+        # add a stretch to fill the remaining area and keep the checkbox on the left
         self.top_layout.addStretch()
 
     def handleCheckBoxStateChange(self):
@@ -84,14 +75,15 @@ class PlotWithInteraction(QWidget):
     
     '''
     ==================================================
-    左侧图表区域
-    self.viewL GraphicsLayoutWidget
-    self.leftPlotList list(PlotItem)
+    bottom left area: plot
+    - self.viewL GraphicsLayoutWidget
+    - self.leftPlotList list(PlotItem)
     ==================================================
     '''
     def createLeftPlot(self):
         viewL = pg.GraphicsLayoutWidget()
         self.viewL = viewL
+        self.bottom_layout.addWidget(viewL)
 
         self.leftPlotList = []
         for column in self.columnList:
@@ -99,32 +91,31 @@ class PlotWithInteraction(QWidget):
             index = len(self.leftPlotList)
             
             plot.plot(df['Col ' + str(index * 2 + 1)], df['Col ' + str(index * 2 + 2)], symbol='o', pen=pg.mkPen(index))
-            # 可选 - 除了第一个plot，都 link 第一个 plot，让可视区域同步
+            # optional - link plot viewbox range
             # if index > 0:
             #     plot.setXLink(self.leftPlotList[0])
             #     plot.setYLink(self.leftPlotList[0])
             self.leftPlotList.append(plot)
 
-        self.bottom_layout.addWidget(viewL)
-
     def renderLeftPlot(self):
-        # 清空已有 item
+        # clear all items
         self.viewL.clear()
 
-        # 添加选中项对应图形
+        # add plot item according to select column
         for i in range(len(self.columnList)):
             if self.checkboxList[i].isChecked():
                 self.viewL.addItem(self.leftPlotList[i])
                 self.viewL.nextRow()
                 self.leftPlotList[i].autoRange()
 
+        # placeholder
         if len(self.selectColumn) == 0:
             self.viewL.addLabel('Please select the column of interest above')
 
     '''
     ==================================================
-    中间按钮
-    self.computeBtn QPushButton
+    bottom center area: button
+    - self.computeBtn QPushButton
     ==================================================
     '''
     def createCenterBtn(self):
@@ -140,7 +131,7 @@ class PlotWithInteraction(QWidget):
         self.isTarining = True
         self.updateBtn()
 
-        # 模拟计算时间
+        # simulation training time
         self.computeTimer.singleShot(1500, self.handleComputeFinish)
 
     def handleComputeFinish(self):
@@ -163,13 +154,16 @@ class PlotWithInteraction(QWidget):
 
     '''
     ==================================================
-    右侧结果
-    self.viewR PlotWidget
+    bottom right area: result plot
+    - self.viewR PlotWidget
+    - self.selectRect QRect
+    - self.lastChange list(SpotItem)
     ==================================================
     '''
     def createRightPlot(self):
         viewR = pg.PlotWidget()
         self.viewR = viewR
+        self.bottom_layout.addWidget(viewR)
 
         n = 100
         scatterItem = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
@@ -186,6 +180,7 @@ class PlotWithInteraction(QWidget):
         x = rect.x()
         y = rect.y()
 
+        # create ROI
         roi = pg.ROI([x + w * 0.4, y + h * 0.4], [w * 0.2, h * 0.2])
         # 上
         roi.addScaleHandle([0.5, 1], [0.5, 0])
@@ -202,11 +197,14 @@ class PlotWithInteraction(QWidget):
 
         viewR.addItem(roi)
 
+        # cache select region
+        self.selectRect = QRectF(0, 0, 1, 1)
+
+        # cache highlight point
+        self.lastChange = []
+
         roi.sigRegionChanged.connect(self.handleROIChange)
-
         self.handleROIChange(roi)
-
-        self.bottom_layout.addWidget(viewR)
 
     def handleROIChange(self, roi: pg.ROI):
         pos: pg.Point = roi.pos()
@@ -216,11 +214,11 @@ class PlotWithInteraction(QWidget):
         points = self.scatterItem.pointsAt(self.selectRect)
         print('points: %s'%([i.data() for i in points]))
 
-        # 重置上次点的状态
+        # reset last change points
         for p in self.lastChange:
             p.resetPen()
 
-        # 修改点状态，并记录点
+        # change point state and cache
         for p in points:
             p.setPen(clickedPen)
         self.lastChange = points
