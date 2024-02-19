@@ -19,7 +19,6 @@ from deepview.gui import components
 from deepview.gui.tabs import ProjectCreator
 from deepview.gui import BASE_DIR
 
-
 # import deeplabcut
 from deepview import auxiliaryfunctions
 # from deeplabcut import VERSION
@@ -33,7 +32,7 @@ from deepview.gui.tabs.open_project import OpenProject
 from deepview.gui.tabs.train_network import TrainNetwork
 from deepview.gui.tabs.evaluate_network import EvaluateNetwork
 from deepview.gui.tabs.label_data import LabelData
-
+from deepview.gui.tabs.interaction_plot import InteractionPlot
 
 
 class MainWindow(QMainWindow):
@@ -511,6 +510,11 @@ class MainWindow(QMainWindow):
             parent=None,
             h1_description="Step 4. Label Data",
         )
+        self.interaction_plot = InteractionPlot(
+            root=self,
+            parent=None,
+            h1_description="Step 5. Interaction Plot",
+        )
         # self.analyze_videos = AnalyzeVideos(
         #     root=self, parent=None, h1_description="DeepLabCut - Analyze Videos"
         # )
@@ -546,6 +550,7 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(self.train_network, "Train network")
         self.tab_widget.addTab(self.evaluate_network, "Evaluate network")
         self.tab_widget.addTab(self.mad_gui, "Label data")
+        self.tab_widget.addTab(self.interaction_plot, "Interaction plot")
         # self.tab_widget.addTab(self.analyze_videos, "Analyze videos")
         # self.tab_widget.addTab(
         #     self.unsupervised_id_tracking, "Unsupervised ID Tracking (*)"
