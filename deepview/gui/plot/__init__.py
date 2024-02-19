@@ -1,16 +1,14 @@
+import math
 from PySide6.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QCheckBox
 from PySide6.QtCore import QTimer, QRectF, Qt
 import numpy as np
 import pandas as pd
 import pyqtgraph as pg
 
-np.random.seed(0)
-df = pd.DataFrame({'Col ' + str(i + 1): np.random.rand(30) for i in range(6)})  # 随机生成2组30以内的数
-
 clickedPen = pg.mkPen('b', width=2)
 
 class PlotWithInteraction(QWidget):
-    def __init__(self) -> None:
+    def __init__(self, data: pd.DataFrame) -> None:
         super().__init__()
 
         # init main_layout & top_layout & bottom_layout
@@ -19,8 +17,11 @@ class PlotWithInteraction(QWidget):
         # TODO simulation training time, delete it after finish
         self.computeTimer = QTimer()
 
-        self.columnList = ['AAA', 'BBB', 'CCC']
+        # TODO remove hardcode column name, read from data
+        self.columnList = ['acc_x', 'acc_y', 'acc_z', 'gyro_x', 'gyro_y', 'gyro_z', 'mag_x', 'mag_y', 'mag_z']
         self.selectColumn = []
+
+        self.data = data
 
         # status
         self.isTarining = False
@@ -85,12 +86,15 @@ class PlotWithInteraction(QWidget):
         self.viewL = viewL
         self.bottom_layout.addWidget(viewL)
 
+        df = self.data
+
         self.leftPlotList = []
         for column in self.columnList:
-            plot = pg.PlotItem(title=column, name=column)
+            plot = pg.PlotItem(title=column, name=column, axisItems = {'bottom': pg.DateAxisItem()})
             index = len(self.leftPlotList)
             
-            plot.plot(df['Col ' + str(index * 2 + 1)], df['Col ' + str(index * 2 + 2)], symbol='o', pen=pg.mkPen(index))
+            plot.plot(df['datetime'], df[column], pen=pg.mkPen(index))
+
             # optional - link plot viewbox range
             # if index > 0:
             #     plot.setXLink(self.leftPlotList[0])
@@ -159,7 +163,8 @@ class PlotWithInteraction(QWidget):
     bottom right area: result plot
     - self.viewR PlotWidget
     - self.selectRect QRect
-    - self.lastChange list(SpotItem)
+    - self.lastChangePoint list(SpotItem)
+    - self.lastMarkList list(LinearRegionItem)
     ==================================================
     '''
     def createRightPlot(self):
@@ -169,10 +174,17 @@ class PlotWithInteraction(QWidget):
 
     def renderRightPlot(self):
     
+        df = self.data
+
+        rows = df.shape[0]
+        
+        # mock scatter number
         n = 100
+        step = math.floor(rows / n)
         scatterItem = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
         pos = np.random.normal(size=(2,n), scale=100)
-        spots = [{'pos': pos[:,i], 'data': i} for i in range(n)]
+        # save something into data attribute
+        spots = [{'pos': pos[:,i], 'data': (i, i * step, i * step + step - 1)} for i in range(n)]
         scatterItem.addPoints(spots)
         self.scatterItem = scatterItem
 
@@ -185,7 +197,7 @@ class PlotWithInteraction(QWidget):
         y = rect.y()
 
         # create ROI
-        roi = pg.ROI([x + w * 0.4, y + h * 0.4], [w * 0.2, h * 0.2])
+        roi = pg.ROI([x + w * 0.45, y + h * 0.45], [w * 0.1, h * 0.1])
         # 上
         roi.addScaleHandle([0.5, 1], [0.5, 0])
         # 右
@@ -205,30 +217,91 @@ class PlotWithInteraction(QWidget):
         self.selectRect = QRectF(0, 0, 1, 1)
 
         # cache highlight point
-        self.lastChange = []
+        self.lastChangePoint = []
+
+        # cache plot mark
+        self.lastMarkList = []
 
         roi.sigRegionChanged.connect(self.handleROIChange)
+        roi.sigRegionChangeFinished.connect(self.handleROIChangeFinished)
         self.handleROIChange(roi)
+        self.handleROIChangeFinished(roi)
 
+    # highlight select point
     def handleROIChange(self, roi: pg.ROI):
         pos: pg.Point = roi.pos()
         size: pg.Point = roi.size()
 
         self.selectRect.setRect(pos.x(), pos.y(), size.x(), size.y())
         points = self.scatterItem.pointsAt(self.selectRect)
-        print('points: %s'%([i.data() for i in points]))
+        # print('points: %s'%([i.data() for i in points]))
 
         # reset last change points
-        for p in self.lastChange:
+        for p in self.lastChangePoint:
             p.resetPen()
 
         # change point state and cache
         for p in points:
             p.setPen(clickedPen)
-        self.lastChange = points
+        self.lastChangePoint = points
+
+    # add mark to plot, use sigRegionChangeFinished to reduce render
+    def handleROIChangeFinished(self, roi: pg.ROI):
+        pos: pg.Point = roi.pos()
+        size: pg.Point = roi.size()
+
+        self.selectRect.setRect(pos.x(), pos.y(), size.x(), size.y())
+        points = self.scatterItem.pointsAt(self.selectRect)
+        print('roi select points data: %s'%([i.data() for i in points]))
+
+        # remove last marks, removeItem() will ignore item not add
+        for mark in self.lastMarkList:
+            for p in self.leftPlotList:
+                p.removeItem(mark)
+
+        df = self.data
+
+        markList = []
+        # change point state and cache
+        for p in points:
+            # get data attribute
+            index, start, end = p.data()
+
+            # loop all plot and create mark
+            # TODO only create mark for select column
+            for p in self.leftPlotList:
+                # highlight region
+                lr = pg.LinearRegionItem(values=[df['datetime'][start], df['datetime'][end]], movable=False)
+                # label
+                pg.InfLineLabel(lr.lines[1], str(index), position=0.95, rotateAxis=(1,0), anchor=(1, 1))
+                # add and cache
+                markList.append(lr)
+                p.addItem(lr)
+
+        self.lastMarkList = markList
+
 
 if __name__ == '__main__':
     app = QApplication([])
-    window = PlotWithInteraction()
+
+    df = pd.DataFrame({
+        'datetime': pd.date_range(start='1/1/2022', periods=10000),
+        'acc_x': np.random.rand(10000),
+        'acc_y': np.random.rand(10000),
+        'acc_z': np.random.rand(10000),
+        'gyro_x': np.random.rand(10000),
+        'gyro_y': np.random.rand(10000),
+        'gyro_z': np.random.rand(10000),
+        'mag_x': np.random.rand(10000),
+        'mag_y': np.random.rand(10000),
+        'mag_z': np.random.rand(10000)
+    })
+
+    df['datetime'] = df['datetime'].apply(lambda x: x.timestamp())
+    
+    # df2 = pd.read_csv('/Users/zyz/Git/DeepView/Umineko2018_small_data_LB07_lb0001.csv')
+    # df2['datetime'] = pd.to_datetime(df2['timestamp']).apply(lambda x: x.timestamp())
+    
+    window = PlotWithInteraction(df)
     window.show()
     app.exec()        
