@@ -357,7 +357,8 @@ class LabelWithInteractivePlot(QWidget):
 
     # highlight select point
     def handleROIChange(self, roi: pg.ROI):
-        # when selected area changed, trigger this func
+        # when selected rectangle area changed, trigger this func
+        # when the mouse is changing the rectangle, use this func until the mouse stopped
         pos: pg.Point = roi.pos()
         size: pg.Point = roi.size()
 
@@ -376,6 +377,7 @@ class LabelWithInteractivePlot(QWidget):
 
     # add mark to plot, use sigRegionChangeFinished to reduce render
     def handleROIChangeFinished(self, roi: pg.ROI):
+        # when the mouse stopped, use this func to calculate point positions
         pos: pg.Point = roi.pos()
         size: pg.Point = roi.size()
 
@@ -417,16 +419,18 @@ class LabelWithInteractivePlot(QWidget):
     
     def createLabelComboBox(self):
         labelComboBox = QComboBox()
-        self.currentLabel = "flying"
+
         labelComboBox.addItem("flying")
         labelComboBox.addItem("stationary")
         labelComboBox.addItem("foraging")
+        self.labelComboBox = labelComboBox
         labelComboBox.currentIndexChanged.connect(self.handleLabelComboBoxChange)
+        # add this button to the table
         self.settingPannel.addWidget(labelComboBox)
     
     def handleLabelComboBoxChange(self):
-        print(self.currentLabel)
-        # self.currentLabel = self.labelComboBox.currentText()
+        # when QComboBox changed, trigger this func
+        print("Labeled the data to label: "+self.labelComboBox.currentText())
 
     
     def createModelComboBox(self):
@@ -518,6 +522,7 @@ class LabelWithInteractivePlot(QWidget):
         self.data['datetime'] = pd.to_datetime(self.data['timestamp']).apply(lambda x: x.timestamp())
     
     def createLabelButton(self):
+        # create the "Label" button
         labelButton = QPushButton('Label')
         labelButton.clicked.connect(self.handleLabelButton)
         self.settingPannel.addWidget(labelButton)
@@ -526,7 +531,8 @@ class LabelWithInteractivePlot(QWidget):
         points = self.scatterItem.pointsAt(self.selectRect)
         for p in points:
             index, start, end = p.data()
-            self.data.loc[start:end,"label"] = self.currentLabel
+            self.data.loc[start:end,"label"] = self.labelComboBox.currentText()
+        # update the scatter points color
         self.updateRightPlotColor()
 
 if __name__ == '__main__':
