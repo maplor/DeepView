@@ -17,7 +17,7 @@ class LabelWithInteractivePlot(QWidget):
         # init main_layout & top_layout & bottom_layout
         self.initLayout()
 
-        # TODO simulation training time, delete it after finish
+        # TODO simulation training time, delete it after finishing
         self.computeTimer = QTimer()
 
         # TODO remove hardcode column name, read from data
@@ -152,7 +152,7 @@ class LabelWithInteractivePlot(QWidget):
         self.isTarining = True
         self.updateBtn()
 
-        # simulation training time
+        # TODO: simulation training time
         self.computeTimer.singleShot(1500, self.handleComputeFinish)
 
     def handleComputeFinish(self):
@@ -227,13 +227,14 @@ class LabelWithInteractivePlot(QWidget):
 
         # save something into data attribute
         spots = [{'pos': pos[i,:], 'data': (i, start_indice[i], end_indice[i]), 'brush': self.checkColor(self.data.loc[i*step,'label'])} for i in range(n)]
-        
+
+        # plot spots on the scatter figure
         scatterItem.addPoints(spots)
         self.scatterItem = scatterItem
 
         self.viewC.addItem(scatterItem)
 
-        rect = self.viewC.viewCect()
+        rect = self.viewC.viewRect()
         w = rect.width()
         h = rect.height()
         x = rect.x()
@@ -355,6 +356,7 @@ class LabelWithInteractivePlot(QWidget):
 
     # highlight select point
     def handleROIChange(self, roi: pg.ROI):
+        # when selected area changed, trigger this func
         pos: pg.Point = roi.pos()
         size: pg.Point = roi.size()
 
@@ -422,7 +424,9 @@ class LabelWithInteractivePlot(QWidget):
         self.settingPannel.addWidget(labelComboBox)
     
     def handleLabelComboBoxChange(self):
-        self.currentLabel = self.comboBox.currentText()
+        print(self.currentLabel)
+        # self.currentLabel = self.labelComboBox.currentText()
+
     
     def createModelComboBox(self):
         modelComboBoxLabel = QLabel('Select model:')
@@ -451,8 +455,8 @@ class LabelWithInteractivePlot(QWidget):
         self.settingPannel.addWidget(saveButton)
 
     def handleSaveButton(self):
-        os.makedirs(os.path.join(self.cfg["project_path"],"edit-data",), exist_ok=True)
-        edit_data_path = os.path.join(self.cfg["project_path"],"edit-data", self.RawDatacomboBox.currentText())
+        os.makedirs(os.path.join(self.cfg["project_path"], "edit-data",), exist_ok=True)
+        edit_data_path = os.path.join(self.cfg["project_path"], "edit-data", self.RawDatacomboBox.currentText())
         self.data.to_csv(edit_data_path)
     
     def createMaxColumnSpinBox(self):
