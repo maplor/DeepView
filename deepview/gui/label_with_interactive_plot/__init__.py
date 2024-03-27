@@ -80,7 +80,8 @@ class LabelWithInteractivePlot(QWidget):
         self.updateLeftPlotList()
         self.renderLeftPlot()
         self.updateBtn()
-    
+
+
     '''
     ==================================================
     bottom left area: plot
