@@ -54,11 +54,12 @@ class InteractivePlot(QMainWindow):
         self.resize(800, 600)
 
         # 创建图形窗口
-        self.plot_widget = pg.PlotWidget()
+        self.plot_widget = pg.PlotWidget(axisItems={'bottom': pg.DateAxisItem()})
         self.setCentralWidget(self.plot_widget)
 
         # 读取CSV文件中的数据
-        self.data = pd.read_csv("./mad_gui_main/example_data/sensor_data.csv")
+        self.data = pd.read_csv("Umineko2018_small_data_LB07_lb0001.csv")
+        self.data['datetime'] = pd.to_datetime(self.data['timestamp']).apply(lambda x: x.timestamp())
         self.plot_data()
 
         self.add_buttons()
@@ -88,7 +89,7 @@ class InteractivePlot(QMainWindow):
 
     def plot_data(self):
         # 将数据拆分为时间戳和值
-        timestamps = self.data['sample']
+        timestamps = self.data['datetime']
         values = self.data['acc_x']
 
         # 绘制数据
@@ -97,6 +98,11 @@ class InteractivePlot(QMainWindow):
         # 添加交互功能
         self.plot_widget.scene().sigMouseClicked.connect(self.mouse_clicked)
         self.plot_widget.scene().sigMouseMoved.connect(self.mouse_moved)
+
+    def _to_idx(self, start_ts, end_ts):
+        selected_indices = self.data[(self.data['datetime'] >= start_ts)
+                                     & (self.data['datetime'] <= end_ts)].index
+        return selected_indices.values[0], selected_indices.values[-1]
 
     def _add_region(self, pos):
         if self.click_begin:    # 记录开始位置
@@ -118,14 +124,17 @@ class InteractivePlot(QMainWindow):
             self.plot_widget.addItem(region)
             self.regions.append(region)
 
-            print(f'Selected range: from index {int(region.getRegion()[0])} to index {int(region.getRegion()[1])}')
+            start_idx, end_idx = self._to_idx(int(region.getRegion()[0]), int(region.getRegion()[1]))
+            print(f'Selected range: from index {start_idx} to index {end_idx}')
 
     def _del_region(self, pos):
         for item in self.regions:
             if item.getRegion()[0] < pos.x() and item.getRegion()[1] > pos.x():
                 self.plot_widget.removeItem(item)
                 self.regions.remove(item)
-                print(f'Delete region({int(item.getRegion()[0])}, {int(item.getRegion()[1])})')
+
+                start_idx, end_idx = self._to_idx(int(item.getRegion()[0]), int(item.getRegion()[1]))
+                print(f'Delete region({start_idx}, {int(end_idx)})')
                 break
 
     def _edit_region(self, pos):
@@ -138,8 +147,10 @@ class InteractivePlot(QMainWindow):
                         item.setBrush(QColor(255, 0, 0, 100))
                     elif selected_option == 'stand':
                         item.setBrush(QColor(0, 255, 0, 100))
-                    print(f'Edit region({int(item.getRegion()[0])}, {int(item.getRegion()[1])}) label: {selected_option}')
-                break
+
+                    start_idx, end_idx = self._to_idx(int(item.getRegion()[0]), int(item.getRegion()[1]))
+                    print(f'Edit region({start_idx}, {end_idx}) label: {selected_option}')
+                    break
 
     def mouse_clicked(self, event):
         if event.button() == Qt.LeftButton:
