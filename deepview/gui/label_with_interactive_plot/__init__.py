@@ -37,7 +37,7 @@ class LabelWithInteractivePlot(QWidget):
         self.createLeftPlot()
         self.createCenterPlot()
         self.createRightSettingPannel()
-        
+
         self.updateBtn()
 
     def initLayout(self):
@@ -96,7 +96,7 @@ class LabelWithInteractivePlot(QWidget):
 
         self.updateLeftPlotList()
         self.renderLeftPlot()
-    
+
     def updateLeftPlotList(self):
         df = self.data
 
@@ -140,14 +140,14 @@ class LabelWithInteractivePlot(QWidget):
                 if index >= len(self.leftPlotList):
                     return
             self.viewL.nextRow()
-            
+
     '''
     ==================================================
     bottom center area: button
     - self.computeBtn QPushButton
     ==================================================
     '''
-    
+
     def handleCompute(self):
         print('start train...')
         self.isTarining = True
@@ -160,7 +160,7 @@ class LabelWithInteractivePlot(QWidget):
         #print('finish train')
         self.isTarining = False
         self.updateBtn()
-        
+
         self.renderRightPlot()
 
     def updateBtn(self):
@@ -169,7 +169,7 @@ class LabelWithInteractivePlot(QWidget):
             self.computeBtn.setEnabled(False)
         else:
             self.computeBtn.setEnabled(True)
-        
+
         # text
         if self.isTarining:
             self.computeBtn.setText('Extracting feature...')
@@ -189,7 +189,7 @@ class LabelWithInteractivePlot(QWidget):
         viewC = pg.PlotWidget()
         self.viewC = viewC
         self.bottom_layout.addWidget(viewC)
-    
+
     def checkColor(self, label):
         if label == 'flying':
             return pg.mkBrush(0, 0, 255, 120)
@@ -199,28 +199,28 @@ class LabelWithInteractivePlot(QWidget):
             return pg.mkBrush(0, 255, 0, 120)
         else:
             return pg.mkBrush(255, 255, 255, 120)
-        
+
     def updateRightPlotColor(self):
         new_spots = []
         for spot in self.scatterItem.points():
             pos = spot.pos()
             i, start, end = spot.data()
             new_color = self.checkColor(self.data.loc[start, 'label'])
-            new_spot = {'pos': (pos.x(), pos.y()), 'data': (i, start, end), 
+            new_spot = {'pos': (pos.x(), pos.y()), 'data': (i, start, end),
                         'brush': pg.mkBrush(new_color)}
             new_spots.append(new_spot)
         self.scatterItem.setData(spots=new_spots)
-    
+
     def renderRightPlot(self):
         self.viewC.clear()
         df = self.data
 
         rows = df.shape[0]
-        
+
         # mock scatter number
         n = 100
         step = math.floor(rows / n)
-        
+
         scatterItem = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None))
         pos = np.random.normal(size=(2,n), scale=100)
 
@@ -271,11 +271,11 @@ class LabelWithInteractivePlot(QWidget):
         roi.sigRegionChangeFinished.connect(self.handleROIChangeFinished)
         self.handleROIChange(roi)
         self.handleROIChangeFinished(roi)
-    
+
     def clearSelection(self):
         self.selectPoints = []
         self.selectRect = None
-    
+
     def clearPlot(self):
         self.viewL.clear()
         self.viewC.clear()
@@ -295,10 +295,10 @@ class LabelWithInteractivePlot(QWidget):
                 selected_dfs.append(selected_range)
                 start_indice.append(start_idx)
                 end_indice.append(end_idx)
-        
+
         return start_indice, end_indice, selected_dfs
 
-    
+
     def featureExtraction(self):
         # TODO: Implement feature extraction function. Currently, the model output results in a NAN error, so random values are being used.
 
@@ -309,9 +309,9 @@ class LabelWithInteractivePlot(QWidget):
         sensor_columns=['acc_x', 'acc_y', 'acc_z']
 
         input = [df[sensor_columns].to_numpy() for df in selected_dfs]
-    
+
         input = np.array(input)
-        
+
         input = torch.from_numpy(input).double()
 
         modelfoldername = auxiliaryfunctions.get_model_folder(self.cfg)
@@ -344,7 +344,7 @@ class LabelWithInteractivePlot(QWidget):
         model.double()
         output, _ = model(input)
 
-        output = output.detach().numpy().reshape(output.shape[0], -1) 
+        output = output.detach().numpy().reshape(output.shape[0], -1)
 
         pca = PCA(n_components=2)
         pos = pca.fit_transform(output)
@@ -404,7 +404,7 @@ class LabelWithInteractivePlot(QWidget):
         self.bottom_layout.addLayout(self.settingPannel)
 
         self.settingPannel.setAlignment(Qt.AlignTop)
-        
+
         self.createRawDataComboBox()
 
         self.createModelComboBox()
@@ -416,7 +416,7 @@ class LabelWithInteractivePlot(QWidget):
         self.createSaveButton()
         self.createMaxColumnSpinBox()
         self.createMaxRowSpinBox()
-    
+
     def createLabelComboBox(self):
         labelComboBox = QComboBox()
 
@@ -427,12 +427,12 @@ class LabelWithInteractivePlot(QWidget):
         labelComboBox.currentIndexChanged.connect(self.handleLabelComboBoxChange)
         # add this button to the table
         self.settingPannel.addWidget(labelComboBox)
-    
+
     def handleLabelComboBoxChange(self):
         # when QComboBox changed, trigger this func
         print("Labeled the data to label: "+self.labelComboBox.currentText())
 
-    
+
     def createModelComboBox(self):
         modelComboBoxLabel = QLabel('Select model:')
         self.settingPannel.addWidget(modelComboBoxLabel)
@@ -442,7 +442,7 @@ class LabelWithInteractivePlot(QWidget):
         modelComboBox.addItem("model 3")
         modelComboBox.currentIndexChanged.connect(self.handleModelComboBoxChange)
         self.settingPannel.addWidget(modelComboBox)
-    
+
     def createFeatureExtractButton(self):
         computeBtn = QPushButton('Extract feature')
         self.computeBtn = computeBtn
@@ -453,7 +453,7 @@ class LabelWithInteractivePlot(QWidget):
 
     def handleModelComboBoxChange(self):
         print('ModelComboBox changed')
-    
+
     def createSaveButton(self):
         saveButton = QPushButton('Save')
         saveButton.clicked.connect(self.handleSaveButton)
@@ -463,7 +463,7 @@ class LabelWithInteractivePlot(QWidget):
         os.makedirs(os.path.join(self.cfg["project_path"], "edit-data",), exist_ok=True)
         edit_data_path = os.path.join(self.cfg["project_path"], "edit-data", self.RawDatacomboBox.currentText())
         self.data.to_csv(edit_data_path)
-    
+
     def createMaxColumnSpinBox(self):
         maxColumnSpinBox = QSpinBox(self)
         maxColumnSpinBox.setMinimum(1)  # minimum value
@@ -472,7 +472,7 @@ class LabelWithInteractivePlot(QWidget):
         maxColumnSpinBox.valueChanged.connect(self.maxColumnSpinBoxChange)
         self.settingPannel.addWidget(QLabel('Maximam column of left view'))
         self.settingPannel.addWidget(maxColumnSpinBox)
-    
+
     def maxColumnSpinBoxChange(self):
         self.maxColumn = self.maxColumnSpinBox.value()
         self.renderLeftPlot()
@@ -486,10 +486,10 @@ class LabelWithInteractivePlot(QWidget):
         self.settingPannel.addWidget(QLabel('Maximam row of left view'))
         self.settingPannel.addWidget(maxRowSpinBox)
 
-    def maxRowSpinBoxChange(self): 
+    def maxRowSpinBoxChange(self):
         self.maxRow = self.maxRowSpinBox.value()
         self.renderLeftPlot()
-    
+
     def createRawDataComboBox(self):
         RawDataComboBoxLabel = QLabel('Select raw data:')
         self.settingPannel.addWidget(RawDataComboBoxLabel)
@@ -506,10 +506,10 @@ class LabelWithInteractivePlot(QWidget):
         self.updateRawData()
         self.clearPlot()
         self.clearSelection()
-        
+
         self.updateLeftPlotList()
         self.renderLeftPlot()
-    
+
     def updateRawData(self):
         edit_data_path = os.path.join(self.cfg["project_path"],"edit-data", self.RawDatacomboBox.currentText())
         if Path(os.path.join(self.cfg["project_path"],"edit-data", self.RawDatacomboBox.currentText())).exists():
@@ -517,10 +517,10 @@ class LabelWithInteractivePlot(QWidget):
         else:
             raw_data_path = os.path.join(self.cfg["project_path"], "raw-data", self.RawDatacomboBox.currentText())
             self.data = pd.read_csv(raw_data_path)
-            self.data['label'] = "" 
+            self.data['label'] = ""
 
         self.data['datetime'] = pd.to_datetime(self.data['timestamp']).apply(lambda x: x.timestamp())
-    
+
     def createLabelButton(self):
         # create the "Label" button
         labelButton = QPushButton('Label')
@@ -552,7 +552,7 @@ if __name__ == '__main__':
     })
 
     df['datetime'] = df['datetime'].apply(lambda x: x.timestamp())
-    
+
     window = LabelWithInteractivePlot(df)
     window.show()
-    app.exec()        
+    app.exec()
