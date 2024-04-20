@@ -66,20 +66,20 @@ class InteractivePlot(QMainWindow):
 
         self.columnList = ['acc_x', 'acc_y', 'acc_z', 'gyro_x', 'gyro_y', 'gyro_z', 'mag_x', 'mag_y', 'mag_z']
         self.selectColumn = ['acc_x', 'acc_y', 'acc_z']
-        self.colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k', 'w']
+        self.colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k', 'w', 'k']
 
         # 绘制数据
-        self.plot_widgets = []
+        self.plot_widgets = [None] * len(self.columnList)
         self.plot_data()
 
         self.add_buttons()
         self.mode = 'add'
 
         self.click_begin = True
-        self.start_line = [None] * len(self.selectColumn)
-        self.end_line = [None] * len(self.selectColumn)
+        self.start_line = [None] * len(self.columnList)
+        self.end_line = [None] * len(self.columnList)
         self.regions = []
-        for _ in range(len(self.selectColumn)):
+        for _ in range(len(self.columnList)):
             self.regions.append([])
 
     def add_buttons(self):
@@ -101,7 +101,8 @@ class InteractivePlot(QMainWindow):
 
     def plot_data(self):
         timestamps = self.data['datetime']
-        for i, col in enumerate(self.selectColumn):
+        for col in self.columnList:
+            i = self.columnList.index(col)
             values = self.data[col]
             pwidget = pg.PlotWidget(axisItems={'bottom': pg.DateAxisItem()})
             pwidget.plot(timestamps, values, pen=self.colors[i])
@@ -110,7 +111,9 @@ class InteractivePlot(QMainWindow):
             pwidget.scene().sigMouseClicked.connect(self.mouse_clicked)
             pwidget.scene().sigMouseMoved.connect(self.mouse_moved)
             self.layout.addWidget(pwidget)
-            self.plot_widgets.append(pwidget)
+            # if col not in self.selectColumn:
+            #     pwidget.hide()
+            self.plot_widgets[i] = pwidget
 
     def _to_idx(self, start_ts, end_ts):
         selected_indices = self.data[(self.data['datetime'] >= start_ts)
@@ -183,7 +186,8 @@ class InteractivePlot(QMainWindow):
 
     def mouse_clicked(self, event):
         if event.button() == Qt.LeftButton:
-            pos = self.plot_widgets[0].plotItem.vb.mapSceneToView(event.pos()) # 将场景坐标映射到图形坐标系中
+            i = self.columnList.index(self.selectColumn[0])
+            pos = self.plot_widgets[i].plotItem.vb.mapSceneToView(event.pos())
 
             if self.mode == 'add':
                 self._add_region(pos)
@@ -193,7 +197,8 @@ class InteractivePlot(QMainWindow):
                 self._del_region(pos)
 
     def mouse_moved(self, event):
-        pos = self.plot_widgets[0].plotItem.vb.mapSceneToView(event)
+        i = self.columnList.index(self.selectColumn[0])
+        pos = self.plot_widgets[i].plotItem.vb.mapSceneToView(event)
         if not self.click_begin:
             for line in self.end_line:
                 line.setPos(pos.x())
