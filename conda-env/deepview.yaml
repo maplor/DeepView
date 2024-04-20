@@ -28,5 +28,6 @@ dependencies:
   - notebook<7.0.0
   - ffmpeg
   - pyqtgraph
+  - seaborn
   - pip:
     - "deeplabcut[gui,tf]"

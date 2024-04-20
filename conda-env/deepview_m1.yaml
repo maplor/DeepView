@@ -40,5 +40,6 @@ dependencies:
   - ffmpeg
   - pyqtgraph
   - apple::tensorflow-deps
+  - seaborn
   - pip:
     - "deeplabcut[gui,apple_mchips]"
