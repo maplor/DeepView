@@ -1,14 +1,63 @@
 import math
-from PySide6.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QCheckBox, QComboBox, QLabel, QSpinBox
+from PySide6.QtWidgets import (
+    QApplication,
+    QWidget,
+    QHBoxLayout,
+    QVBoxLayout,
+    QPushButton,
+    QCheckBox,
+    QComboBox,
+    QLabel,
+    QSpinBox,
+    QDialog,
+    QRadioButton,
+    QSplitter,
+)
 from PySide6.QtCore import QTimer, QRectF, Qt
+from PySide6.QtGui import QColor
 import numpy as np
 import pandas as pd
 import pyqtgraph as pg
 from PySide6.QtWidgets import QCheckBox
+from functools import partial
 import os
 from pathlib import Path
 
 clickedPen = pg.mkPen('b', width=2)
+
+class LabelOption(QDialog):
+    def __init__(self):
+        super().__init__()
+
+        layout = QVBoxLayout()
+
+        self.radio_button1 = QRadioButton("flying")
+        self.radio_button2 = QRadioButton("stationary")
+        self.radio_button3 = QRadioButton("foraging")
+
+        layout.addWidget(self.radio_button1)
+        layout.addWidget(self.radio_button2)
+        layout.addWidget(self.radio_button3)
+
+        self.confirm_button = QPushButton("Confirm")
+        self.confirm_button.clicked.connect(self.confirm_selection)
+        layout.addWidget(self.confirm_button)
+
+        self.setLayout(layout)
+
+    def confirm_selection(self):
+        if self.radio_button1.isChecked():
+            selected_option = "flying"
+        elif self.radio_button2.isChecked():
+            selected_option = "stationary"
+        elif self.radio_button3.isChecked():
+            selected_option = "foraging"
+        else:
+            selected_option = None
+
+        self.accept()
+
+        return selected_option
 
 class LabelWithInteractivePlot(QWidget):
     def __init__(self, root, data: pd.DataFrame, cfg) -> None:
@@ -29,9 +78,7 @@ class LabelWithInteractivePlot(QWidget):
 
         # status
         self.isTarining = False
-
-        self.maxColumn = 1
-        self.maxRow = 1
+        self.mode = 'add'
 
         self.createCheckBoxList()
         self.createLeftPlot()
@@ -78,9 +125,7 @@ class LabelWithInteractivePlot(QWidget):
         print('selectColumn: %s'%(newSelectColumn))
 
         self.updateLeftPlotList()
-        self.renderLeftPlot()
         self.updateBtn()
-
 
     '''
     ==================================================
@@ -89,57 +134,130 @@ class LabelWithInteractivePlot(QWidget):
     - self.leftPlotList list(PlotItem)
     ==================================================
     '''
-    def createLeftPlot(self):
-        viewL = pg.GraphicsLayoutWidget()
-        self.viewL = viewL
-        self.bottom_layout.addWidget(viewL)
 
-        self.updateLeftPlotList()
-        self.renderLeftPlot()
+    def createLeftPlot(self):
+        viewL = QVBoxLayout()
+        self.viewL = viewL
+        self.splitter = QSplitter(Qt.Vertical)
+        self.plot_widgets = [None] * len(self.columnList)
+        self.click_begin = True
+        self.start_line = [None] * len(self.columnList)
+        self.end_line = [None] * len(self.columnList)
+        self.regions = []
+        for _ in range(len(self.columnList)):
+            self.regions.append([])
+        self.bottom_layout.addLayout(viewL)
+
+        self.resetLeftPlot()
+        self.splitter.setSizes([100] * len(self.columnList))
+        self.viewL.addWidget(self.splitter)
+
+    def resetLeftPlot(self):
+        # reset widget
+        for i in range(len(self.columnList)):
+            if self.plot_widgets[i] is not None:
+                self.splitter.removeWidget(self.plot_widgets[i])
+                self.plot_widgets[i].close()
+                self.plot_widgets[i] = None
+
+        # add widget
+        df = self.data
+        for i, column in enumerate(self.columnList):
+            plot = pg.PlotWidget(title=column, name=column, axisItems={'bottom': pg.DateAxisItem()})
+            plot.plot(df['datetime'], df[column], pen=pg.mkPen(i))
+            plot.scene().sigMouseClicked.connect(self.mouse_clicked)
+            plot.scene().sigMouseMoved.connect(self.mouse_moved)
+            self.plot_widgets[i] = plot
+            self.splitter.addWidget(plot)
 
     def updateLeftPlotList(self):
-        df = self.data
+        for i, column in enumerate(self.columnList):
+            if column in self.selectColumn:
+                self.plot_widgets[i].show()
+            else:
+                self.plot_widgets[i].hide()
 
-        self.leftPlotList = []
+    def _to_idx(self, start_ts, end_ts):
+        selected_indices = self.data[(self.data['datetime'] >= start_ts)
+                                     & (self.data['datetime'] <= end_ts)].index
+        return selected_indices.values[0], selected_indices.values[-1]
 
-        if not hasattr(self, 'scatterItem') or len(self.selectPoints) == 0:
-            plotList = []
-            for i, column in enumerate(self.selectColumn):
-                plot = pg.PlotItem(title=column, name=column, axisItems={'bottom': pg.DateAxisItem()})
-                plot.plot(df['datetime'], df[column], pen=pg.mkPen(i))
-                plotList.append(plot)
-            self.leftPlotList.append(plotList)
+    def _add_region(self, pos):
+        if self.click_begin:    # 记录开始位置
+            self.click_begin = False
+            for i, plot in enumerate(self.plot_widgets):
+                self.start_line[i] = pg.InfiniteLine(pos.x(), angle=90, movable=False)
+                self.end_line[i] = pg.InfiniteLine(pos.x(), angle=90, movable=False)
+                plot.addItem(self.start_line[i])
+                plot.addItem(self.end_line[i])
+        else:                   # 记录结束位置
+            self.click_begin = True
+            for i, plot in enumerate(self.plot_widgets):
+                plot.removeItem(self.start_line[i])
+                plot.removeItem(self.end_line[i])
 
-        else:
-            for p_index, p in enumerate(self.selectPoints):
-                index, start, end = p.data()
-                plotList = []
-                for c_index, column in enumerate(self.selectColumn):
-                    plot = pg.PlotItem(title=column, name=column, axisItems={'bottom': pg.DateAxisItem()})
-                    plot.plot(df['datetime'], df[column], pen=pg.mkPen(c_index))
-                    plot.addItem(pg.LinearRegionItem(values=[df['datetime'][start], df['datetime'][end]], movable=False))
-                    plot.setXRange(df['datetime'][start], df['datetime'][end])
-                    plotList.append(plot)
-                for plotA in plotList:
-                    for plotB in plotList:
-                        plotA.setXLink(plotB)
-                self.leftPlotList.append(plotList)
+                region = pg.LinearRegionItem([self.start_line[i].value(), self.end_line[i].value()], brush=(0, 0, 255, 100))
+                region.sigRegionChanged.connect(self._region_changed)
 
-    def renderLeftPlot(self):
-        # clear all items
-        self.viewL.clear()
+                self.start_line[i] = None
+                self.end_line[i] = None
 
-        # add plot item according to select column
-        index = 0
-        for column in range(self.maxColumn):
-            for row in range(self.maxRow):
-                plotList = self.leftPlotList[index]
-                for plot_index, plot in enumerate(plotList):
-                    self.viewL.addItem(plot, col=column, row=row*len(plotList)+plot_index)
-                index += 1
-                if index >= len(self.leftPlotList):
-                    return
-            self.viewL.nextRow()
+                plot.addItem(region)
+                self.regions[i].append(region)
+            start_idx, end_idx = self._to_idx(int(region.getRegion()[0]), int(region.getRegion()[1]))
+            print(f'Selected range: from index {start_idx} to index {end_idx}')
+
+    def _region_changed(self, region):
+        idx = 0
+        for reg_lst in self.regions:
+            for i, reg in enumerate(reg_lst):
+                if reg == region:
+                    idx = i
+                    break
+        for reg_lst in self.regions:
+            reg_lst[idx].setRegion(region.getRegion())
+
+    def _del_region(self, pos):
+        for i, pwidget in enumerate(self.plot_widgets):
+            for reg in self.regions[i]:
+                if reg.getRegion()[0] < pos.x() and reg.getRegion()[1] > pos.x():
+                    pwidget.removeItem(reg)
+                    self.regions[i].remove(reg)
+                    break
+        start_idx, end_idx = self._to_idx(int(reg.getRegion()[0]), int(reg.getRegion()[1]))
+        print(f'Delete region({start_idx}, {int(end_idx)})')
+
+    def _edit_region(self, pos):
+        set_val = None
+        for i, _ in enumerate(self.regions):
+            for reg in self.regions[i]:
+                if reg.getRegion()[0] < pos.x() and reg.getRegion()[1] > pos.x():
+                    if set_val is None:
+                        dialog = LabelOption()
+                        if dialog.exec() == QDialog.Accepted:
+                            set_val = dialog.confirm_selection()
+                        else:
+                            set_val = 'None'
+                    reg.setBrush(self.checkColor(set_val))
+        start_idx, end_idx = self._to_idx(int(reg.getRegion()[0]), int(reg.getRegion()[1]))
+        print(f'Edit region({start_idx}, {end_idx}) label: {set_val}')
+
+    def mouse_clicked(self, event):
+        if event.button() == Qt.LeftButton and hasattr(self, 'scatterItem'):
+            pos = self.plot_widgets[0].plotItem.vb.mapSceneToView(event.pos())
+
+            if self.mode == 'add':
+                self._add_region(pos)
+            elif self.mode == 'edit':
+                self._edit_region(pos)
+            elif self.mode == 'del':
+                self._del_region(pos)
+
+    def mouse_moved(self, event):
+        pos = self.plot_widgets[0].plotItem.vb.mapSceneToView(event)
+        if not self.click_begin:
+            for line in self.end_line:
+                line.setPos(pos.x())
 
     '''
     ==================================================
@@ -162,6 +280,7 @@ class LabelWithInteractivePlot(QWidget):
         self.updateBtn()
 
         self.renderRightPlot()
+        self.updateLeftPlotList()
 
     def updateBtn(self):
         # enabled
@@ -201,15 +320,24 @@ class LabelWithInteractivePlot(QWidget):
             return pg.mkBrush(255, 255, 255, 120)
 
     def updateRightPlotColor(self):
-        new_spots = []
+        # reset spots
+        spots = []
         for spot in self.scatterItem.points():
             pos = spot.pos()
             i, start, end = spot.data()
-            new_color = self.checkColor(self.data.loc[start, 'label'])
-            new_spot = {'pos': (pos.x(), pos.y()), 'data': (i, start, end),
-                        'brush': pg.mkBrush(new_color)}
-            new_spots.append(new_spot)
-        self.scatterItem.setData(spots=new_spots)
+            color = self.checkColor(self.data.loc[start, 'label'])
+            spot = {'pos': (pos.x(), pos.y()), 'data': (i, start, end),
+                        'brush': pg.mkBrush(color)}
+            spots.append(spot)
+
+        # update spots
+        for reg in self.regions[0]:
+            for spot in spots:
+                idx_begin, idx_end = self._to_idx(int(reg.getRegion()[0]), int(reg.getRegion()[1]))
+                if idx_begin < spot['data'][1] and idx_end > spot['data'][2]:
+                    spot['brush'] = reg.brush
+
+        self.scatterItem.setData(spots=spots)
 
     def renderRightPlot(self):
         self.viewC.clear()
@@ -234,51 +362,6 @@ class LabelWithInteractivePlot(QWidget):
         self.scatterItem = scatterItem
 
         self.viewC.addItem(scatterItem)
-
-        rect = self.viewC.viewRect()
-        w = rect.width()
-        h = rect.height()
-        x = rect.x()
-        y = rect.y()
-
-        # create ROI
-        roi = pg.ROI([x + w * 0.45, y + h * 0.45], [w * 0.1, h * 0.1])
-        # 上
-        roi.addScaleHandle([0.5, 1], [0.5, 0])
-        # 右
-        roi.addScaleHandle([1, 0.5], [0, 0.5])
-        # 下
-        roi.addScaleHandle([0.5, 0], [0.5, 1])
-        # 左
-        roi.addScaleHandle([0, 0.5], [1, 0.5])
-        # 右下
-        roi.addScaleHandle([1, 0], [0, 1])
-        # 左上 - 旋转
-        # roi.addRotateHandle([0, 1], [0.5, 0.5])
-
-        self.viewC.addItem(roi)
-
-        # cache select region
-        self.selectRect = QRectF(0, 0, 1, 1)
-
-        # cache highlight point
-        self.lastChangePoint = []
-
-        # cache plot mark
-        self.lastMarkList = []
-
-        roi.sigRegionChanged.connect(self.handleROIChange)
-        roi.sigRegionChangeFinished.connect(self.handleROIChangeFinished)
-        self.handleROIChange(roi)
-        self.handleROIChangeFinished(roi)
-
-    def clearSelection(self):
-        self.selectPoints = []
-        self.selectRect = None
-
-    def clearPlot(self):
-        self.viewL.clear()
-        self.viewC.clear()
 
     def select_random_continuous_seconds(self, num_samples=100, points_per_second=90):
         df = self.data
@@ -355,39 +438,6 @@ class LabelWithInteractivePlot(QWidget):
 
         return start_indice, end_indice, pos
 
-    # highlight select point
-    def handleROIChange(self, roi: pg.ROI):
-        # when selected rectangle area changed, trigger this func
-        # when the mouse is changing the rectangle, use this func until the mouse stopped
-        pos: pg.Point = roi.pos()
-        size: pg.Point = roi.size()
-
-        self.selectRect.setRect(pos.x(), pos.y(), size.x(), size.y())
-        points = self.scatterItem.pointsAt(self.selectRect)
-        # print('points: %s'%([i.data() for i in points]))
-
-        # reset last change points
-        for p in self.lastChangePoint:
-            p.resetPen()
-
-        # change point state and cache
-        for p in points:
-            p.setPen(clickedPen)
-        self.lastChangePoint = points
-
-    # add mark to plot, use sigRegionChangeFinished to reduce render
-    def handleROIChangeFinished(self, roi: pg.ROI):
-        # when the mouse stopped, use this func to calculate point positions
-        pos: pg.Point = roi.pos()
-        size: pg.Point = roi.size()
-
-        self.selectRect.setRect(pos.x(), pos.y(), size.x(), size.y())
-        points = self.scatterItem.pointsAt(self.selectRect)
-        self.selectPoints = points
-
-        self.updateLeftPlotList()
-        self.renderLeftPlot()
-
     '''
     ==================================================
     bottom right area: setting panel
@@ -410,28 +460,8 @@ class LabelWithInteractivePlot(QWidget):
         self.createModelComboBox()
         self.createFeatureExtractButton()
 
-        self.createLabelComboBox()
         self.createLabelButton()
-
         self.createSaveButton()
-        self.createMaxColumnSpinBox()
-        self.createMaxRowSpinBox()
-
-    def createLabelComboBox(self):
-        labelComboBox = QComboBox()
-
-        labelComboBox.addItem("flying")
-        labelComboBox.addItem("stationary")
-        labelComboBox.addItem("foraging")
-        self.labelComboBox = labelComboBox
-        labelComboBox.currentIndexChanged.connect(self.handleLabelComboBoxChange)
-        # add this button to the table
-        self.settingPannel.addWidget(labelComboBox)
-
-    def handleLabelComboBoxChange(self):
-        # when QComboBox changed, trigger this func
-        print("Labeled the data to label: "+self.labelComboBox.currentText())
-
 
     def createModelComboBox(self):
         modelComboBoxLabel = QLabel('Select model:')
@@ -464,32 +494,6 @@ class LabelWithInteractivePlot(QWidget):
         edit_data_path = os.path.join(self.cfg["project_path"], "edit-data", self.RawDatacomboBox.currentText())
         self.data.to_csv(edit_data_path)
 
-    def createMaxColumnSpinBox(self):
-        maxColumnSpinBox = QSpinBox(self)
-        maxColumnSpinBox.setMinimum(1)  # minimum value
-        maxColumnSpinBox.setMaximum(5)  # maximum value
-        maxColumnSpinBox.setValue(1)  # initial value
-        maxColumnSpinBox.valueChanged.connect(self.maxColumnSpinBoxChange)
-        self.settingPannel.addWidget(QLabel('Maximam column of left view'))
-        self.settingPannel.addWidget(maxColumnSpinBox)
-
-    def maxColumnSpinBoxChange(self):
-        self.maxColumn = self.maxColumnSpinBox.value()
-        self.renderLeftPlot()
-
-    def createMaxRowSpinBox(self):
-        maxRowSpinBox = QSpinBox(self)
-        maxRowSpinBox.setMinimum(1)  # minimum value
-        maxRowSpinBox.setMaximum(5)  # maximum value
-        maxRowSpinBox.setValue(1)  # initial value
-        maxRowSpinBox.valueChanged.connect(self.maxRowSpinBoxChange)
-        self.settingPannel.addWidget(QLabel('Maximam row of left view'))
-        self.settingPannel.addWidget(maxRowSpinBox)
-
-    def maxRowSpinBoxChange(self):
-        self.maxRow = self.maxRowSpinBox.value()
-        self.renderLeftPlot()
-
     def createRawDataComboBox(self):
         RawDataComboBoxLabel = QLabel('Select raw data:')
         self.settingPannel.addWidget(RawDataComboBoxLabel)
@@ -504,11 +508,9 @@ class LabelWithInteractivePlot(QWidget):
 
     def handleRawDataComboBoxChange(self):
         self.updateRawData()
-        self.clearPlot()
-        self.clearSelection()
+        self.resetLeftPlot()
 
         self.updateLeftPlotList()
-        self.renderLeftPlot()
 
     def updateRawData(self):
         edit_data_path = os.path.join(self.cfg["project_path"],"edit-data", self.RawDatacomboBox.currentText())
@@ -522,37 +524,19 @@ class LabelWithInteractivePlot(QWidget):
         self.data['datetime'] = pd.to_datetime(self.data['timestamp']).apply(lambda x: x.timestamp())
 
     def createLabelButton(self):
-        # create the "Label" button
-        labelButton = QPushButton('Label')
-        labelButton.clicked.connect(self.handleLabelButton)
-        self.settingPannel.addWidget(labelButton)
+        self.add_mode = QPushButton("Label Add Mode", self)
+        self.add_mode.clicked.connect(partial(self._change_mode, "add"))
+        self.edit_mode = QPushButton("Label Edit Mode", self)
+        self.edit_mode.clicked.connect(partial(self._change_mode, "edit"))
+        self.del_mode = QPushButton("Label Delete Mode", self)
+        self.del_mode.clicked.connect(partial(self._change_mode, "del"))
+        self.refresh = QPushButton("Refresh Spots", self)
+        self.refresh.clicked.connect(self.updateRightPlotColor)
+        self.settingPannel.addWidget(self.add_mode)
+        self.settingPannel.addWidget(self.edit_mode)
+        self.settingPannel.addWidget(self.del_mode)
+        self.settingPannel.addWidget(self.refresh)
 
-    def handleLabelButton(self):
-        points = self.scatterItem.pointsAt(self.selectRect)
-        for p in points:
-            index, start, end = p.data()
-            self.data.loc[start:end,"label"] = self.labelComboBox.currentText()
-        # update the scatter points color
-        self.updateRightPlotColor()
-
-if __name__ == '__main__':
-    app = QApplication([])
-
-    df = pd.DataFrame({
-        'datetime': pd.date_range(start='1/1/2022', periods=10000),
-        'acc_x': np.random.rand(10000),
-        'acc_y': np.random.rand(10000),
-        'acc_z': np.random.rand(10000),
-        'gyro_x': np.random.rand(10000),
-        'gyro_y': np.random.rand(10000),
-        'gyro_z': np.random.rand(10000),
-        'mag_x': np.random.rand(10000),
-        'mag_y': np.random.rand(10000),
-        'mag_z': np.random.rand(10000)
-    })
-
-    df['datetime'] = df['datetime'].apply(lambda x: x.timestamp())
-
-    window = LabelWithInteractivePlot(df)
-    window.show()
-    app.exec()
+    def _change_mode(self, mode: str):
+        print(f'Change mode to "{mode}"')
+        self.mode = mode
