@@ -42,19 +42,13 @@ def return_train_network_path(config, trainingsetindex=0, modelprefix=""):
 
 def train_network(
     config,
-    # shuffle=1,
-    trainingsetindex=0,
-    max_snapshots_to_keep=5,
-    displayiters=None,
-    saveiters=None,
-    maxiters=None,
-    allow_growth=True,
-    gputouse=None,
-    autotune=False,
-    keepdeconvweights=True,
-    modelprefix="",
-    superanimal_name="",
-    superanimal_transfer_learning=False,
+    net_type='CNN_AE',
+    lr=0.0005,
+    batch_size=32,
+    num_epochs=100,
+    data_len=180,
+    data_column=['acc_x']
+
 ):
     """Trains the network with the labels in the training dataset.
 
@@ -144,8 +138,8 @@ def train_network(
                 keepdeconvweights=True,
             )
     """
-    if allow_growth:
-        os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
+    # if allow_growth:
+    #     os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
 
     # reload logger.
     import importlib
@@ -161,7 +155,7 @@ def train_network(
 
     # Read file path for pose_config file. >> pass it on
     cfg = auxiliaryfunctions.read_config(config)
-    modelfoldername = auxiliaryfunctions.get_model_folder(cfg, modelprefix=modelprefix)
+    modelfoldername = auxiliaryfunctions.get_unsup_model_folder(cfg, modelprefix=modelprefix)
     poseconfigfile = Path(
         os.path.join(
             cfg["project_path"], str(modelfoldername), "train", "model_cfg.yaml"
@@ -176,14 +170,14 @@ def train_network(
             "Try with a different trainingsetfraction or use function 'create_training_dataset' to create a new trainingdataset."
             # "Try with a different shuffle/trainingsetfraction or use function 'create_training_dataset' to create a new trainingdataset with this shuffle index."
         )
-    else:
-        # Set environment variables
-        if (
-            autotune is not False
-        ):  # see: https://github.com/tensorflow/tensorflow/issues/13317
-            os.environ["TF_CUDNN_USE_AUTOTUNE"] = "0"
-        if gputouse is not None:
-            os.environ["CUDA_VISIBLE_DEVICES"] = str(gputouse)
+    # else:
+    #     # Set environment variables
+    #     if (
+    #         autotune is not False
+    #     ):  # see: https://github.com/tensorflow/tensorflow/issues/13317
+    #         os.environ["TF_CUDNN_USE_AUTOTUNE"] = "0"
+    #     if gputouse is not None:
+    #         os.environ["CUDA_VISIBLE_DEVICES"] = str(gputouse)
     try:
         # cfg_dlc = auxiliaryfunctions.read_plainconfig(poseconfigfile)
 
@@ -193,12 +187,12 @@ def train_network(
         print("Selecting single-animal trainer")
         train(
             str(poseconfigfile),
-            displayiters,
-            saveiters,
-            maxiters,
-            max_to_keep=max_snapshots_to_keep,
-            keepdeconvweights=keepdeconvweights,
-            allow_growth=allow_growth,
+            net_type=net_type,
+            lr=lr,
+            batch_size=batch_size,
+            num_epochs=num_epochs,
+            data_len=data_len,
+            data_column=data_column
         )  # pass on path and file name for pose_cfg.yaml!
 
     except BaseException as e:

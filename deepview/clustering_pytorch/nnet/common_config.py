@@ -48,8 +48,8 @@ def get_model(p_backbone, p_setup, pretrain_path=None):
     num_channel = 3
 
     # Get backbone
-    if True:
-    # if p_backbone == 'CNN_AE':
+    # if True:
+    if p_backbone == 'CNN_AE':
         from deepview.clustering_pytorch.nnet.models import CNN_AE
         backbone = CNN_AE(n_channels=num_channel, out_channels=128)
     else:
@@ -66,37 +66,42 @@ def get_model(p_backbone, p_setup, pretrain_path=None):
     else:
         raise ValueError('Invalid setup {}'.format(p_setup))
 
-    # # Load pretrained weights
-    # if pretrain_path is not None and os.path.exists(pretrain_path):
-    #     state = torch.load(pretrain_path, map_location='cpu')
-    #
-    #     if p['setup'] == 'scan':  # Weights are supposed to be transfered from contrastive training
-    #         missing = model.load_state_dict(state, strict=False)
-    #         assert (set(missing[1]) == {
-    #             'contrastive_head.0.weight', 'contrastive_head.0.bias',
-    #             'contrastive_head.2.weight', 'contrastive_head.2.bias'}
-    #                 or set(missing[1]) == {
-    #                     'contrastive_head.weight', 'contrastive_head.bias'})
-    #
-    #     elif p['setup'] == 'selflabel':  # Weights are supposed to be transfered from scan
-    #         # We only continue with the best head (pop all heads first, then copy back the best head)
-    #         model_state = state['model']
-    #         all_heads = [k for k in model_state.keys() if 'cluster_head' in k]
-    #         best_head_weight = model_state['cluster_head.%d.weight' % (state['head'])]
-    #         best_head_bias = model_state['cluster_head.%d.bias' % (state['head'])]
-    #         for k in all_heads:
-    #             model_state.pop(k)
-    #
-    #         model_state['cluster_head.0.weight'] = best_head_weight
-    #         model_state['cluster_head.0.bias'] = best_head_bias
-    #         missing = model.load_state_dict(model_state, strict=True)
-    #
-    #     else:
-    #         raise NotImplementedError
-    # elif pretrain_path is not None and not os.path.exists(pretrain_path):
-    #     raise ValueError('Path with pre-trained weights does not exist {}'.format(pretrain_path))
-    # else:
-    #     pass
+    # Load pretrained weights
+    if pretrain_path is not None and os.path.exists(pretrain_path):
+        state = torch.load(pretrain_path, map_location='cpu')
+        model_state = state['model']
+        best_head_weight = model_state['cluster_head.%d.weight' % (state['head'])]
+        best_head_bias = model_state['cluster_head.%d.bias' % (state['head'])]
+        model_state['cluster_head.0.weight'] = best_head_weight
+        model_state['cluster_head.0.bias'] = best_head_bias
+
+        # if p['setup'] == 'scan':  # Weights are supposed to be transfered from contrastive training
+        #     missing = model.load_state_dict(state, strict=False)
+        #     assert (set(missing[1]) == {
+        #         'contrastive_head.0.weight', 'contrastive_head.0.bias',
+        #         'contrastive_head.2.weight', 'contrastive_head.2.bias'}
+        #             or set(missing[1]) == {
+        #                 'contrastive_head.weight', 'contrastive_head.bias'})
+
+        # elif p['setup'] == 'selflabel':  # Weights are supposed to be transfered from scan
+        #     # We only continue with the best head (pop all heads first, then copy back the best head)
+        #     model_state = state['model']
+        #     all_heads = [k for k in model_state.keys() if 'cluster_head' in k]
+        #     best_head_weight = model_state['cluster_head.%d.weight' % (state['head'])]
+        #     best_head_bias = model_state['cluster_head.%d.bias' % (state['head'])]
+        #     for k in all_heads:
+        #         model_state.pop(k)
+        #
+        #     model_state['cluster_head.0.weight'] = best_head_weight
+        #     model_state['cluster_head.0.bias'] = best_head_bias
+        #     missing = model.load_state_dict(model_state, strict=True)
+
+        # else:
+        #     raise NotImplementedError
+    elif pretrain_path is not None and not os.path.exists(pretrain_path):
+        raise ValueError('Path with pre-trained weights does not exist {}'.format(pretrain_path))
+    else:
+        pass
 
     return model
 
@@ -272,8 +277,8 @@ def get_optimizer(p_opti, model, cluster_head_only=False):
     return optimizer
 
 
-def adjust_learning_rate(optimizer, epoch, p_scheduler,p_epochs):
-    lr = 0.0001
+def adjust_learning_rate(lr, optimizer, epoch, p_scheduler,p_epochs):
+    # lr = 0.0001
 
     if p_scheduler == 'cosine':
         lr_decay_rate = 0.1
