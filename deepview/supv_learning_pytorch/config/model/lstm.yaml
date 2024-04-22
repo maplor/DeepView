@@ -1,0 +1,6 @@
+model_name: "lstm"
+num_lstm_hidden_units: 128
+num_lstm_layers: 1
+bidirectional_lstm: false
+out_layer_type: "flatten-linear-2" # "1-by-1-conv" or "flatten-linear" or "flatten-linear-2"
+out_dropout_rate: 0.0

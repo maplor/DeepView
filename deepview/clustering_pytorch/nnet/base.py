@@ -11,7 +11,7 @@
 import abc
 import tensorflow as tf
 from deepview.clustering_pytorch.datasets import Batch
-# from deeplabcut.pose_estimation_tensorflow.core import predict_multianimal
+# from deeplabcut.pose_estimation_tensorflow.core1 import predict_multianimal
 # from .layers import prediction_layer
 # from .utils import make_2d_gaussian_kernel
 import torch.nn as nn

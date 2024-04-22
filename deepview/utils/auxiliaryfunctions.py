@@ -117,17 +117,33 @@ def read_config(configname):
         )
     return cfg
 
-def get_model_folder(cfg, modelprefix=""):
+def get_sup_model_folder(cfg, modelprefix=""):
     Task = cfg["Task"]
     date = cfg["date"]
     iterate = "iteration-" + str(cfg["iteration"])
     return Path(
         modelprefix,
-        "dv-models",
+        "sup-models",
         iterate,
         Task
         + date
-        + "-trainset"
+        # + "-trainset"
+        # + str(int(trainFraction * 100))
+        # + "shuffle"
+        # + str(shuffle),
+    )
+
+def get_unsup_model_folder(cfg, modelprefix=""):
+    Task = cfg["Task"]
+    date = cfg["date"]
+    iterate = "iteration-" + str(cfg["iteration"])
+    return Path(
+        modelprefix,
+        "unsup-models",
+        iterate,
+        Task
+        + date
+        # + "-trainset"
         # + str(int(trainFraction * 100))
         # + "shuffle"
         # + str(shuffle),
@@ -158,13 +174,22 @@ def write_plainconfig(configname, cfg):
         YAML().dump(cfg, file)
 
 ## Various functions to get filenames, foldernames etc. based on configuration parameters.
+def get_unsupervised_set_folder(cfg):
+    """get folder for all sensor data used for unsupervised learning"""
+    # iterate = "iteration-" + str(cfg["iteration"])
+    return Path(
+        os.path.join("unsupervised-datasets", "allDataSet")
+    )
+
 def get_training_set_folder(cfg):
     """Training Set folder for config file based on parameters"""
     Task = cfg["Task"]
     date = cfg["date"]
-    iterate = "iteration-" + str(cfg["iteration"])
+    # iterate = "iteration-" + str(cfg["iteration"])
     return Path(
-        os.path.join("training-datasets", iterate, "UnaugmentedDataSet_" + Task + date)
+        'training-datasets',
+        Task
+        + date
     )
 
 def get_evaluation_folder(cfg, modelprefix=""):
@@ -221,7 +246,7 @@ def get_data_and_metadata_filenames(trainingsetfolder, cfg):
     )
     return metadatafn, datafn
 
-def attempt_to_make_folder(foldername, recursive=False):
+def attempt_to_make_folder(foldername, recursive=True):
     """Attempts to create a folder with specified name. Does nothing if it already exists."""
     try:
         os.path.isdir(foldername)
