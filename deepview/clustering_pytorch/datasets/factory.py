@@ -76,18 +76,12 @@ def sliding_window(data, len_sw):
     return xlist
 
 
-def prep_dataset_umineko(data_path, data_path_new):
-    # ['logger_id', 'animal_tag', 'timestamp', 'acc_x', 'acc_y', 'acc_z',
-    #        'latitude', 'longitude', 'gyro_x', 'gyro_y', 'gyro_z', 'mag_x', 'mag_y',
-    #        'mag_z', 'illumination', 'pressure', 'temperature', 'labelid',
-    #        'velocity']
-    # sampling rate: look back to \seabird\export\masterLabelsByOtsuka\animal_id.csv
+def prep_dataset_umineko(data_path,
+                         # data_path_new,
+                         len_sw,
+                         data_column):
 
-    # root_path = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
-    # batch_data = 32  # args.batch_data
-    # num_channel = 3  # args.n
-
-    if not os.path.exists(data_path_new):
+    if os.path.exists(data_path):
         # the pickle file is a list of dataframes, each dataframe is a segment with a label
         # datapath = os.path.join(data_path)
         print('path to load pkl data: ' + data_path)
@@ -96,29 +90,27 @@ def prep_dataset_umineko(data_path, data_path_new):
 
         print('generating segment batch data...')
         # sliding window length
-        len_sw = 90
+        # len_sw = 90
         data, timestamps, labels, domains, timestr = [], [], [], [], []
-        for d in [datalist]:
-            tmp = sliding_window(d[['acc_x', 'acc_y', 'acc_z', 'time', 'labelid', 'domainid', 'timestamp']], len_sw)  # temp:['acc_x', 'acc_y', 'acc_z', 'timestamp', 'labelid', 'domain']
+        for d in datalist:
+            tmp = sliding_window(d[data_column, 'timestamp', 'labelid'], len_sw)  # temp:['acc_x', 'acc_y', 'acc_z', 'timestamp', 'labelid', 'domain']
             if tmp.shape[1] != len_sw:
                 continue
             data.append(tmp[:,:,:3])
             timestamps.append(tmp[:,:,3:4])
             labels.append(tmp[:,:,4:5])
-            domains.append(tmp[:,:,5:6])
+            # domains.append(tmp[:,:,5:6])
             # timestr.append(tmp[:,:,6:7])
-            # todo, 在这里增加数据column
-            # ...
 
-        with open(data_path_new, 'wb') as f:
-            pickle.dump([data, timestamps, labels, domains], f)
+        # with open(data_path_new, 'wb') as f:
+        #     pickle.dump([data, timestamps, labels, domains], f)
 
-    print('load segment batch data...')
-    with open(data_path_new, 'rb') as f:
-        [data, timestamps, labels, domains] = pickle.load(f)  # return list of batch(,,)
-        # print(timestamps.shape)  # acc+gyro (15961, 90, 1)
-    # set args.num_channel
-    # num_channel = data[0].shape[-1]
+    # print('load segment batch data...')
+    # with open(data_path_new, 'rb') as f:
+    #     [data, timestamps, labels, domains] = pickle.load(f)  # return list of batch(,,)
+    #     # print(timestamps.shape)  # acc+gyro (15961, 90, 1)
+    # # set args.num_channel
+    # # num_channel = data[0].shape[-1]
     return data, timestamps, labels, domains
 
 def prep_dataset_umineko_single(data_path):
@@ -194,15 +186,15 @@ def generate_dataloader(data, target, domains, timestamps):
     return train_loader_r
 
 
-def prepare_all_data(data_path, data_path_new):  # todo, 传args，以后改成从model_cfg.yaml中读取
+def prepare_all_data(data_path, data_len, data_column):  # todo, 传args，以后改成从model_cfg.yaml中读取
     '''
-    主要是训练集，需要全部数据做训练
+    主要是训练集，需要全部数据做训练。读取数据
     :param data_path:
     :param data_path_new:
     :return:
     '''
     # if args.seabird_name == 'umineko':
-    data, timestamps, labels, domains = prep_dataset_umineko(data_path, data_path_new)  # return dict: key=filename, value=[data, timestamps, labels]
+    data, timestamps, labels, domains = prep_dataset_umineko(data_path, data_len, data_column)  # return dict: key=filename, value=[data, timestamps, labels]
 
     # concatenate list
     # todo, 根据数据重新选择哪几个columns
@@ -212,10 +204,6 @@ def prepare_all_data(data_path, data_path_new):  # todo, 传args，以后改成�
     label_b = np.concatenate(labels, axis=0)  # [B, Len, dim]
     domain_b = np.concatenate(domains, axis=0)  # [B, Len, dim]
 
-    # # Convert float timestamp to Timestamp, because timestrb cannot apply to dataloader
-    # ## remember this relationship to get timestr!!!
-    # timestamp1 = pd.Timestamp(timestamp_b[0,0,0], unit='us')
-    # groundtp1 = timestr_b[0,0,0]
 
     # train_loader = generate_dataloader_overlap(data, labels, domains, timestamps)
     train_loader = generate_dataloader(data_b, label_b, domain_b, timestamp_b)

@@ -67,12 +67,12 @@ def get_batch_spec(cfg):
 
 def train(
     config_yaml,
-    displayiters,
-    saveiters,
-    maxiters,
-    max_to_keep=5,
-    keepdeconvweights=True,
-    allow_growth=True,
+    net_type='CNN_AE',
+    lr=0.0005,
+    batch_size=32,
+    num_epochs=100,
+    data_len=180,
+    data_column=['acc_x']
 ):
     start_path = os.getcwd()
     try:
@@ -85,17 +85,18 @@ def train(
     setup_logging()
 
     cfg = load_config(config_yaml)
-    net_type = cfg["net_type"]
     project_path = cfg['project_path']
     data_path = os.path.join(project_path, cfg['dataset'])
-    data_path_new = os.path.join(project_path, cfg['dataset'][:-4]+'_new.pkl')
+    # data_path_new = os.path.join(project_path, cfg['dataset'][:-4]+'_new.pkl')
 
     # xia, dataloader
-    train_dataloader = prepare_all_data(data_path, data_path_new)
+    train_dataloader = prepare_all_data(data_path,
+                                        data_len,
+                                        data_column)
 
     # print(optimizer)
     # -------------------------核心的模型训练部分，计算loss----------------------------
-    device = 'cpu'
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # get model
     model = get_model(p_backbone=net_type, p_setup='autoencoder')  # set backbone model=ResNet18, SSL=simclr, weight
     model = model.to(device)
@@ -109,12 +110,12 @@ def train(
     optimizer = get_optimizer(p_opti, model)
 
     # training
-    start_epoch, num_epochs = 0, 3
+    start_epoch = 0
     # i = 1  # 应该一只鸟一个trainloader，暂时全拼接到一起
     # print('Starting %s-th bird data' % str(i))
     for epoch in range(start_epoch, num_epochs):
         # Adjust lr
-        lr = adjust_learning_rate(optimizer, epoch, p_scheduler='cosine',p_epochs=num_epochs)
+        lr = adjust_learning_rate(lr, optimizer, epoch, p_scheduler='cosine',p_epochs=num_epochs)
         print('Adjusted learning rate to {:.5f}'.format(lr))
 
         # Train: the same as simclr
@@ -127,7 +128,7 @@ def train(
         # torch.save({'optimizer': optimizer.state_dict(), 'model': model.state_dict(),
         #             'epoch': epoch + 1}, p['pretext_checkpoint'])
 
-    # Save final model
+    # Save final model, todo, 按照data column, data len, nettype, num epochs保存
     print('Saving model at: ' + net_type + '_epoch%s' % str(epoch) + '.pth')
     torch.save(model.state_dict(), net_type + '_epoch%s' % str(epoch) + '.pth')
 

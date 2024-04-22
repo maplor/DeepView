@@ -48,7 +48,7 @@ class TrainNetwork(DefaultTab):
         self.max_iter = str(pose_cfg['max_epochs'])
 
         self.data_length = str(pose_cfg['batch_size'])
-        self.data_column = str(pose_cfg['data_colunms'])
+        self.data_column = str(pose_cfg['data_columns'])
         self._set_page()
 
     def _set_page(self):
@@ -85,7 +85,7 @@ class TrainNetwork(DefaultTab):
         net_label = QtWidgets.QLabel("Network type")
         self.display_net_type = QtWidgets.QComboBox()
         self.display_net_type.addItems(['CNN_AE', 'DeepConvLSTM'])
-        self.display_net_type.valueChanged.connect(self.log_net_choice)
+        self.display_net_type.currentIndexChanged.connect(self.log_net_choice)
 
         # Display iterations
         dispiters_label = QtWidgets.QLabel("Maximum iterations")
@@ -101,15 +101,15 @@ class TrainNetwork(DefaultTab):
         # self.save_iters_spin.setMinimum(1)
         # self.save_iters_spin.setMaximum(1)
         self.save_iters_spin.setText(self.learning_rate)
-        self.save_iters_spin.valueChanged.connect(self.log_init_lr)
+        self.save_iters_spin.textChanged.connect(self.log_init_lr)
 
         # Max iterations
         maxiters_label = QtWidgets.QLabel("Batch size")
-        self.max_iters_spin = QtWidgets.QSpinBox()
-        self.max_iters_spin.setMinimum(1)
-        self.max_iters_spin.setMaximum(10000)
-        self.max_iters_spin.setValue(int(self.batch_size))
-        self.max_iters_spin.valueChanged.connect(self.log_batch_size)
+        self.batchsize_spin = QtWidgets.QSpinBox()
+        self.batchsize_spin.setMinimum(1)
+        self.batchsize_spin.setMaximum(10000)
+        self.batchsize_spin.setValue(int(self.batch_size))
+        self.batchsize_spin.valueChanged.connect(self.log_batch_size)
 
         layout.addWidget(net_label, 0, 0)
         layout.addWidget(self.display_net_type, 0, 1)
@@ -118,18 +118,18 @@ class TrainNetwork(DefaultTab):
         layout.addWidget(saveiters_label, 0, 4)
         layout.addWidget(self.save_iters_spin, 0, 5)
         layout.addWidget(maxiters_label, 0, 6)
-        layout.addWidget(self.max_iters_spin, 0, 7)
+        layout.addWidget(self.batchsize_spin, 0, 7)
         # layout.addWidget(snapkeep_label, 0, 8)
         # layout.addWidget(self.snapshots, 0, 9)
-        layout.addWidget()
+        # layout.addWidget()
 
     def _generate_layout_attributes_dataset(self, layout):
         layout.setColumnMinimumWidth(3, 300)
 
         net_label = QtWidgets.QLabel("Input data column(TODO)")
         self.display_net_type = QtWidgets.QComboBox()
-        self.display_net_type.isChecked(['acc_x', 'acc_y', 'acc_z'])
-        self.display_net_type.valueChanged.connect(self.log_data_columns)
+        self.display_net_type.addItems(['acc_x', 'acc_y', 'acc_z'])
+        self.display_net_type.currentIndexChanged.connect(self.log_data_columns)
 
         # Display iterations
         dispiters_label = QtWidgets.QLabel("Input data length")
@@ -144,7 +144,7 @@ class TrainNetwork(DefaultTab):
         layout.addWidget(self.display_net_type, 0, 1)
         layout.addWidget(dispiters_label, 0, 2)
         layout.addWidget(self.display_datalen_spin, 0, 3)
-        layout.addWidget()
+        # layout.addWidget()
 
 
 
@@ -181,21 +181,33 @@ class TrainNetwork(DefaultTab):
 
     def train_network(self):
         config = self.root.config
+
+        # 将unsupervised model所需的参数赋值，传入train_network
         # shuffle = int(self.shuffle.value())
-        max_snapshots_to_keep = int(self.snapshots.value())
-        displayiters = int(self.display_iters_spin.value())
-        saveiters = int(self.save_iters_spin.value())
-        maxiters = int(self.max_iters_spin.value())
+        # max_snapshots_to_keep = int(self.snapshots.value())
+        # displayiters = int(self.display_iters_spin.value())
+        # saveiters = int(self.save_iters_spin.value())
+        # maxiters = int(self.max_iters_spin.value())
+
+        net_type = str(self.net_type.upper())
+        learning_rate = int(self.save_iters_spin.value())
+        batch_size = int(self.batchsize_spin.value())
+        # self.batch_size = str(pose_cfg['batch_size'])
+        max_iter = int(self.display_iters_spin.value())
+
+        data_length = int(self.display_datalen_spin.value())
+        # todo: bug
+        data_column = str(self.display_net_type.value())
+
 
         deepview.train_network(
             config,
-            # shuffle,
-            gputouse=None,
-            max_snapshots_to_keep=max_snapshots_to_keep,
-            autotune=None,
-            displayiters=displayiters,
-            saveiters=saveiters,
-            maxiters=maxiters,
+            net_type=net_type,
+            lr=learning_rate,
+            batch_size=batch_size,
+            num_epochs=max_iter,
+            data_len=data_length,
+            data_column=data_column
         )
         msg = QtWidgets.QMessageBox()
         msg.setIcon(QtWidgets.QMessageBox.Information)
