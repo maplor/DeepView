@@ -34,6 +34,7 @@ from deepview.gui.tabs.evaluate_network import EvaluateNetwork
 from deepview.gui.tabs.label_data import LabelData
 from deepview.gui.tabs.interaction_plot import InteractionPlot
 from deepview.gui.tabs.label_with_interactive_plot import LabelWithInteractivePlotTab
+from deepview.gui.tabs.supervised_learning_new_labels import SupervisedLearningNewLabels
 
 
 class MainWindow(QMainWindow):
@@ -499,24 +500,30 @@ class MainWindow(QMainWindow):
         )
         self.train_network = TrainNetwork(
             root=self, parent=None,
-            h1_description="Step 2. Train network",
+            h1_description="Step 2. Train unsupervised learning network",
         )
         self.evaluate_network = EvaluateNetwork(
             root=self,
             parent=None,
-            h1_description="Step 3. Evaluate Network",
+            h1_description="Step 3. Evaluate unsupervised learning Network",
         )
+        # TODO: remove this tab later and convert it to LabelWithInteractivePlotTab tab
         self.mad_gui = LabelData(
             root=self,
             parent=None,
             h1_description="Step 4. Label Data",
         )
-        self.interaction_plot = InteractionPlot(
+        # self.interaction_plot = InteractionPlot(
+        #     root=self,
+        #     parent=None,
+        #     h1_description="Step 5. Interaction Plot",
+        # )
+        self.label_with_interactive_plot = LabelWithInteractivePlotTab(
             root=self,
             parent=None,
-            h1_description="Step 5. Interaction Plot",
+            h1_description="Step 5. Label with Interaction Plot",
         )
-        self.label_with_interactive_plot = LabelWithInteractivePlotTab(
+        self.supervised_learning_gui = SupervisedLearningNewLabels(
             root=self,
             parent=None,
             h1_description="Step 6. Label with Interaction Plot",
@@ -556,8 +563,9 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(self.train_network, "Train network")
         self.tab_widget.addTab(self.evaluate_network, "Evaluate network")
         self.tab_widget.addTab(self.mad_gui, "Label data")
-        self.tab_widget.addTab(self.interaction_plot, "Interaction plot")
+        # self.tab_widget.addTab(self.interaction_plot, "Interaction plot")
         self.tab_widget.addTab(self.label_with_interactive_plot, "Label with interactive plot")
+        self.tab_widget.addTab(self.supervised_learning_gui, "Supervised learning with new labels")
         # self.tab_widget.addTab(self.analyze_videos, "Analyze videos")
         # self.tab_widget.addTab(
         #     self.unsupervised_id_tracking, "Unsupervised ID Tracking (*)"

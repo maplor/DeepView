@@ -1,0 +1,8 @@
+model_name: "cnn-ae"
+pretrain: false # true, false
+freeze: "no-freeze" # no-freeze, soft-freeze, hard-freeze
+kernel_size: 5
+out_ch: 128
+out_layer_type: "flatten-linear-2" # "1-by-1-conv" or "flatten-linear" or "flatten-linear-2"
+out_dropout_rate: 0.0
+

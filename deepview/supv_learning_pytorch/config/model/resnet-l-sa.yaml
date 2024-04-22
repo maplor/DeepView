@@ -1,0 +1,12 @@
+model_name: "resnet-l-sa"
+kernel_size: 5
+num_residual_blocks: 4
+num_conv_filters: 128
+num_conv_filters2: 64
+num_lstm_hidden_units: 128
+num_lstm_layers: 1
+bidirectional_lstm: false
+num_attn_heads: 4
+num_attn_layers: 1
+out_layer_type: "flatten-linear-2" # "1-by-1-conv" or "flatten-linear" or "flatten-linear-2"
+out_dropout_rate: 0.0

@@ -1,0 +1,121 @@
+species: "om" 
+n_classes: 6
+window_size: 50 # 25Hz * 2s
+in_ch: 3
+test_animal_id: "OM2102" # default test_animal_id
+da_type: "random" # "random"
+da_param1: None
+da_param2: None
+
+
+
+un_sup_pretraining:
+  animal_id_list:
+    train:
+      # - "OM1801", # sensor broken?
+      - "OM1802"
+      - "OM1803"
+      - "OM1804"
+      - "OM1805"
+      - "OM1806"
+      - "OM1807"
+      - "OM1808"
+      - "OM1809"
+      - "OM1810"
+      - "OM1811"
+      - "OM1901"
+      - "OM2001"
+      - "OM2002"
+      - "OM2003"
+      # - "OM2004", # sensor broken?
+      - "OM2005"
+      - "OM2006"
+      - "OM2101"
+      - "OM2102"
+      - "OM2103"
+      - "OM2201"
+      - "OM2202"
+      - "OM2203"
+      - "OM2204"
+      - "OM2205"
+      - "OM2206"
+      - "OM2207"
+      - "OM2208"
+      - "OM2209"
+      - "OM2210"
+      - "OM2211"
+      - "OM2212"
+      - "OM2213"
+      - "OM2214"
+    val:
+      - null
+    test:
+      - "DUMMY"
+  
+
+labelled:
+  animal_id_list:
+    all:
+      - "OM1803"
+      - "OM1804"
+      - "OM1805"
+      - "OM1806"
+      - "OM1807"
+      - "OM1808"
+      - "OM1809"
+      - "OM1901"
+      - "OM2001"
+      - "OM2002"
+      - "OM2003"
+      - "OM2005"
+      - "OM2006"
+      - "OM2101"
+      - "OM2102"
+      - "OM2103"
+      - "OM2201"
+      - "OM2202"
+      - "OM2203"
+      - "OM2204"
+      - "OM2205"
+      - "OM2207"
+      - "OM2208"
+      - "OM2210"
+      - "OM2211"
+      - "OM2212"
+      - "OM2213"
+      - "OM2214"
+    train:
+      - null
+    val:
+      - null
+    test:
+      - null
+  test_animal_id_list_list:
+      - ["OM1803"]
+      - ["OM1804"]
+      - ["OM1805"]
+      - ["OM1806"]
+      - ["OM1807"]
+      - ["OM1808"]
+      - ["OM1809"]
+      - ["OM1901"]
+      - ["OM2001"]
+      - ["OM2002"]
+      - ["OM2003"]
+      - ["OM2005"]
+      - ["OM2006"]
+      - ["OM2101"]
+      - ["OM2102"]
+      - ["OM2103"]
+      - ["OM2201"]
+      - ["OM2202"]
+      - ["OM2203"]
+      - ["OM2204"]
+      - ["OM2205"]
+      - ["OM2207"]
+      - ["OM2208"]
+      - ["OM2210"]
+      - ["OM2211"]
+      - ["OM2212"]
+      - ["OM2213"]
+      - ["OM2214"]

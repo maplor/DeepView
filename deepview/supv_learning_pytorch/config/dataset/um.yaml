@@ -1,0 +1,111 @@
+species: "um" 
+n_classes: 6
+window_size: 50 # 25Hz * 2s
+in_ch: 3
+test_animal_id: "UM1901" # default test_animal_id
+da_type: "random" # "random"
+da_param1: None
+da_param2: None
+
+un_sup_pretraining:
+  animal_id_list:
+    train:
+      - "UM1801"
+      - "UM1802"
+      - "UM1803"
+      - "UM1804"
+      - "UM1805"
+      - "UM1806"
+      - "UM1807"
+      - "UM1808"
+      - "UM1809"
+      - "UM1810"
+      - "UM1811"
+      - "UM1901"
+      - "UM1902"
+      - "UM1903"
+      - "UM1904"
+      - "UM1905"
+      - "UM1906"
+      - "UM1907"
+      - "UM1908"
+      - "UM1909"
+      - "UM1910"
+      - "UM1911"
+      - "UM1912"
+      - "UM1913"
+      - "UM1917"
+      - "UM2201"
+      - "UM2202"
+      - "UM2203"
+      - "UM2204"
+    val:
+      - null
+    test:
+      - "DUMMY"
+  
+
+labelled:
+  animal_id_list:
+    all:
+      - "UM1801"
+      - "UM1803"
+      - "UM1804"
+      - "UM1806"
+      - "UM1807"
+      - "UM1808"
+      - "UM1809"
+      - "UM1810"
+      - "UM1811"
+      - "UM1901"
+      - "UM1902"
+      - "UM1903"
+      - "UM1904"
+      - "UM1905"
+      - "UM1906"
+      - "UM1907"
+      - "UM1908"
+      - "UM1909"
+      - "UM1910"
+      - "UM1911"
+      - "UM1912"
+      - "UM1913"
+      - "UM1917"
+      - "UM2201"
+      - "UM2202"
+      - "UM2203"
+      - "UM2204"
+    train:
+      - null
+    val:
+      - null
+    test:
+      - null    
+  test_animal_id_list_list:
+    - ["UM1801"]
+    - ["UM1803"]
+    - ["UM1804"]
+    - ["UM1806"]
+    - ["UM1807"]
+    - ["UM1808"]
+    - ["UM1809"]
+    - ["UM1810"]
+    - ["UM1811"]
+    - ["UM1901"]
+    - ["UM1902"]
+    - ["UM1903"]
+    - ["UM1904"]
+    - ["UM1905"]
+    - ["UM1906"]
+    - ["UM1907"]
+    - ["UM1908"]
+    - ["UM1909"]
+    - ["UM1910"]
+    - ["UM1911"]
+    - ["UM1912"]
+    - ["UM1913"]
+    - ["UM1917"]
+    - ["UM2201"]
+    - ["UM2202"]
+    - ["UM2203"]
+    - ["UM2204"]

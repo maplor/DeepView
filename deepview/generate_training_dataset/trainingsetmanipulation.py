@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import yaml
+import glob
 import pickle
 from datetime import datetime
 
@@ -34,6 +35,7 @@ from deepview.utils import (
     get_deepview_path,
     read_plainconfig,
     get_training_set_folder,
+    get_unsupervised_set_folder,
     attempt_to_make_folder,
 )
 
@@ -41,6 +43,8 @@ from deepview.generate_training_dataset.utils import (
     label_str_list,
     label_str2num,
     GRAVITATIONAL_ACCELERATION,
+    divide_df_if_timestamp_gap_detected_2,
+    run_resampling_and_concat_df,
     date_format,
     GYROSCOPE_SCALE,
 )
@@ -152,8 +156,85 @@ def z_score_normalization(df):
 
     return normalized_df
 
+def format_timestamp(df):
+    s = df['timestamp'].str.replace('T', ' ').str.replace('Z', '')
+    df = df.drop('timestamp', axis=1)
+    s_datetime = pd.to_datetime(s)  # to datetime64[ns]
+    df.insert(loc=0, column='datetime', value=s_datetime)
+    # round at 1 millisecond
+    df['datetime'] = df['datetime'].dt.round('1L')
+    # unixtime
+    unixtime = df['datetime'].apply(lambda t: t.timestamp())
+    df.insert(loc=1, column='unixtime', value=unixtime)
+    return df
 
-def read_process_csv(file, filename, string_to_value):
+#---------------------------read raw sensor data--------------------------------
+
+def read_process_csv(file, sample_rate):
+    """
+    data most contains rows: timestamp and label
+    timestamp: transfer string to unixtime
+    """
+    df = pd.read_csv(file)
+    # todo: check if timestamp and label columns exist
+
+    df = format_timestamp(df)
+
+    # divide data if time_gap exists
+    df_list = divide_df_if_timestamp_gap_detected_2(df, int(sample_rate) * 5 * 60)
+
+    # change sampling rate
+    df = run_resampling_and_concat_df(df_list,
+                                      int(sample_rate),
+                                      remove_sec=3,
+                                      check_df=False)
+
+    # create label_id (int) for label (str)
+    df['label_id'] = df['label'].map(label_str2num)
+
+    return df
+
+def preprocess_datasets(cfg, allsetfolder, sample_rate):
+    """
+    for each sensor data file, preprocess it and save as pkl file into
+    rootpath/unsupervised-datasets/allDataSet folder
+    raw sensor data path saved at: rootpath/config.yaml, file_sets parameter
+    """
+
+    # get raw sensor data full paths
+    filenames = cfg["file_sets"]
+    sorted_filenames = sorted(filenames)
+
+    # read data
+    # AnnotationData = []
+    for file in sorted_filenames:
+        parent, filename, _ = _robust_path_split(file)
+        file_path = os.path.join(
+            allsetfolder, filename+f'_{cfg["scorer"]}.pkl'
+        )
+        # reading raw data here...
+        try:
+            if os.path.isfile(file_path):
+                print('Raw sensor data already exists at %s'%file_path)
+                # with open(file_path, 'rb') as f:
+                #     data = pickle.load(f)
+            else:
+                data = read_process_csv(file, sample_rate)  # return dataframe
+                # todo 检查是否正确存储
+                with open(file_path, 'wb') as f:
+                    pickle.dump(data, f)
+            # conversioncode.guarantee_multiindex_rows(data)
+            # AnnotationData.append(data)
+        except FileNotFoundError:
+            print(file_path, " not found raw sensor data, please create data first.")
+
+    # if not len(AnnotationData):
+    #     print("No data was found!")
+    #     return
+    return
+#---------------------------read raw sensor data--------------------------------
+
+def read_process_csv_old(file, filename, string_to_value):
     # load data
     df = pd.read_csv(file)
     needed_column = ['logger_id', 'animal_tag', 'timestamp', 'acc_x', 'acc_y', 'acc_z',
@@ -183,7 +264,7 @@ def read_process_csv(file, filename, string_to_value):
     tmpdata['domainid'] = tmpdata['filename'].map(string_to_value)
     return tmpdata
 
-def preprocess_datasets(cfg, trainingsetfolder_full):
+def preprocess_datasets_old(cfg, trainingsetfolder_full):
     """
     This file preprocess raw sensor data and store new files into 'labeled_data' folder
     #------by xia---------
@@ -257,11 +338,11 @@ def create_training_dataset(
     config,
     # num_shuffles=1,
     # Shuffles=None,
-    windows2linux=False,
-    userfeedback=False,
-    trainIndices=None,
-    testIndices=None,
-    net_type=None,
+    # windows2linux=False,
+    # userfeedback=False,
+    # trainIndices=None,
+    # testIndices=None,
+    sample_rate=None,
     augmenter_type=None,
     posecfg_template=None,
     superanimal_name="",
@@ -300,7 +381,7 @@ def create_training_dataset(
 
 
     # Loading metadata from config.yaml file:
-    cfg = auxiliaryfunctions.read_config(config)
+    cfg = auxiliaryfunctions.read_config(config)  # project_path/config.yaml
     # dlc_root_path = auxiliaryfunctions.get_deepview_path()
 
 
@@ -308,130 +389,120 @@ def create_training_dataset(
    #  scorer = cfg["scorer"]  # part of project name, string
     project_path = cfg["project_path"]
     # Create path for training sets & store data there. Path: training_datasets/iteration_0/..
-    trainingsetfolder = auxiliaryfunctions.get_training_set_folder(
+    trainingsetfolder = auxiliaryfunctions.get_unsupervised_set_folder(
         cfg
     )  # Create folder for above path. Path concatenation OS platform independent
     auxiliaryfunctions.attempt_to_make_folder(
         Path(os.path.join(project_path, str(trainingsetfolder))), recursive=True
-    )
+    )  # WindowsPath('C:/Users/dell/Desktop/xia-logbot-2024-04-19/unsupervised-datasets/allDataSet')
 
     # preprocess data
     # print('preprocessing data using min-max norm...')
 
-    Data = preprocess_datasets(
+    preprocess_datasets(
         cfg,
         Path(os.path.join(project_path, trainingsetfolder)),
+        sample_rate,
     )
-    if Data is None:
-        print('No data preprocessed.')
-        return
-    # Data = Data[scorer]  # extract labeled data, dataframe
+    # if Data is None:
+    #     print('No data preprocessed.')
+    #     return
 
 
-    # 2. load模型训练参数，目前可以不写
+    ################################################################################
+    # Creating file structure for unsupervised/supervised training &
+    # Test files as well as pose_yaml files (containing training and testing information)
+    #################################################################################
+    unsup_modelfoldername = auxiliaryfunctions.get_unsup_model_folder(cfg)
 
-    # loading & linking pretrained models
-    if net_type is None:  # loading & linking pretrained models
-        net_type = cfg.get("default_net_type", "resnet_50")
-    else:
-        if (
-            "resnet" in net_type
-            or "CNN_AE" in net_type
-            # or "efficientnet" in net_type
-            # or "dlcrnet" in net_type
-        ):
-            pass
-        else:
-            raise ValueError("Invalid network type:", net_type)
+    auxiliaryfunctions.attempt_to_make_folder(
+        str(Path(config).parents[0] / unsup_modelfoldername) + "/train"
+    )  # for all data
 
-
-        ################################################################################
-        # Creating file structure for training &
-        # Test files as well as pose_yaml files (containing training and testing information)
-        #################################################################################
-        modelfoldername = auxiliaryfunctions.get_model_folder(cfg)
-        auxiliaryfunctions.attempt_to_make_folder(
-            Path(config).parents[0] / modelfoldername, recursive=True
+    path_unsup_train_config = str(
+        os.path.join(
+            cfg["project_path"],
+            Path(unsup_modelfoldername),
+            "train",
+            "model_cfg.yaml",
         )
-        auxiliaryfunctions.attempt_to_make_folder(
-            str(Path(config).parents[0] / modelfoldername) + "/train"
-        )
-        auxiliaryfunctions.attempt_to_make_folder(
-            str(Path(config).parents[0] / modelfoldername) + "/test"
-        )
+    )
+    # Make training file! 读文件路径，是存到training datasets里的两个文件
+    trainingsetfolder = auxiliaryfunctions.get_training_set_folder(cfg)
+    (
+        datafilename,
+        metadatafilename,
+    ) = auxiliaryfunctions.get_data_and_metadata_filenames(
+        trainingsetfolder, cfg
+    )
+    items2change = {
+        "project_path": str(cfg["project_path"]),  # 最外层路径
+        "dataset": Path(os.path.join(project_path, trainingsetfolder)),
+        "sample_rate": int(sample_rate),
+        "net_type": "CNN_AE",
+        "lr_init": 0.0001,
+        'batch_size': 32,
+        'max_epochs': 100,
+        'data_length': 180,
+        'data_colunms': ['acc_x', 'acc_y', 'acc_z']
+    }
+    dvparent_path = auxiliaryfunctions.get_deepview_path()
+    defaultconfigfile = os.path.join(dvparent_path, "model_cfg.yaml")
+    _ = MakeTrain_yaml(
+        items2change, path_unsup_train_config, defaultconfigfile)
 
-        path_train_config = str(
-            os.path.join(
-                cfg["project_path"],
-                Path(modelfoldername),
-                "train",
-                "model_cfg.yaml",
-            )
-        )
-        path_test_config = str(
-            os.path.join(
-                cfg["project_path"],
-                Path(modelfoldername),
-                "test",
-                "model_cfg.yaml",
-            )
-        )
-        # str(cfg['proj_path']+'/'+Path(modelfoldername) / 'test'  /  'pose_cfg.yaml')
-        # bodyparts = ['label1', 'label2', 'label3']
-        # dlcparent_path = auxiliaryfunctions.get_deepview_path()
-        # model_path = auxfun_models.check_for_weights(
-        #     net_type, Path(dlcparent_path))
 
-        # Make training file! 读文件路径，是存到training datasets里的两个文件
-        trainingsetfolder = auxiliaryfunctions.get_training_set_folder(cfg)
-        (
-            datafilename,
-            metadatafilename,
-        ) = auxiliaryfunctions.get_data_and_metadata_filenames(
-            trainingsetfolder, cfg
-        )
-        items2change = {
-            "dataset": datafilename,
-            # "metadataset": metadatafilename,
-            # "num_joints": len(bodyparts),
-            # "all_joints": [[i] for i in range(len(bodyparts))],
-            # "all_joints_names": [str(bpt) for bpt in bodyparts],
-            "init_weights": '',
-            "project_path": str(cfg["project_path"]),
-            "net_type": net_type,
-            "dataset_type": augmenter_type,
-        }
+    sup_modelfoldername = auxiliaryfunctions.get_sup_model_folder(cfg)
 
-        items2drop = {}
-        if augmenter_type == "scalecrop":
-            # these values are dropped as scalecrop
-            # doesn't have rotation implemented
-            items2drop = {"rotation": 0, "rotratio": 0.0}
-        # Also drop maDLC smart cropping augmentation parameters
-        for key in ["pre_resize", "crop_size", "max_shift", "crop_sampling"]:
-            items2drop[key] = None
+    auxiliaryfunctions.attempt_to_make_folder(
+        str(Path(config).parents[0] / sup_modelfoldername) + "/train"
+    )
+    auxiliaryfunctions.attempt_to_make_folder(
+        str(Path(config).parents[0] / sup_modelfoldername) + "/test"
+    )
 
-        dvparent_path = auxiliaryfunctions.get_deepview_path()
-        defaultconfigfile = os.path.join(dvparent_path, "model_cfg.yaml")
-        trainingdata = MakeTrain_yaml(
-            items2change, path_train_config, defaultconfigfile, items2drop
-        )
 
-        keys2save = [
-            "dataset",
-            # "num_joints",
-            # "all_joints",
-            # "all_joints_names",
-            "net_type",
-            "init_weights",
-            "global_scale",
-            "location_refinement",
-            "locref_stdev",
-        ]
-        MakeTest_pose_yaml(trainingdata, keys2save, path_test_config)
-        print(
-            "The training dataset is successfully created. Use the function 'train_network' to start training. Happy training!"
+    path_train_config = str(
+        os.path.join(
+            cfg["project_path"],
+            Path(sup_modelfoldername),
+            "train",
+            "model_cfg.yaml",
         )
+    )
+    path_test_config = str(
+        os.path.join(
+            cfg["project_path"],
+            Path(sup_modelfoldername),
+            "test",
+            "model_cfg.yaml",
+        )
+    )
+
+    # Make training file! 读文件路径，是存到training datasets里的两个文件
+    trainingsetfolder = auxiliaryfunctions.get_training_set_folder(cfg)
+    (
+        datafilename,
+        metadatafilename,
+    ) = auxiliaryfunctions.get_data_and_metadata_filenames(
+        trainingsetfolder, cfg
+    )
+
+
+    dvparent_path = auxiliaryfunctions.get_deepview_path()
+    defaultconfigfile = os.path.join(dvparent_path, "model_cfg.yaml")
+    trainingdata = MakeTrain_yaml(
+        items2change, path_train_config, defaultconfigfile)
+
+    keys2save = [
+        "dataset",
+        "net_type",
+        "init_weights",
+    ]
+    MakeTest_pose_yaml(trainingdata, keys2save, path_test_config)
+    print(
+        "The training dataset is successfully created. Use the function 'train_network' to start training. Happy training!"
+    )
 
     return
 
