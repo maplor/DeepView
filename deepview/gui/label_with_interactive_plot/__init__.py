@@ -505,6 +505,7 @@ class LabelWithInteractivePlot(QWidget):
             RawDatacomboBox.addItem(str(path.name))
         RawDatacomboBox.currentIndexChanged.connect(self.handleRawDataComboBoxChange)
         self.settingPannel.addWidget(RawDatacomboBox)
+        self.RawDatacomboBox = RawDatacomboBox
 
     def handleRawDataComboBoxChange(self):
         self.updateRawData()
