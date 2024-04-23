@@ -42,10 +42,11 @@ def return_train_network_path(config, trainingsetindex=0, modelprefix=""):
 
 def train_network(
     config,
+    select_filenames='',
     net_type='CNN_AE',
     lr=0.0005,
     batch_size=32,
-    num_epochs=100,
+    num_epochs=10,
     data_len=180,
     data_column=['acc_x']
 
@@ -155,7 +156,7 @@ def train_network(
 
     # Read file path for pose_config file. >> pass it on
     cfg = auxiliaryfunctions.read_config(config)
-    modelfoldername = auxiliaryfunctions.get_unsup_model_folder(cfg, modelprefix=modelprefix)
+    modelfoldername = auxiliaryfunctions.get_unsup_model_folder(cfg)
     poseconfigfile = Path(
         os.path.join(
             cfg["project_path"], str(modelfoldername), "train", "model_cfg.yaml"
@@ -187,6 +188,7 @@ def train_network(
         print("Selecting single-animal trainer")
         train(
             str(poseconfigfile),
+            select_filenames,
             net_type=net_type,
             lr=lr,
             batch_size=batch_size,

@@ -149,11 +149,11 @@ def get_unsup_model_folder(cfg, modelprefix=""):
         # + str(shuffle),
     )
 
-def grab_files_in_folder(folder, ext="", relative=True):
+def grab_files_in_folder(folder, ext=".csv", relative=True):
     """Return the paths of files with extension *ext* present in *folder*."""
     for file in os.listdir(folder):
-        if file.endswith(ext):
-            yield file if relative else os.path.join(folder, file)
+        # if file.endswith(ext):
+        yield file if relative else os.path.join(folder, file)
 
 
 def get_deepview_path():

@@ -47,7 +47,8 @@ def cfg_from_file(filename):
     Load a config from file filename and merge it into the default options.
     """
     with open(filename, "r") as f:
-        yaml_cfg = yaml.load(f, Loader=yaml.SafeLoader)
+        yaml_cfg = yaml.load(f, Loader=yaml.Loader)
+        # yaml_cfg = yaml.load(f, Loader=yaml.SafeLoader)
 
     # Update the snapshot path to the corresponding path!
     trainpath = str(filename).split("pose_cfg.yaml")[0]

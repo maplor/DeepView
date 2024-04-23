@@ -444,7 +444,7 @@ def create_training_dataset(
         'batch_size': 32,
         'max_epochs': 100,
         'data_length': 180,
-        'data_colunms': ['acc_x', 'acc_y', 'acc_z']
+        # 'data_colunms': ['acc_x', 'acc_y', 'acc_z']
     }
     dvparent_path = auxiliaryfunctions.get_deepview_path()
     defaultconfigfile = os.path.join(dvparent_path, "model_cfg.yaml")

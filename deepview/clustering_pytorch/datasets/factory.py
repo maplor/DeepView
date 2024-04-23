@@ -20,6 +20,7 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader
 import pickle
 import pandas as pd
+from pathlib import Path
 
 
 class DatasetFactory:
@@ -77,23 +78,26 @@ def sliding_window(data, len_sw):
 
 
 def prep_dataset_umineko(data_path,
-                         # data_path_new,
+                         filenames,
                          len_sw,
                          data_column):
-
-    if os.path.exists(data_path):
+    full_file_path = os.path.join(data_path, filenames)
+    if os.path.exists(full_file_path):
         # the pickle file is a list of dataframes, each dataframe is a segment with a label
         # datapath = os.path.join(data_path)
         print('path to load pkl data: ' + data_path)
-        with open(data_path, 'rb') as f:
+        with open(Path(full_file_path), 'rb') as f:
             datalist = pickle.load(f)  # 2634 labeled segments (dataframe)
 
         print('generating segment batch data...')
         # sliding window length
         # len_sw = 90
         data, timestamps, labels, domains, timestr = [], [], [], [], []
-        for d in datalist:
-            tmp = sliding_window(d[data_column, 'timestamp', 'labelid'], len_sw)  # temp:['acc_x', 'acc_y', 'acc_z', 'timestamp', 'labelid', 'domain']
+        # todo, full_file_path 应该通过tab2选择多个文件，在这里组合
+        data_column.extend(['unixtime'])
+        data_column.extend(['label_id'])
+        for d in [datalist]:
+            tmp = sliding_window(d[data_column], len_sw)  # temp:['acc_x', 'acc_y', 'acc_z', 'timestamp', 'labelid', 'domain']
             if tmp.shape[1] != len_sw:
                 continue
             data.append(tmp[:,:,:3])
@@ -111,7 +115,7 @@ def prep_dataset_umineko(data_path,
     #     # print(timestamps.shape)  # acc+gyro (15961, 90, 1)
     # # set args.num_channel
     # # num_channel = data[0].shape[-1]
-    return data, timestamps, labels, domains
+    return data, timestamps, labels
 
 def prep_dataset_umineko_single(data_path):
 
@@ -155,7 +159,7 @@ class base_loader(Dataset):
         return len(self.samples)
 
 class data_loader_umineko(Dataset):
-    def __init__(self, samples, labels, domains, timestamps):
+    def __init__(self, samples, labels, timestamps):
         # super().__init__(samples, labels, domains, timestamps)
         # super(data_loader_umineko, self).__init__(samples, labels, domains, timestamps)
         # self.samples = torch.tensor(samples)
@@ -164,29 +168,29 @@ class data_loader_umineko(Dataset):
         # self.timestamps = torch.tensor(timestamps)
         self.samples = torch.tensor(torch.from_numpy(samples.astype(float)))
         self.labels = torch.tensor(labels.astype(int))
-        self.domains = torch.tensor(domains.astype(int))
+        # self.domains = torch.tensor(domains.astype(int))
         self.timestamps = torch.tensor(timestamps.astype(float))
 
     def __getitem__(self, index):
-        sample, target, domain = self.samples[index], self.labels[index], self.domains[index]
+        sample, target = self.samples[index], self.labels[index]
         timestamp = self.timestamps[index]
         # timestr = self.timestr[index]
-        return sample, timestamp, target, domain
+        return sample, timestamp, target
 
     def __len__(self):
         return len(self.samples)
 
 
-def generate_dataloader(data, target, domains, timestamps):
+def generate_dataloader(data, target, timestamps):
     batch_size = 512
     # dataloader
-    train_set_r = data_loader_umineko(data, target, domains, timestamps)
+    train_set_r = data_loader_umineko(data, target, timestamps)
     train_loader_r = DataLoader(train_set_r, batch_size=batch_size,
                                 shuffle=False, drop_last=False)
     return train_loader_r
 
 
-def prepare_all_data(data_path, data_len, data_column):  # todo, 传args，以后改成从model_cfg.yaml中读取
+def prepare_all_data(data_path, select_filenames, data_len, data_column):  # todo, 传args，以后改成从model_cfg.yaml中读取
     '''
     主要是训练集，需要全部数据做训练。读取数据
     :param data_path:
@@ -194,7 +198,7 @@ def prepare_all_data(data_path, data_len, data_column):  # todo, 传args，以�
     :return:
     '''
     # if args.seabird_name == 'umineko':
-    data, timestamps, labels, domains = prep_dataset_umineko(data_path, data_len, data_column)  # return dict: key=filename, value=[data, timestamps, labels]
+    data, timestamps, labels = prep_dataset_umineko(data_path, select_filenames, data_len, data_column)  # return dict: key=filename, value=[data, timestamps, labels]
 
     # concatenate list
     # todo, 根据数据重新选择哪几个columns
@@ -202,11 +206,11 @@ def prepare_all_data(data_path, data_len, data_column):  # todo, 传args，以�
     timestamp_b = np.concatenate(timestamps, axis=0)  # [B, Len, dim]
     # timestr_b = np.concatenate(timestr, axis=0)  # [B, Len, dim]
     label_b = np.concatenate(labels, axis=0)  # [B, Len, dim]
-    domain_b = np.concatenate(domains, axis=0)  # [B, Len, dim]
+    # domain_b = np.concatenate(domains, axis=0)  # [B, Len, dim]
 
 
     # train_loader = generate_dataloader_overlap(data, labels, domains, timestamps)
-    train_loader = generate_dataloader(data_b, label_b, domain_b, timestamp_b)
+    train_loader = generate_dataloader(data_b, label_b, timestamp_b)
 
     return train_loader  # return train_loader
     # return [train_loader]  # return train_loader list

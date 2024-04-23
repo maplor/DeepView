@@ -11,7 +11,8 @@ project_path: willbeautomaticallyupdatedbycreate_training_datasetcode
 # scaling factor to be processed by the CNN. You can select the
 # optimal scale by cross-validation
 global_scale: 0.8
-data_columns: 'acc_x'
+data_columns: ['acc_x', 'acc_y', 'acc_z']
+data_length: 180
 
 ##############################################################################
 #### Augmentation variables
@@ -108,7 +109,7 @@ lr_init: 0.0005
 decay_steps: 30000
 alpha_r: 0.02
 sample_rate: 25
-max_epochs: 100
+max_epochs: 10
 batch_size: 32
 
 
