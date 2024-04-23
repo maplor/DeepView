@@ -71,7 +71,7 @@ class LabelWithInteractivePlot(QWidget):
 
         # TODO remove hardcode column name, read from data
         self.columnList = ['acc_x', 'acc_y', 'acc_z', 'gyro_x', 'gyro_y', 'gyro_z', 'mag_x', 'mag_y', 'mag_z']
-        self.selectColumn = []
+        self.selectColumn = ['acc_x', 'acc_y', 'acc_z']
 
         self.data = data
         self.cfg = cfg
@@ -109,6 +109,8 @@ class LabelWithInteractivePlot(QWidget):
         self.checkboxList = []
         for column in self.columnList:
             cb = QCheckBox(column)
+            if column in self.selectColumn:
+                cb.setChecked(True)
             self.top_layout.addWidget(cb)
             self.checkboxList.append(cb)
             cb.stateChanged.connect(self.handleCheckBoxStateChange)
