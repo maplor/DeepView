@@ -137,9 +137,17 @@ class TrainNetwork(DefaultTab):
             self.display_dataset_cb.addItem(filename)
 
         net_label = QtWidgets.QLabel("Input data column(TODO)")
-        self.display_column_cb = QtWidgets.QComboBox()
-        self.display_column_cb.addItems(['acc_x', 'acc_y', 'acc_z'])
-        self.display_column_cb.currentIndexChanged.connect(self.log_data_columns)
+        self.display_column_container = QtWidgets.QHBoxLayout()
+        self.display_column_cb_list = []
+        # TODO remove hardcode column name, read from data
+        for column in ['acc_x', 'acc_y', 'acc_z', 'gyro_x', 'gyro_y', 'gyro_z', 'mag_x', 'mag_y', 'mag_z']:
+            cb = QtWidgets.QCheckBox(column)
+            self.display_column_container.addWidget(cb)
+            self.display_column_cb_list.append(cb)
+
+        # self.display_column_cb = QtWidgets.QComboBox()
+        # self.display_column_cb.addItems(['acc_x', 'acc_y', 'acc_z'])
+        # self.display_column_cb.currentIndexChanged.connect(self.log_data_columns)
 
         # Display iterations
         dispiters_label = QtWidgets.QLabel("Input data length")
@@ -153,7 +161,7 @@ class TrainNetwork(DefaultTab):
         layout.addWidget(select_label, 0, 0)
         layout.addWidget(self.display_dataset_cb, 0, 1)
         layout.addWidget(net_label, 1, 0)
-        layout.addWidget(self.display_column_cb, 1, 1)
+        layout.addLayout(self.display_column_container, 1, 1)
         layout.addWidget(dispiters_label, 2, 0)
         layout.addWidget(self.display_datalen_spin, 2, 1)
 
@@ -208,7 +216,11 @@ class TrainNetwork(DefaultTab):
 
         data_length = int(self.display_datalen_spin.value())
         # todo: bug
-        data_column = str(self.display_column_cb.value())
+        newSelectColumn = []
+        for i, cb in enumerate(self.display_column_cb_list):
+            if cb.isChecked():
+                newSelectColumn.append(cb.text())
+        data_column = str(newSelectColumn)
 
 
         deepview.train_network(
