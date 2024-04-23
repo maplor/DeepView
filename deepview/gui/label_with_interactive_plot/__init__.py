@@ -1,4 +1,6 @@
 import math
+from typing import List
+
 from PySide6.QtWidgets import (
     QApplication,
     QWidget,
@@ -60,6 +62,7 @@ class LabelOption(QDialog):
         return selected_option
 
 class LabelWithInteractivePlot(QWidget):
+
     def __init__(self, root, data: pd.DataFrame, cfg) -> None:
         super().__init__()
 
@@ -70,7 +73,8 @@ class LabelWithInteractivePlot(QWidget):
         self.computeTimer = QTimer()
 
         # TODO remove hardcode column name, read from data
-        self.columnList = ['acc_x', 'acc_y', 'acc_z', 'gyro_x', 'gyro_y', 'gyro_z', 'mag_x', 'mag_y', 'mag_z']
+        # self.columnList = ['acc_x', 'acc_y', 'acc_z', 'gyro_x', 'gyro_y', 'gyro_z', 'mag_x', 'mag_y', 'mag_z']
+        self.columnList = list(data.columns.values)
         self.selectColumn = ['acc_x', 'acc_y', 'acc_z']
 
         self.data = data
@@ -165,12 +169,13 @@ class LabelWithInteractivePlot(QWidget):
         # add widget
         df = self.data
         for i, column in enumerate(self.columnList):
-            plot = pg.PlotWidget(title=column, name=column, axisItems={'bottom': pg.DateAxisItem()})
-            plot.plot(df['datetime'], df[column], pen=pg.mkPen(i))
-            plot.scene().sigMouseClicked.connect(self.mouse_clicked)
-            plot.scene().sigMouseMoved.connect(self.mouse_moved)
-            self.plot_widgets[i] = plot
-            self.splitter.addWidget(plot)
+            if (type(df[column].values[0]) == int) or (type(df[column].values[0]) == float):
+                plot = pg.PlotWidget(title=column, name=column, axisItems={'bottom': pg.DateAxisItem()})
+                plot.plot(df['datetime'], df[column], pen=pg.mkPen(i))
+                plot.scene().sigMouseClicked.connect(self.mouse_clicked)
+                plot.scene().sigMouseMoved.connect(self.mouse_moved)
+                self.plot_widgets[i] = plot
+                self.splitter.addWidget(plot)
 
     def updateLeftPlotList(self):
         for i, column in enumerate(self.columnList):

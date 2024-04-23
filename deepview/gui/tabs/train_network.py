@@ -47,7 +47,7 @@ class TrainNetwork(DefaultTab):
         self.batch_size = str(pose_cfg['batch_size'])
         self.max_iter = str(pose_cfg['max_epochs'])
 
-        self.data_length = str(pose_cfg['batch_size'])
+        self.data_length = str(pose_cfg['data_length'])
         self.data_column = str(pose_cfg['data_columns'])
         self._set_page()
 
@@ -127,16 +127,18 @@ class TrainNetwork(DefaultTab):
         layout.setColumnMinimumWidth(3, 300)
 
         trainingsetfolder = auxiliaryfunctions.get_unsupervised_set_folder({})
-
+        # todo todo: 需要做成复选框，选多个csv文件
         select_label = QtWidgets.QLabel("Select dataset file")
         self.display_dataset_cb = QtWidgets.QComboBox()
-        for filename in auxiliaryfunctions.grab_files_in_folder(
-            os.path.join(self.root.project_folder, trainingsetfolder),
-            relative=False,
-        ):
-            self.display_dataset_cb.addItem(filename)
 
-        net_label = QtWidgets.QLabel("Input data column(TODO)")
+        if os.path.exists(os.path.join(self.root.project_folder, trainingsetfolder)):
+            for filename in auxiliaryfunctions.grab_files_in_folder(
+                os.path.join(self.root.project_folder, trainingsetfolder),
+                relative=False,
+            ):
+                self.display_dataset_cb.addItem(os.path.split(filename)[-1])
+
+        net_label = QtWidgets.QLabel("Input data columns")
         self.display_column_container = QtWidgets.QHBoxLayout()
         self.display_column_cb_list = []
         # TODO remove hardcode column name, read from data
@@ -209,13 +211,14 @@ class TrainNetwork(DefaultTab):
         # maxiters = int(self.max_iters_spin.value())
 
         net_type = str(self.net_type.upper())
-        learning_rate = int(self.save_iters_spin.value())
-        batch_size = int(self.batchsize_spin.value())
+        learning_rate = float(self.save_iters_spin.text())
+        batch_size = int(self.batchsize_spin.text())
         # self.batch_size = str(pose_cfg['batch_size'])
-        max_iter = int(self.display_iters_spin.value())
+        max_iter = int(self.display_iters_spin.text())
 
-        data_length = int(self.display_datalen_spin.value())
+        data_length = int(self.display_datalen_spin.text())
         # todo: bug
+        select_filenames = self.display_dataset_cb.currentText()
         newSelectColumn = []
         for i, cb in enumerate(self.display_column_cb_list):
             if cb.isChecked():
@@ -225,6 +228,7 @@ class TrainNetwork(DefaultTab):
 
         deepview.train_network(
             config,
+            select_filenames,
             net_type=net_type,
             lr=learning_rate,
             batch_size=batch_size,

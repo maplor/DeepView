@@ -40,6 +40,7 @@ from deepview.clustering_pytorch.nnet.common_config import (
 from deepview.clustering_pytorch.nnet.train_utils import (
     AE_train_time_series,
 )
+import json
 
 
 class LearningRate(object):
@@ -67,6 +68,7 @@ def get_batch_spec(cfg):
 
 def train(
     config_yaml,
+    select_filenames,
     net_type='CNN_AE',
     lr=0.0005,
     batch_size=32,
@@ -74,6 +76,7 @@ def train(
     data_len=180,
     data_column=['acc_x']
 ):
+    data_column_list = json.loads(data_column.replace('\'', '"'))
     start_path = os.getcwd()
     try:
         os.chdir(
@@ -86,13 +89,16 @@ def train(
 
     cfg = load_config(config_yaml)
     project_path = cfg['project_path']
-    data_path = os.path.join(project_path, cfg['dataset'])
+    # data_path = os.path.join(project_path, cfg['dataset'])
+    from deepview.utils import auxiliaryfunctions
+    data_path = os.path.join(project_path, auxiliaryfunctions.get_unsupervised_set_folder(cfg))
     # data_path_new = os.path.join(project_path, cfg['dataset'][:-4]+'_new.pkl')
 
-    # xia, dataloader
+    # xia, dataloader,将Train network tab中选中的文件传入这个函数
     train_dataloader = prepare_all_data(data_path,
+                                        select_filenames,
                                         data_len,
-                                        data_column)
+                                        data_column_list)
 
     # print(optimizer)
     # -------------------------核心的模型训练部分，计算loss----------------------------

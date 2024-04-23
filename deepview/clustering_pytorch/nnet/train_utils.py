@@ -114,7 +114,7 @@ def AE_train_time_series(train_loader, model, criterion, optimizer, epoch, devic
 
     model.train()
 
-    for i, (sample, timestamp, label, domain) in enumerate(tqdm(train_loader)):
+    for i, (sample, timestamp, label) in enumerate(tqdm(train_loader)):
         # aug_sample1 = gen_aug(sample, 't_warp')  # t_warp, out.shape=batch64,width3,height900
         # reshape data by adding channel to 1, and transpose height and width
         sample = sample.to(device=device, non_blocking=True, dtype=torch.float)
@@ -138,7 +138,7 @@ def AE_eval_time_series(train_loader, model, device):
 
     representation_list = []
     sample_list, timestamp_list, label_list, domain_list, timestr_list = [], [], [], [], []
-    for i, (sample, timestamp, label, domain) in enumerate(train_loader):
+    for i, (sample, timestamp, label) in enumerate(train_loader):
         sample = sample.to(device=device, non_blocking=True, dtype=torch.float)
         # input_ = (sample).permute(0, 2, 1)  # input.shape=b512,3channel,90width
         input_ = sample
@@ -153,9 +153,9 @@ def AE_eval_time_series(train_loader, model, device):
         timestamp_list.append(timestamp)
         # timestr_list.append(timestr)
         label_list.append(label)
-        domain_list.append(domain)
+        # domain_list.append(domain)
 
-    return representation_list, sample_list, timestamp_list, label_list, domain_list
+    return representation_list, sample_list, timestamp_list, label_list
 
 
 # ----------------------------------------step 2: clustering--------------------------------------
