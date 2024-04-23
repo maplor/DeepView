@@ -476,7 +476,7 @@ class LabelWithInteractivePlot(QWidget):
     def createFeatureExtractButton(self):
         computeBtn = QPushButton('Extract feature')
         self.computeBtn = computeBtn
-        computeBtn.setFixedWidth(100)
+        computeBtn.setFixedWidth(160)
         computeBtn.setEnabled(False)
         computeBtn.clicked.connect(self.handleCompute)
         self.settingPannel.addWidget(computeBtn)
