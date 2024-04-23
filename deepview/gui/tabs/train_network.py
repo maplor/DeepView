@@ -126,10 +126,20 @@ class TrainNetwork(DefaultTab):
     def _generate_layout_attributes_dataset(self, layout):
         layout.setColumnMinimumWidth(3, 300)
 
+        trainingsetfolder = auxiliaryfunctions.get_unsupervised_set_folder({})
+
+        select_label = QtWidgets.QLabel("Select dataset file")
+        self.display_dataset_cb = QtWidgets.QComboBox()
+        for filename in auxiliaryfunctions.grab_files_in_folder(
+            os.path.join(self.root.project_folder, trainingsetfolder),
+            relative=False,
+        ):
+            self.display_dataset_cb.addItem(filename)
+
         net_label = QtWidgets.QLabel("Input data column(TODO)")
-        self.display_net_type = QtWidgets.QComboBox()
-        self.display_net_type.addItems(['acc_x', 'acc_y', 'acc_z'])
-        self.display_net_type.currentIndexChanged.connect(self.log_data_columns)
+        self.display_column_cb = QtWidgets.QComboBox()
+        self.display_column_cb.addItems(['acc_x', 'acc_y', 'acc_z'])
+        self.display_column_cb.currentIndexChanged.connect(self.log_data_columns)
 
         # Display iterations
         dispiters_label = QtWidgets.QLabel("Input data length")
@@ -140,11 +150,12 @@ class TrainNetwork(DefaultTab):
         self.display_datalen_spin.valueChanged.connect(self.log_display_datalen)
 
 
-        layout.addWidget(net_label, 0, 0)
-        layout.addWidget(self.display_net_type, 0, 1)
-        layout.addWidget(dispiters_label, 0, 2)
-        layout.addWidget(self.display_datalen_spin, 0, 3)
-        # layout.addWidget()
+        layout.addWidget(select_label, 0, 0)
+        layout.addWidget(self.display_dataset_cb, 0, 1)
+        layout.addWidget(net_label, 1, 0)
+        layout.addWidget(self.display_column_cb, 1, 1)
+        layout.addWidget(dispiters_label, 2, 0)
+        layout.addWidget(self.display_datalen_spin, 2, 1)
 
 
 
@@ -197,7 +208,7 @@ class TrainNetwork(DefaultTab):
 
         data_length = int(self.display_datalen_spin.value())
         # todo: bug
-        data_column = str(self.display_net_type.value())
+        data_column = str(self.display_column_cb.value())
 
 
         deepview.train_network(
