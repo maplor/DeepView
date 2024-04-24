@@ -266,12 +266,13 @@ class CNN_AE_encoder(nn.Module):
     def __init__(self, n_channels, n_classes, out_channels=128, backbone=True):
         super(CNN_AE_encoder, self).__init__()
 
-        self.n_channels = n_channels
+        self.n_channels = n_channels*2
         # self.datalen = 180  #args.len_sw
         # self.n_classes = n_classes   # check if correct a
 
-        kernel_size = 6
-        self.e_conv1 = nn.Sequential(nn.Conv2d(n_channels, 32,
+        self.linear = nn.Linear(n_channels,  self.n_channels)
+        kernel_size = 5
+        self.e_conv1 = nn.Sequential(nn.Conv2d(self.n_channels, 32,
                                                (1, kernel_size), bias=False,
                                                padding=(0, kernel_size // 2)),
                                      nn.BatchNorm2d(32),
@@ -284,31 +285,23 @@ class CNN_AE_encoder(nn.Module):
                                                padding=(0, kernel_size // 2)),
                                      nn.BatchNorm2d(64),
                                      nn.Tanh())
-        self.pool2 = nn.MaxPool1d(kernel_size=2, stride=2, padding=0, return_indices=True)
+        self.pool2 = nn.MaxPool1d(kernel_size=4, stride=2, padding=0, return_indices=True)
 
         self.e_conv3 = nn.Sequential(nn.Conv2d(64, out_channels,
                                                (1, kernel_size), bias=False,
                                                padding=(0, kernel_size // 2)),
                                      nn.BatchNorm2d(out_channels),
                                      nn.PReLU())
-        self.pool3 = nn.MaxPool1d(kernel_size=3, stride=3, padding=0, return_indices=True)
+        self.pool3 = nn.MaxPool1d(kernel_size=2, stride=2, padding=0, return_indices=True)
 
-        self.out_samples = 15
+        self.out_samples = 25
         self.out_dim = out_channels
 
-        # # backbone 为autoencoder，encoder为batch,128,15
-        # # 对15，up pooling到datalength 180
-        # self.datalen =180  #180
-        # # transpose后，对128维度加linear为n_classes
-        # self.bb_dim = 128  #128
-        # self.out_dim = 12#args.n_class
 
-        # kernelsize = int(self.datalen / self.out_samples)
-        # self.upsample = nn.Upsample(scale_factor=kernelsize, mode='nearest')
-        # self.classifier = nn.Linear(self.bb_dim, self.out_dim)
         return
 
-    def forward(self, x):  # x(batch,len180,dim6)
+    def forward(self, x_input):  # x(batch,len180,dim6)
+        x = self.linear(x_input)
         x = x.unsqueeze(2).permute(0, 3, 2, 1)  # outx(batch,dim,1,len)
         x1 = self.e_conv1(x)  # x1(batch,64,1,180)
         x1 = x1.squeeze(2)  # batch,32,180
@@ -334,8 +327,8 @@ class CNN_AE_decoder(nn.Module):
         super(CNN_AE_decoder, self).__init__()
 
         self.n_channels = n_channels
-        kernel_size = 6
-        self.unpool1 = nn.MaxUnpool1d(kernel_size=3, stride=3, padding=0)
+        kernel_size = 5
+        self.unpool1 = nn.MaxUnpool1d(kernel_size=2, stride=2, padding=0)
         self.d_conv1 = nn.Sequential(nn.ConvTranspose2d(out_channels, 64,
                                                         kernel_size=(1, kernel_size),
                                                         bias=False,
@@ -343,7 +336,7 @@ class CNN_AE_decoder(nn.Module):
                                      nn.BatchNorm2d(64),
                                      nn.Tanh())
 
-        self.unpool2 = nn.MaxUnpool1d(kernel_size=2, stride=2, padding=0)
+        self.unpool2 = nn.MaxUnpool1d(kernel_size=4, stride=2, padding=0)
         self.d_conv2 = nn.Sequential(nn.ConvTranspose2d(64, 32,
                                                         kernel_size=(1, kernel_size),
                                                         stride=1, bias=False,
@@ -358,6 +351,8 @@ class CNN_AE_decoder(nn.Module):
                                                         padding=(0, kernel_size // 2)),
                                      nn.BatchNorm2d(n_channels),
                                      nn.PReLU())
+
+        self.linear = nn.Linear(n_channels, 3)
         if n_channels == 3:  # acc,gyro, where data length is 90
             self.reshapel = nn.Linear(89, 90)
         else:
@@ -380,7 +375,8 @@ class CNN_AE_decoder(nn.Module):
         x = x.unsqueeze(2)
         x_decoded = self.d_conv3(x)
         x_decoded = x_decoded.squeeze(2)  # batch, 6, 180 = AE input
-        x_decoded = self.reshapel(x_decoded)
+        # x_decoded = self.reshapel(x_decoded)
+        # x_decoded = self.linear(x_decoded)
         return x_decoded
 
 

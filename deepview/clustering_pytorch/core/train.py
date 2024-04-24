@@ -134,9 +134,13 @@ def train(
         # torch.save({'optimizer': optimizer.state_dict(), 'model': model.state_dict(),
         #             'epoch': epoch + 1}, p['pretext_checkpoint'])
 
-    # Save final model, todo, 按照data column, data len, nettype, num epochs保存
-    print('Saving model at: ' + net_type + '_epoch%s' % str(epoch) + '.pth')
-    torch.save(model.state_dict(), net_type + '_epoch%s' % str(epoch) + '.pth')
+    # Save final model, xx\aaa-bbb-2024-04-24\unsup-models\iteration-0\aaaApr24\train
+    column_list = '-'.join(cfg['data_columns']).replace('_','')
+    print('Saving model at: ' + net_type + '_epoch%s' % str(epoch)\
+          + '_datalen%s_' % str(cfg['data_length']) \
+          + column_list + '.pth')
+    torch.save(model.state_dict(), net_type + '_epoch%s' % str(epoch) +\
+               '_datalen%s_' % str(cfg['data_length']) + column_list + '.pth')
 
 
     # return to original path.
