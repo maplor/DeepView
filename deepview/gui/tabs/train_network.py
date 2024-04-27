@@ -129,14 +129,18 @@ class TrainNetwork(DefaultTab):
         trainingsetfolder = auxiliaryfunctions.get_unsupervised_set_folder({})
         # todo todo: 需要做成复选框，选多个csv文件
         select_label = QtWidgets.QLabel("Select dataset file")
-        self.display_dataset_cb = QtWidgets.QComboBox()
+        # self.display_dataset_cb = QtWidgets.QComboBox()
+        self.display_dataset_container = QtWidgets.QHBoxLayout()
+        self.display_dataset_cb_list = []
 
         if os.path.exists(os.path.join(self.root.project_folder, trainingsetfolder)):
             for filename in auxiliaryfunctions.grab_files_in_folder(
                 os.path.join(self.root.project_folder, trainingsetfolder),
                 relative=False,
             ):
-                self.display_dataset_cb.addItem(os.path.split(filename)[-1])
+                cb = QtWidgets.QCheckBox(os.path.split(filename)[-1])
+                self.display_dataset_container.addWidget(cb)
+                self.display_dataset_cb_list.append(cb)
 
         net_label = QtWidgets.QLabel("Input data columns")
         self.display_column_container = QtWidgets.QHBoxLayout()
@@ -161,7 +165,7 @@ class TrainNetwork(DefaultTab):
 
 
         layout.addWidget(select_label, 0, 0)
-        layout.addWidget(self.display_dataset_cb, 0, 1)
+        layout.addLayout(self.display_dataset_container, 0, 1)
         layout.addWidget(net_label, 1, 0)
         layout.addLayout(self.display_column_container, 1, 1)
         layout.addWidget(dispiters_label, 2, 0)
@@ -218,7 +222,12 @@ class TrainNetwork(DefaultTab):
 
         data_length = int(self.display_datalen_spin.text())
         # todo: bug
-        select_filenames = self.display_dataset_cb.currentText()
+        newSelectFilename = []
+        for cb in self.display_dataset_cb_list:
+            if cb.isChecked():
+                newSelectFilename.append(cb.text())
+        select_filenames = str(newSelectFilename)
+
         newSelectColumn = []
         for i, cb in enumerate(self.display_column_cb_list):
             if cb.isChecked():
