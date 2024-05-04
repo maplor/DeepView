@@ -507,12 +507,12 @@ class MainWindow(QMainWindow):
             parent=None,
             h1_description="Step 3. Evaluate unsupervised learning Network",
         )
-        # TODO: remove this tab later and convert it to LabelWithInteractivePlotTab tab
-        self.mad_gui = LabelData(
-            root=self,
-            parent=None,
-            h1_description="Step 4. Label Data",
-        )
+        # # TODO: remove this tab later and convert it to LabelWithInteractivePlotTab tab
+        # self.mad_gui = LabelData(
+        #     root=self,
+        #     parent=None,
+        #     h1_description="Step 4. Label Data",
+        # )
         # self.interaction_plot = InteractionPlot(
         #     root=self,
         #     parent=None,
@@ -562,7 +562,7 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(self.create_training_dataset, "Create training dataset")
         self.tab_widget.addTab(self.train_network, "Train network")
         self.tab_widget.addTab(self.evaluate_network, "Evaluate network")
-        self.tab_widget.addTab(self.mad_gui, "Label data")
+        # self.tab_widget.addTab(self.mad_gui, "Label data")
         # self.tab_widget.addTab(self.interaction_plot, "Interaction plot")
         self.tab_widget.addTab(self.label_with_interactive_plot, "Label with interactive plot")
         self.tab_widget.addTab(self.supervised_learning_gui, "Supervised learning with new labels")

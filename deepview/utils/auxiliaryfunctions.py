@@ -174,7 +174,7 @@ def write_plainconfig(configname, cfg):
         YAML().dump(cfg, file)
 
 ## Various functions to get filenames, foldernames etc. based on configuration parameters.
-def get_unsupervised_set_folder(cfg):
+def get_unsupervised_set_folder():
     """get folder for all sensor data used for unsupervised learning"""
     # iterate = "iteration-" + str(cfg["iteration"])
     return Path(
