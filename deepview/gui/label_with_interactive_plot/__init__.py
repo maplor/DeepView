@@ -66,6 +66,8 @@ class LabelWithInteractivePlot(QWidget):
     def __init__(self, root, data: pd.DataFrame, cfg) -> None:
         super().__init__()
 
+        self.root = root
+
         # init main_layout & top_layout & bottom_layout
         self.initLayout()
 

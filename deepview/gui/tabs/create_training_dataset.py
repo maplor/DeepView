@@ -90,7 +90,7 @@ class CreateTrainingDataset(DefaultTab):
             augmenter_type=self.aug_choice.currentText(),  # augmentation (string)
         )
         # Check that training data files were indeed created.
-        trainingsetfolder = get_unsupervised_set_folder(self.root.cfg)  # training-datasets/../..
+        trainingsetfolder = get_unsupervised_set_folder()  # training-datasets/../..
         # filenames = list(
         #     get_data_and_metadata_filenames(
         #         trainingsetfolder,

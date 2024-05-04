@@ -389,9 +389,8 @@ def create_training_dataset(
    #  scorer = cfg["scorer"]  # part of project name, string
     project_path = cfg["project_path"]
     # Create path for training sets & store data there. Path: training_datasets/iteration_0/..
-    trainingsetfolder = auxiliaryfunctions.get_unsupervised_set_folder(
-        cfg
-    )  # Create folder for above path. Path concatenation OS platform independent
+    trainingsetfolder = auxiliaryfunctions.get_unsupervised_set_folder()
+    # Create folder for above path. Path concatenation OS platform independent
     auxiliaryfunctions.attempt_to_make_folder(
         Path(os.path.join(project_path, str(trainingsetfolder))), recursive=True
     )  # WindowsPath('C:/Users/dell/Desktop/xia-logbot-2024-04-19/unsupervised-datasets/allDataSet')

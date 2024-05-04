@@ -91,7 +91,7 @@ def train(
     project_path = cfg['project_path']
     # data_path = os.path.join(project_path, cfg['dataset'])
     from deepview.utils import auxiliaryfunctions
-    data_path = os.path.join(project_path, auxiliaryfunctions.get_unsupervised_set_folder(cfg))
+    data_path = os.path.join(project_path, auxiliaryfunctions.get_unsupervised_set_folder())
     # data_path_new = os.path.join(project_path, cfg['dataset'][:-4]+'_new.pkl')
 
     # xia, dataloader,将Train network tab中选中的文件传入这个函数
