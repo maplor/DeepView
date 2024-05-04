@@ -13,7 +13,8 @@ from pathlib import Path
 
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QShowEvent
+import pandas as pd
 
 from deepview.gui.components import (
     DefaultTab,
@@ -49,6 +50,10 @@ class TrainNetwork(DefaultTab):
 
         self.data_length = str(pose_cfg['data_length'])
         self.data_column = str(pose_cfg['data_columns'])
+        # self._set_page()
+
+    # 在第一次渲染 tab 时才构造内容
+    def firstShowEvent(self, event: QShowEvent) -> None:
         self._set_page()
 
     def _set_page(self):
@@ -133,11 +138,16 @@ class TrainNetwork(DefaultTab):
         self.display_dataset_container = QtWidgets.QHBoxLayout()
         self.display_dataset_cb_list = []
 
+        column_list = []
+
         if os.path.exists(os.path.join(self.root.project_folder, trainingsetfolder)):
             for filename in auxiliaryfunctions.grab_files_in_folder(
                 os.path.join(self.root.project_folder, trainingsetfolder),
                 relative=False,
             ):
+                if len(column_list) == 0:
+                    df = pd.read_pickle(filename)
+                    column_list = list(df.columns)
                 cb = QtWidgets.QCheckBox(os.path.split(filename)[-1])
                 self.display_dataset_container.addWidget(cb)
                 self.display_dataset_cb_list.append(cb)
@@ -145,8 +155,8 @@ class TrainNetwork(DefaultTab):
         net_label = QtWidgets.QLabel("Input data columns")
         self.display_column_container = QtWidgets.QHBoxLayout()
         self.display_column_cb_list = []
-        # TODO remove hardcode column name, read from data
-        for column in ['acc_x', 'acc_y', 'acc_z', 'gyro_x', 'gyro_y', 'gyro_z', 'mag_x', 'mag_y', 'mag_z']:
+        # read from first data file
+        for column in column_list:
             cb = QtWidgets.QCheckBox(column)
             self.display_column_container.addWidget(cb)
             self.display_column_cb_list.append(cb)
