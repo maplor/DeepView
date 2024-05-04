@@ -12,6 +12,7 @@ import os
 
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QShowEvent
 from deeplabcut.gui.dlc_params import DLCParams
 from deeplabcut.gui.widgets import ConfigEditor
 
@@ -35,6 +36,18 @@ class DefaultTab(QtWidgets.QWidget):
         self.setLayout(self.main_layout)
 
         self._init_default_layout()
+
+        self.firstShow = False
+
+    def showEvent(self, event: QShowEvent) -> None:
+        if not self.firstShow:
+            self.firstShowEvent(event)
+            self.firstShow = True
+
+        return super().showEvent(event)
+    
+    def firstShowEvent(self, event: QShowEvent) -> None:
+        return
 
     def _init_default_layout(self):
         # Add tab header
