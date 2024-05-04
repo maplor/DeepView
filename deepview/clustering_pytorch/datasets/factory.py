@@ -81,41 +81,24 @@ def prep_dataset_umineko(data_path,
                          filenames,
                          len_sw,
                          data_column):
-    full_file_path = os.path.join(data_path, filenames)
-    if os.path.exists(full_file_path):
-        # the pickle file is a list of dataframes, each dataframe is a segment with a label
-        # datapath = os.path.join(data_path)
-        print('path to load pkl data: ' + data_path)
-        with open(Path(full_file_path), 'rb') as f:
-            datalist = pickle.load(f)  # 2634 labeled segments (dataframe)
+    data_column.extend(['unixtime'])
+    data_column.extend(['label_id'])
 
-        print('generating segment batch data...')
-        # sliding window length
-        # len_sw = 90
-        data, timestamps, labels, domains, timestr = [], [], [], [], []
-        # todo, full_file_path 应该通过tab2选择多个文件，在这里组合
-        data_column.extend(['unixtime'])
-        data_column.extend(['label_id'])
-        for d in [datalist]:
-            tmp = sliding_window(d[data_column], len_sw)  # temp:['acc_x', 'acc_y', 'acc_z', 'timestamp', 'labelid', 'domain']
+    datalist, timestamps, labels, domains, timestr = [], [], [], [], []
+    for filename in filenames:
+        full_file_path = os.path.join(data_path, filename)
+        if os.path.exists(full_file_path):
+            print('path to load pkl data: ' + data_path)
+            with open(Path(full_file_path), 'rb') as f:
+                data = pickle.load(f)  # 2634 labeled segments (dataframe)
+            tmp = sliding_window(data[data_column], len_sw)  # temp:['acc_x', 'acc_y', 'acc_z', 'timestamp', 'labelid', 'domain']
             if tmp.shape[1] != len_sw:
                 continue
-            data.append(tmp[:,:,:3])
+            datalist.append(tmp[:,:,:3])
             timestamps.append(tmp[:,:,3:4])
             labels.append(tmp[:,:,4:5])
-            # domains.append(tmp[:,:,5:6])
-            # timestr.append(tmp[:,:,6:7])
 
-        # with open(data_path_new, 'wb') as f:
-        #     pickle.dump([data, timestamps, labels, domains], f)
-
-    # print('load segment batch data...')
-    # with open(data_path_new, 'rb') as f:
-    #     [data, timestamps, labels, domains] = pickle.load(f)  # return list of batch(,,)
-    #     # print(timestamps.shape)  # acc+gyro (15961, 90, 1)
-    # # set args.num_channel
-    # # num_channel = data[0].shape[-1]
-    return data, timestamps, labels
+    return datalist, timestamps, labels
 
 def prep_dataset_umineko_single(data_path):
 

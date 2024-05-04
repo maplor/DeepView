@@ -72,10 +72,15 @@ class LabelWithInteractivePlot(QWidget):
         # TODO simulation training time, delete it after finishing
         self.computeTimer = QTimer()
 
-        # TODO remove hardcode column name, read from data
-        # self.columnList = ['acc_x', 'acc_y', 'acc_z', 'gyro_x', 'gyro_y', 'gyro_z', 'mag_x', 'mag_y', 'mag_z']
-        self.columnList = list(data.columns.values)
-        self.selectColumn = ['acc_x', 'acc_y', 'acc_z']
+        # remove hardcode column name, read from data
+        self.columnList = []
+        full_columns = list(data.columns.values)
+        for column in full_columns:
+            if ('label' not in column) and ('time' not in column):
+                self.columnList.append(column)
+
+        self.selectColumn = self.columnList
+        # self.selectColumn = ['acc_x', 'acc_y', 'acc_z']
 
         self.data = data
         self.cfg = cfg
@@ -169,13 +174,13 @@ class LabelWithInteractivePlot(QWidget):
         # add widget
         df = self.data
         for i, column in enumerate(self.columnList):
-            if (type(df[column].values[0]) == int) or (type(df[column].values[0]) == float):
-                plot = pg.PlotWidget(title=column, name=column, axisItems={'bottom': pg.DateAxisItem()})
-                plot.plot(df['datetime'], df[column], pen=pg.mkPen(i))
-                plot.scene().sigMouseClicked.connect(self.mouse_clicked)
-                plot.scene().sigMouseMoved.connect(self.mouse_moved)
-                self.plot_widgets[i] = plot
-                self.splitter.addWidget(plot)
+            # if (type(df[column].values[0]) == int) or (type(df[column].values[0]) == float):
+            plot = pg.PlotWidget(title=column, name=column, axisItems={'bottom': pg.DateAxisItem()})
+            plot.plot(df['datetime'], df[column], pen=pg.mkPen(i))
+            plot.scene().sigMouseClicked.connect(self.mouse_clicked)
+            plot.scene().sigMouseMoved.connect(self.mouse_moved)
+            self.plot_widgets[i] = plot
+            self.splitter.addWidget(plot)
 
     def updateLeftPlotList(self):
         for i, column in enumerate(self.columnList):
@@ -474,9 +479,16 @@ class LabelWithInteractivePlot(QWidget):
         modelComboBoxLabel = QLabel('Select model:')
         self.settingPannel.addWidget(modelComboBoxLabel)
         modelComboBox = QComboBox()
-        modelComboBox.addItem("model 1")
-        modelComboBox.addItem("model 2")
-        modelComboBox.addItem("model 3")
+        from deepview.utils import auxiliaryfunctions
+        # Read file path for pose_config file. >> pass it on
+        config = self.root.config
+        cfg = auxiliaryfunctions.read_config(config)
+        unsup_model_path = auxiliaryfunctions.get_unsup_model_folder(cfg)
+        model_path_list = list(
+            Path(os.path.join(self.cfg["project_path"], unsup_model_path)).glob('*.pth'),
+        )
+        for path in model_path_list:
+            modelComboBox.addItem(str(path.name))
         modelComboBox.currentIndexChanged.connect(self.handleModelComboBoxChange)
         self.settingPannel.addWidget(modelComboBox)
 
@@ -502,11 +514,14 @@ class LabelWithInteractivePlot(QWidget):
         self.data.to_csv(edit_data_path)
 
     def createRawDataComboBox(self):
+        # find data at here:C:\Users\dell\Desktop\aa-bbb-2024-04-28\unsupervised-datasets\allDataSet
         RawDataComboBoxLabel = QLabel('Select raw data:')
         self.settingPannel.addWidget(RawDataComboBoxLabel)
         RawDatacomboBox = QComboBox()
+        from deepview.utils import auxiliaryfunctions
+        unsup_data_path = auxiliaryfunctions.get_unsupervised_set_folder()
         rawdata_file_path_list = list(
-        Path(os.path.join(self.cfg["project_path"], "raw-data")).glob('*.csv'),
+        Path(os.path.join(self.cfg["project_path"], unsup_data_path)).glob('*.pkl'),
         )
         for path in rawdata_file_path_list:
             RawDatacomboBox.addItem(str(path.name))

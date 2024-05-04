@@ -94,6 +94,7 @@ class PlotWithInteraction(QWidget):
             index = len(self.leftPlotList)
             
             plot.plot(df['datetime'], df[column], pen=pg.mkPen(index))
+            # plot.plot(df['datetime'], df[column].values.astype(float), pen=pg.mkPen(index))
 
             # optional - link plot viewbox range
             # if index > 0:

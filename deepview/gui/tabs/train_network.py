@@ -126,7 +126,7 @@ class TrainNetwork(DefaultTab):
     def _generate_layout_attributes_dataset(self, layout):
         layout.setColumnMinimumWidth(3, 300)
 
-        trainingsetfolder = auxiliaryfunctions.get_unsupervised_set_folder({})
+        trainingsetfolder = auxiliaryfunctions.get_unsupervised_set_folder()
         # todo todo: 需要做成复选框，选多个csv文件
         select_label = QtWidgets.QLabel("Select dataset file")
         # self.display_dataset_cb = QtWidgets.QComboBox()
@@ -180,6 +180,7 @@ class TrainNetwork(DefaultTab):
         self.root.logger.info(f"Display input data length set to {value}")
 
     def log_net_choice(self, net):
+        # todo, bug, when selecting DeepConvLSTM, bug
         self.root.logger.info(f"Network type set to {net.upper()}")
         # self.root.logger.info(f"TODO: test dataset set to {net.upper()}")
 
@@ -226,7 +227,7 @@ class TrainNetwork(DefaultTab):
         for cb in self.display_dataset_cb_list:
             if cb.isChecked():
                 newSelectFilename.append(cb.text())
-        select_filenames = str(newSelectFilename)
+        select_filenames = newSelectFilename
 
         newSelectColumn = []
         for i, cb in enumerate(self.display_column_cb_list):
