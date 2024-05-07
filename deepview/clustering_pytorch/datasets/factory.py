@@ -67,8 +67,8 @@ def sliding_window(data, len_sw):
 
     # generate batch of data by overlapping the training set
     data_batch = []
-    for idx in range(0, datanp.shape[0] - len_sw - step, step): #step10
-        data_batch.append(datanp[idx: idx+len_sw, :])
+    for idx in range(0, datanp.shape[0] - len_sw - step, step):  # step10
+        data_batch.append(datanp[idx: idx + len_sw, :])
     data_batch.append(datanp[-1 - len_sw: -1, :])  # last batch
     xlist = np.stack(data_batch, axis=0)  # [B, Len90, dim6]
     # [samples, timestamps, labels] = xlist
@@ -91,17 +91,18 @@ def prep_dataset_umineko(data_path,
             print('path to load pkl data: ' + data_path)
             with open(Path(full_file_path), 'rb') as f:
                 data = pickle.load(f)  # 2634 labeled segments (dataframe)
-            tmp = sliding_window(data[data_column], len_sw)  # temp:['acc_x', 'acc_y', 'acc_z', 'timestamp', 'labelid', 'domain']
+            tmp = sliding_window(data[data_column],
+                                 len_sw)  # temp:['acc_x', 'acc_y', 'acc_z', 'timestamp', 'labelid', 'domain']
             if tmp.shape[1] != len_sw:
                 continue
-            datalist.append(tmp[:,:,:3])
-            timestamps.append(tmp[:,:,3:4])
-            labels.append(tmp[:,:,4:5])
+            datalist.append(tmp[:, :, :3])
+            timestamps.append(tmp[:, :, 3:4])
+            labels.append(tmp[:, :, 4:5])
 
     return datalist, timestamps, labels
 
-def prep_dataset_umineko_single(data_path):
 
+def prep_dataset_umineko_single(data_path):
     with open(data_path, 'rb') as f:
         datalist = pickle.load(f)  # 2634 labeled segments (dataframe)
 
@@ -110,14 +111,15 @@ def prep_dataset_umineko_single(data_path):
     len_sw = 90
     data, timestamps, labels, domains, timestr = [], [], [], [], []
     for d in [datalist]:
-        tmp = sliding_window(d[['acc_x', 'acc_y', 'acc_z', 'time', 'labelid', 'domainid']], len_sw)  # temp:['acc_x', 'acc_y', 'acc_z', 'timestamp', 'labelid', 'domain']
+        tmp = sliding_window(d[['acc_x', 'acc_y', 'acc_z', 'time', 'labelid', 'domainid']],
+                             len_sw)  # temp:['acc_x', 'acc_y', 'acc_z', 'timestamp', 'labelid', 'domain']
         if tmp.shape[1] != len_sw:
             continue
-        data.append(tmp[:,:,:3])
-        timestamps.append(tmp[:,:,3:4])
-        labels.append(tmp[:,:,4:5])
-        domains.append(tmp[:,:,5:6])
-        timestr.append(tmp[:,:,6:7])
+        data.append(tmp[:, :, :3])
+        timestamps.append(tmp[:, :, 3:4])
+        labels.append(tmp[:, :, 4:5])
+        domains.append(tmp[:, :, 5:6])
+        timestr.append(tmp[:, :, 6:7])
         # todo, 在这里增加数据column
 
     return data, timestamps, labels, domains, timestr
@@ -134,12 +136,14 @@ class base_loader(Dataset):
         self.timestr = timestr  # filename of the data belongs to
 
     def __getitem__(self, index):
-        sample, label, domain, timestamp = self.samples[index], self.labels[index], self.domains[index], self.timestamps[index]
+        sample, label, domain, timestamp = self.samples[index], self.labels[index], self.domains[index], \
+        self.timestamps[index]
         timestr = self.timestr[index]
         return sample, timestamp, label, domain, timestr
 
     def __len__(self):
         return len(self.samples)
+
 
 class data_loader_umineko(Dataset):
     def __init__(self, samples, labels, timestamps):
@@ -181,25 +185,24 @@ def prepare_all_data(data_path, select_filenames, data_len, data_column):  # tod
     :return:
     '''
     # if args.seabird_name == 'umineko':
-    data, timestamps, labels = prep_dataset_umineko(data_path, select_filenames, data_len, data_column)  # return dict: key=filename, value=[data, timestamps, labels]
+    data, timestamps, labels = prep_dataset_umineko(data_path, select_filenames, data_len,
+                                                    data_column)  # return dict: key=filename, value=[data, timestamps, labels]
 
     # concatenate list
     # todo, 根据数据重新选择哪几个columns
     data_b = np.concatenate(data, axis=0)  # [B, Len, dim]
     timestamp_b = np.concatenate(timestamps, axis=0)  # [B, Len, dim]
-    # timestr_b = np.concatenate(timestr, axis=0)  # [B, Len, dim]
     label_b = np.concatenate(labels, axis=0)  # [B, Len, dim]
-    # domain_b = np.concatenate(domains, axis=0)  # [B, Len, dim]
-
 
     # train_loader = generate_dataloader_overlap(data, labels, domains, timestamps)
     train_loader = generate_dataloader(data_b, label_b, timestamp_b)
 
     return train_loader  # return train_loader
-    # return [train_loader]  # return train_loader list
+
 
 def prepare_single_data(data_path):
-    data, timestamps, labels, domains, timestr = prep_dataset_umineko_single(data_path)  # return dict: key=filename, value=[data, timestamps, labels]
+    data, timestamps, labels, domains, timestr = prep_dataset_umineko_single(
+        data_path)  # return dict: key=filename, value=[data, timestamps, labels]
     data_b = np.concatenate(data, axis=0)  # [B, Len, dim]
     timestamp_b = np.concatenate(timestamps, axis=0)  # [B, Len, dim]
     label_b = np.concatenate(labels, axis=0)  # [B, Len, dim]
@@ -209,3 +212,23 @@ def prepare_single_data(data_path):
     train_loader = generate_dataloader(data_b, label_b, domain_b, timestamp_b)
 
     return train_loader  # return train_loader
+
+
+def prepare_unsup_dataset(segments, data_column):
+    data_list, timestamp_list, label_list = [], [], []
+    for seg in segments:
+        data_list.append(seg[data_column].values)
+        timestamp_list.append(seg['datetime'].values)
+        # label_list.append(seg['label'].values)
+    timestamp_b = np.array(timestamp_list)  # [B, Len, dim]
+    # label_b = np.array(label_list)  # [B, Len, dim]
+    data_b = np.array(data_list)  # [B, Len, dim]
+    # check data shape
+    if len(timestamp_b.shape) == 2:
+        timestamp_b = timestamp_b.reshape(timestamp_b.shape[0], timestamp_b.shape[1], 1)
+
+    # sudo label
+    array_shape = (data_b.shape[0], data_b.shape[1], 1)
+    label_b = np.ones(array_shape)
+    train_loader = generate_dataloader(data_b, label_b, timestamp_b)
+    return train_loader

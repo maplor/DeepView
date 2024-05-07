@@ -1,5 +1,6 @@
 
 import os
+from glob import glob
 import typing
 import pickle
 import warnings
@@ -155,6 +156,13 @@ def grab_files_in_folder(folder, ext=".csv", relative=True):
         # if file.endswith(ext):
         yield file if relative else os.path.join(folder, file)
 
+def grab_files_in_folder_deep(folder, ext=".csv", relative=True):
+    """Return the paths of files with extension *ext* present in *folder*."""
+    all_files = []
+    for path, subdir, files in os.walk(folder):
+        for file in glob(os.path.join(path, ext)):
+            all_files.append(file)
+    return all_files
 
 def get_deepview_path():
     """Get path of where deeplabcut is currently running"""
@@ -289,3 +297,23 @@ def create_folders_from_string(folder_string):
 # # Example usage:
 # folder_string = "root_folder/subfolder1/subfolder2"
 # create_folders_from_string(folder_string)
+
+def get_param_from_path(model_path):
+    '''
+    example of model_path="CNN_AE_epoch9_datalen180_accx-accy-accz"
+    extract and return: model name, data length, data columns
+    '''
+    filename = str(Path(model_path).name)
+    # (1) Extract model name
+    model_name = filename.split("_epoch")[0]
+
+    # (2) Extract data length
+    datalen_index = filename.find("datalen") + len("datalen")
+    underscore_index = filename.find("_", datalen_index)
+    data_length = int(filename[datalen_index:underscore_index])
+
+    # (3) Extract column names
+    column_names = filename.split("_")[-1].split(".")[0]
+    column_names_list = column_names.split('-') if '-' in column_names else [column_names]
+
+    return model_name, data_length, column_names_list
