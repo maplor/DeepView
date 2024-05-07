@@ -171,14 +171,7 @@ def train_network(
             "Try with a different trainingsetfraction or use function 'create_training_dataset' to create a new trainingdataset."
             # "Try with a different shuffle/trainingsetfraction or use function 'create_training_dataset' to create a new trainingdataset with this shuffle index."
         )
-    # else:
-    #     # Set environment variables
-    #     if (
-    #         autotune is not False
-    #     ):  # see: https://github.com/tensorflow/tensorflow/issues/13317
-    #         os.environ["TF_CUDNN_USE_AUTOTUNE"] = "0"
-    #     if gputouse is not None:
-    #         os.environ["CUDA_VISIBLE_DEVICES"] = str(gputouse)
+
     try:
         # cfg_dlc = auxiliaryfunctions.read_plainconfig(poseconfigfile)
 

@@ -1,6 +1,7 @@
 import math
 from typing import List
-
+import torch
+from sklearn.manifold import TSNE
 from PySide6.QtWidgets import (
     QApplication,
     QWidget,
@@ -281,7 +282,7 @@ class LabelWithInteractivePlot(QWidget):
     '''
 
     def handleCompute(self):
-        print('start train...')
+        print('start trainning...')
         self.isTarining = True
         self.updateBtn()
 
@@ -293,7 +294,7 @@ class LabelWithInteractivePlot(QWidget):
         self.isTarining = False
         self.updateBtn()
 
-        self.renderRightPlot()
+        self.renderRightPlot()  # feature extraction function here
         self.updateLeftPlotList()
 
     def updateBtn(self):
@@ -357,19 +358,34 @@ class LabelWithInteractivePlot(QWidget):
         self.viewC.clear()
         df = self.data
 
-        rows = df.shape[0]
+        # rows = df.shape[0]
+
+        # get model parameters from model_path
+        # todo: 从下拉框中读取model_path
+        model_path = self.model_path_list[0]
+
+        from deepview.utils import auxiliaryfunctions
+        model_name, data_length, column_names = \
+            auxiliaryfunctions.get_param_from_path(model_path)  # todo now just test the first model
+
 
         # mock scatter number
-        n = 100
-        step = math.floor(rows / n)
+        # n = 100
+        # step = math.floor(rows / n)
 
         scatterItem = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None))
-        pos = np.random.normal(size=(2,n), scale=100)
+        # pos = np.random.normal(size=(2, n), scale=100)  # PCA result of latent feature
 
-        start_indice, end_indice, pos = self.featureExtraction()
+        # split the dataframe into segments to get latent feature and index
+        start_indice, end_indice, pos = self.featureExtraction(df,
+                                                               model_path,
+                                                               model_name,
+                                                               data_length,
+                                                               column_names)
 
         # save something into data attribute
-        spots = [{'pos': pos[i,:], 'data': (i, start_indice[i], end_indice[i]), 'brush': self.checkColor(self.data.loc[i*step,'label'])} for i in range(n)]
+        n = len(start_indice)
+        spots = [{'pos': pos[i,:], 'data': (i, start_indice[i], end_indice[i]), 'brush': self.checkColor(self.data.loc[i*data_length,'label'])} for i in range(n)]
 
         # plot spots on the scatter figure
         scatterItem.addPoints(spots)
@@ -389,38 +405,24 @@ class LabelWithInteractivePlot(QWidget):
             selected_range = df.iloc[start_idx:end_idx+1]
 
             if not selected_range[['acc_x', 'acc_y', 'acc_z']].isna().any().any():
-                selected_dfs.append(selected_range)
+                selected_dfs.append(selected_range)  # dataframe segment from start_idx to end_idx
                 start_indice.append(start_idx)
                 end_indice.append(end_idx)
 
         return start_indice, end_indice, selected_dfs
 
 
-    def featureExtraction(self):
+    def featureExtraction(self, target_data, model_path, model_name, data_length, column_names):
         # TODO: Implement feature extraction function. Currently, the model output results in a NAN error, so random values are being used.
 
-        start_indice, end_indice, selected_dfs = self.select_random_continuous_seconds()
+        # start_indice, end_indice, selected_dfs = self.select_random_continuous_seconds()
 
         """
-
-        sensor_columns=['acc_x', 'acc_y', 'acc_z']
-
-        input = [df[sensor_columns].to_numpy() for df in selected_dfs]
-
-        input = np.array(input)
-
-        input = torch.from_numpy(input).double()
-
-        modelfoldername = auxiliaryfunctions.get_model_folder(self.cfg)
-        modelconfigfile = Path(
-            os.path.join(
-                self.cfg["project_path"], str(modelfoldername), "test", "model_cfg.yaml"
-            )
-        )
-
-        os.chdir(
-            str(Path(modelconfigfile).parents[0])
-        )  # switch to folder of config_yaml (for logging)
+        target_data = dataframe of selected data (oneday pkl file)
+        model_path = full path of model weight
+        model_name = unsupuervised model name in string format
+        data_length = length of input for unsupervised model in int format
+        column_names = ['acc_x', 'acc_y', 'acc_z']
 
         # 2 get model from dv-models
         modelcfg = load_config(modelconfigfile)
@@ -447,10 +449,32 @@ class LabelWithInteractivePlot(QWidget):
         pos = pca.fit_transform(output)
 
         """
+        # preprocessing: find column names in dataframe
+        new_column_names = find_data_columns(target_data, column_names)
 
-        pos = np.random.normal(size=(len(start_indice),2), scale=100)
+        segments, start_indices = split_dataframe(target_data, data_length)
+        end_indices = [i + data_length for i in start_indices]
+        # get latent feature
+        from deepview.clustering_pytorch.nnet.common_config import get_model
+        from deepview.clustering_pytorch.datasets.factory import prepare_unsup_dataset
+        from deepview.clustering_pytorch.nnet.train_utils import AE_eval_time_series
 
-        return start_indice, end_indice, pos
+        model = get_model(p_backbone=model_name, p_setup='autoencoder')
+        model.load_state_dict(torch.load(model_path))
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        model = model.to(device)
+        train_loader = prepare_unsup_dataset(segments, new_column_names)
+        representation_list, _, _, _ = \
+            AE_eval_time_series(train_loader, model, device)
+
+        # PCA latent representation to shape=(2, len)
+        repre_concat = np.concatenate(representation_list)
+        repre_reshape = repre_concat.reshape(repre_concat.shape[0], -1)
+        repre_tsne = reduce_dimension_with_tsne(repre_reshape)
+
+        # pos = np.random.normal(size=(len(start_indice), 2), scale=100)
+
+        return start_indices, end_indices, repre_tsne
 
     '''
     ==================================================
@@ -486,11 +510,13 @@ class LabelWithInteractivePlot(QWidget):
         config = self.root.config
         cfg = auxiliaryfunctions.read_config(config)
         unsup_model_path = auxiliaryfunctions.get_unsup_model_folder(cfg)
-        model_path_list = list(
-            Path(os.path.join(self.cfg["project_path"], unsup_model_path)).glob('*.pth'),
-        )
+
+        model_path_list = auxiliaryfunctions.grab_files_in_folder_deep(
+            os.path.join(self.cfg["project_path"], unsup_model_path),
+            ext='*.pth')
+        self.model_path_list = model_path_list
         for path in model_path_list:
-            modelComboBox.addItem(str(path.name))
+            modelComboBox.addItem(str(Path(path).name))
         modelComboBox.currentIndexChanged.connect(self.handleModelComboBoxChange)
         self.settingPannel.addWidget(modelComboBox)
 
@@ -565,3 +591,43 @@ class LabelWithInteractivePlot(QWidget):
     def _change_mode(self, mode: str):
         print(f'Change mode to "{mode}"')
         self.mode = mode
+
+def split_dataframe(df, segment_size):
+    '''
+    split the dataframe into segments based on segment_size
+    '''
+    segments = []
+    start_indices = []
+    num_segments = len(df) // segment_size
+
+    for i in range(num_segments):
+        start_index = i * segment_size
+        end_index = start_index + segment_size
+        segment = df.iloc[start_index:end_index]
+        segments.append(segment)
+        start_indices.append(start_index)
+
+    # Handle the last segment which may not have the full segment size
+    start_index = num_segments * segment_size
+    last_segment = df.iloc[start_index:]
+    if len(last_segment) == segment_size:
+        segments.append(last_segment)
+        start_indices.append(start_index)
+
+    return segments, start_indices
+
+def find_data_columns(dataf, column_names):
+    new_column_names = []
+    original_columns = list(dataf.columns.values)
+    clean_columns = [i.replace('_', '') for i in original_columns]
+    for column_name in column_names:
+        for orig_c, clean_c in zip(original_columns, clean_columns):
+            if column_name == clean_c:
+                new_column_names.append(orig_c)
+    return new_column_names
+
+def reduce_dimension_with_tsne(array, method='tsne'):
+    # tsne or pca
+    tsne = TSNE(n_components=2)
+    reduced_array = tsne.fit_transform(array)
+    return reduced_array
