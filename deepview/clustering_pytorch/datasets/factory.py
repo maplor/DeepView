@@ -81,8 +81,10 @@ def prep_dataset_umineko(data_path,
                          filenames,
                          len_sw,
                          data_column):
-    data_column.extend(['unixtime'])
-    data_column.extend(['label_id'])
+    
+    extend_column = data_column.copy()
+    extend_column.extend(['unixtime'])
+    extend_column.extend(['label_id'])
 
     datalist, timestamps, labels, domains, timestr = [], [], [], [], []
     for filename in filenames:
@@ -91,7 +93,7 @@ def prep_dataset_umineko(data_path,
             print('path to load pkl data: ' + data_path)
             with open(Path(full_file_path), 'rb') as f:
                 data = pickle.load(f)  # 2634 labeled segments (dataframe)
-            tmp = sliding_window(data[data_column],
+            tmp = sliding_window(data[extend_column],
                                  len_sw)  # temp:['acc_x', 'acc_y', 'acc_z', 'timestamp', 'labelid', 'domain']
             if tmp.shape[1] != len_sw:
                 continue

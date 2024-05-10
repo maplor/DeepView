@@ -76,7 +76,7 @@ def train(
     data_len=180,
     data_column=['acc_x']
 ):
-    data_column_list = json.loads(data_column.replace('\'', '"'))
+    # data_column_list = json.loads(data_column.replace('\'', '"'))
     start_path = os.getcwd()
     try:
         os.chdir(
@@ -98,7 +98,7 @@ def train(
     train_dataloader = prepare_all_data(data_path,
                                         select_filenames,
                                         data_len,
-                                        data_column_list)
+                                        data_column)
 
     # print(optimizer)
     # -------------------------核心的模型训练部分，计算loss----------------------------
@@ -135,7 +135,7 @@ def train(
         #             'epoch': epoch + 1}, p['pretext_checkpoint'])
 
     # Save final model, xx\aaa-bbb-2024-04-24\unsup-models\iteration-0\aaaApr24\train
-    column_list = '-'.join(cfg['data_columns']).replace('_','')
+    column_list = '-'.join(data_column).replace('_','')
     print('Saving model at: ' + net_type + '_epoch%s' % str(epoch)\
           + '_datalen%s_' % str(cfg['data_length']) \
           + column_list + '.pth')
