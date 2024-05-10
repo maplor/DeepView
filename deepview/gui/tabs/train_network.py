@@ -243,7 +243,7 @@ class TrainNetwork(DefaultTab):
         for i, cb in enumerate(self.display_column_cb_list):
             if cb.isChecked():
                 newSelectColumn.append(cb.text())
-        data_column = str(newSelectColumn)
+        data_column = newSelectColumn
 
 
         deepview.train_network(
