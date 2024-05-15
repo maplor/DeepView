@@ -561,7 +561,7 @@ class MainWindow(QMainWindow):
         # self.tab_widget.addTab(self.label_frames, "Label frames")
         self.tab_widget.addTab(self.create_training_dataset, "Create training dataset")
         self.tab_widget.addTab(self.train_network, "Train network")
-        self.tab_widget.addTab(self.evaluate_network, "Evaluate network")
+        # self.tab_widget.addTab(self.evaluate_network, "Evaluate network")
         # self.tab_widget.addTab(self.mad_gui, "Label data")
         # self.tab_widget.addTab(self.interaction_plot, "Interaction plot")
         self.tab_widget.addTab(self.label_with_interactive_plot, "Label with interactive plot")

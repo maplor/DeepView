@@ -128,10 +128,20 @@ def get_sup_model_folder(cfg, modelprefix=""):
         iterate,
         Task
         + date
-        # + "-trainset"
-        # + str(int(trainFraction * 100))
-        # + "shuffle"
-        # + str(shuffle),
+    )
+
+def get_sup_model_yaml(cfg, modelprefix=""):
+    Task = cfg["Task"]
+    date = cfg["date"]
+    iterate = "iteration-" + str(cfg["iteration"])
+    return Path(
+        modelprefix,
+        "sup-models",
+        iterate,
+        Task
+        + date,
+        'train',
+        'model_cfg.yaml'
     )
 
 def get_unsup_model_folder(cfg, modelprefix=""):
@@ -144,10 +154,6 @@ def get_unsup_model_folder(cfg, modelprefix=""):
         iterate,
         Task
         + date
-        # + "-trainset"
-        # + str(int(trainFraction * 100))
-        # + "shuffle"
-        # + str(shuffle),
     )
 
 def grab_files_in_folder(folder, ext=".csv", relative=True):
