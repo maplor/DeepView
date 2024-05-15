@@ -320,24 +320,6 @@ def setup_dataloaders_supervised_learning(cfg,
                                                  val_animal_id_list,
                                                  test_animal_id_list)
 
-    # if train == True:
-    #     if hasattr(train_loader, "load"):
-    #         # print("Loading train_loader: ")
-    #         train_loader = train_loader.load()
-    #     if hasattr(val_loader, "load"):
-    #         # print("Loading val_loader: ")
-    #         val_loader = val_loader.load()
-        # if train_balanced == True:
-        #     train_dataset = train_loader.dataset
-        #     train_loader_balanced = setup_balanced_dataloader(train_dataset, cfg)
-        #     return train_loader_balanced, val_loader, test_loader
-        # else:
-        #     return train_loader, val_loader, test_loader
-    # else:
-    #     if hasattr(test_loader, "load"):
-    #         # print("Loading test_loader: ")
-    #         test_loader = test_loader.load()
-    #     return train_loader, val_loader, test_loader
     return train_loader, val_loader, test_loader
 
 def prep_dataloaders_for_supervised_learning(cfg,
@@ -345,9 +327,7 @@ def prep_dataloaders_for_supervised_learning(cfg,
                                             val_animal_id_list,
                                             test_animal_id_list,
                                             test_only=False):
-    # train_animal_id_list = cfg.dataset.labelled.animal_id_list.train
-    # val_animal_id_list = cfg.dataset.labelled.animal_id_list.val
-    # test_animal_id_list = cfg.dataset.labelled.animal_id_list.test
+
     train_val_split = True  # otsuka: return true or false
     train_data_ratio = 0.8  # otsuka config_dl.yaml
     batch_size = 128  # otsuka config_dl.yaml
@@ -538,12 +518,12 @@ class DatasetLogbot2(BaseDataset):
                  # da_param2=None,
                  in_ch=3):
         super(DatasetLogbot2, self).__init__(samples, labels)
-        self.paths = paths
+        # self.paths = paths
         # self.augmentation = augmentation
-        self.da_type = da_type
+        # self.da_type = da_type
         # self.da_param1 = da_param1
         # self.da_param2 = da_param2
-        self.in_ch = in_ch
+        # self.in_ch = in_ch
 
     def __getitem__(self, index):
         # if self.samples is None:

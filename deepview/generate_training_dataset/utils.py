@@ -1,6 +1,7 @@
 
 import numpy as np
 import pandas as pd
+from scipy.interpolate import interp1d
 
 label_str2num = {}
 # label_str2num['stationary'] = 100
@@ -107,7 +108,11 @@ def divide_df_if_timestamp_gap_detected_2(
 
     return df_list
 
-def run_resampling_and_concat_df(df_list, acc_sampling_rate, remove_sec=3, check_df=False):
+def run_resampling_and_concat_df(df_list,
+                                 acc_sampling_rate,
+                                 INTERMEDIATE_SAMPLING_RATE=100,
+                                 remove_sec=3,
+                                 check_df=False):
     '''
     Args:
         df_list (list): a list of divided data frames
@@ -118,8 +123,9 @@ def run_resampling_and_concat_df(df_list, acc_sampling_rate, remove_sec=3, check
     Return:
         df (DataFrame): a data frame (combined resampled data frames)
     '''
-    OUTPUT_SAMPLIGN_RATE = 25
-    INTERMEDIATE_SAMPLING_RATE = 100
+    OUTPUT_SAMPLIGN_RATE = acc_sampling_rate
+    # OUTPUT_SAMPLIGN_RATE = 25
+    # INTERMEDIATE_SAMPLING_RATE = 100
     start_index = acc_sampling_rate * remove_sec
     df_concat = pd.DataFrame()
 
@@ -127,7 +133,8 @@ def run_resampling_and_concat_df(df_list, acc_sampling_rate, remove_sec=3, check
     # 31Hz, df not divided  -> resampling
     # 25Hz, df divided      -> concat
     # 25Hz, df not divided  -> none
-    if acc_sampling_rate == 31:
+    # if acc_sampling_rate == 31:
+    if acc_sampling_rate != INTERMEDIATE_SAMPLING_RATE:
         if len(df_list) > 1:
             for i in range(0, len(df_list)):
                 # If the data frame contains more than one minute of recordings,
@@ -162,7 +169,8 @@ def run_resampling_and_concat_df(df_list, acc_sampling_rate, remove_sec=3, check
                 output_sampling_rate=OUTPUT_SAMPLIGN_RATE)
             df_concat = pd.concat([df_concat, df_resampled])
 
-    elif acc_sampling_rate == 25:
+    elif acc_sampling_rate == INTERMEDIATE_SAMPLING_RATE:
+    # elif acc_sampling_rate == 25:
         if len(df_list) > 1:
             for i in range(0, len(df_list)):
                 # If the data frame contains more than one minute of recordings,
@@ -197,7 +205,51 @@ def run_resampling_and_concat_df(df_list, acc_sampling_rate, remove_sec=3, check
 
     return df
 
+
 def resampling(df, intermediate_sampling_rate=100, output_sampling_rate=25):
+    if np.sum(df['unixtime'].duplicated()) > 1:
+        # print(len(df[df['unixtime'].duplicated()]))
+        df.drop_duplicates(subset='datetime', keep=False, inplace=True)
+        # print(len(df[df['unixtime'].duplicated()]))
+        print("duplicated index detected -> duplicates removed")
+    else:
+        print("No duplicates")
+
+    # Generate original time indices
+    original_time = np.arange(len(df)) / intermediate_sampling_rate
+    # Generate new time indices
+    new_length = int(len(df) * output_sampling_rate / intermediate_sampling_rate)
+    new_time = np.arange(new_length) / output_sampling_rate
+    # Create a new DataFrame to store the resampled values
+    resampled_df = pd.DataFrame(index=new_time)
+    for column in df.columns:
+        if column == 'label':  # todo 希望用数据类型作为判断条件
+            # Step 1: Extract unique characters from the column
+            unique_chars = df[column].unique()
+            # Step 2: Create a dictionary that maps each character to a unique integer
+            char_to_int = {char: i for i, char in enumerate(unique_chars, start=1)}
+            # Step 3: Use the dictionary to replace the characters with their corresponding integers
+            df[column] = df[column].map(char_to_int)
+
+            # Create interpolation function for each column
+            interp_func = interp1d(original_time, df[column].values, kind='linear', fill_value='extrapolate')
+            # Generate new values at the new sampling rate
+            resampled_df[column] = interp_func(new_time)
+
+            # Step 4: Create an inverse mapping dictionary
+            int_to_char = {v: k for k, v in char_to_int.items()}
+            # Step 5: Use the inverse mapping dictionary to convert the integers back to the original characters
+            resampled_df[column] = resampled_df[column].map(int_to_char)
+        else:
+            # Create interpolation function for each column
+            interp_func = interp1d(original_time, df[column].values, kind='linear', fill_value='extrapolate')
+            # Generate new values at the new sampling rate
+            resampled_df[column] = interp_func(new_time)
+
+    resampled_df.drop(columns=['index'], inplace=True)
+    return resampled_df
+
+def resampling_otsuka(df, intermediate_sampling_rate=100, output_sampling_rate=25):
     '''
     Resampling data: 31Hz -> 100 Hz -> 25 Hz
 
@@ -210,6 +262,7 @@ def resampling(df, intermediate_sampling_rate=100, output_sampling_rate=25):
     '''
     # Message
     print("Resampling -> ", end="")
+
 
     # Settings
     if intermediate_sampling_rate == 100:

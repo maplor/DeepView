@@ -102,9 +102,7 @@ def train(
     optimizer,
     criterion,
     train_loader,
-    val_loader,
     test_loader,
-    # log,
     DEVICE,
     cfg
 ):
@@ -119,9 +117,6 @@ def train(
     train_loss_list = []
     train_acc_list = []
     train_f1_list = []
-    val_loss_list = []
-    val_acc_list = []
-    val_f1_list = []
     test_loss_list = []
     test_acc_list = []
     test_f1_list = []
@@ -143,11 +138,6 @@ def train(
 
     # define your training loop; iterates over the number of epochs
     for epoch in tqdm(range(cfg.train.n_epoch)):
-
-        # log.info(
-        #     "------------------------------------------------------------------------"
-        # )
-        # log.info(f"EPOCH: {epoch}/{cfg.train.n_epoch}")
 
         # ---------------------------------------------------------------------------
         # Training
@@ -227,12 +217,6 @@ def train(
             # Supervised Model Training
             # -------------------------------------
             else: # supervised training
-                # if cfg.model.model_name == "cnn-ae" and cfg.model.pretrain == False:
-                #     train_output, y_onehot, feats, x_decoded, x_encoded = model(inputs)
-                #     train_loss = criterion(train_output, targets) # Cross Entropy loss
-                # elif cfg.model.model_name == "cnn-ae-wo": # CNN-AE without pre-training
-                #     train_output, y_onehot, feats, x_decoded, x_encoded = model(inputs)
-                #     train_loss = criterion(train_output, targets) # Cross Entropy loss
                 if cfg.model.model_name in MODEL_LIST_01:
                     # Manifold Mixup
                     if cfg.train.manifold_mixup:
@@ -246,41 +230,6 @@ def train(
                         # bce_loss = torch.nn.BCELoss().cuda()
                         softmax = torch.nn.Softmax(dim=1).cuda()
 
-                        # if (epoch % 5 == 0) and idx == 0:
-                            # log.info(f"| monitoring manifold mixup |")
-                            # if "flatten-linear" in cfg.model.out_layer_type:
-                            #     # train_output.shape: torch.Size([128, 6])
-                            #     log.info(f"train_output.shape: {train_output.shape}")
-                            #     # reweighted y_onehot.shape: torch.Size([128, 6])
-                            #     log.info(f"reweighted y_onehot.shape: {y_onehot.shape}")
-                            #     log.info(torch.round(y_onehot[0], decimals=3))
-                            #     log.info(torch.round(softmax(train_output)[0], decimals=3))
-                            #     log.info(targets[0])
-                            #     log.info(torch.round(y_onehot[1], decimals=3))
-                            #     log.info(torch.round(softmax(train_output)[1], decimals=3))
-                            #     log.info(targets[1])
-                            #     log.info(torch.round(y_onehot[2], decimals=3))
-                            #     log.info(torch.round(softmax(train_output)[2], decimals=3))
-                            #     log.info(targets[2])
-                            #
-                            # else:
-                            #     # train_output.shape: torch.Size([128, 6, 50, 1])
-                            #     log.info(f"train_output.shape: {train_output.shape}")
-                            #     # reweighted y_onehot.shape: torch.Size([128, 6, 50, 1])
-                            #     log.info(f"reweighted y_onehot.shape: {y_onehot.shape}")
-                            #     log.info(torch.round(y_onehot.transpose(1, 3).transpose(2, 3)[0], decimals=3))
-                            #     log.info(torch.round(softmax(train_output).transpose(1, 3).transpose(2, 3)[0], decimals=3))
-                            #     log.info(targets[0])
-                            #     log.info(torch.round(y_onehot.transpose(1, 3).transpose(2, 3)[1], decimals=3))
-                            #     log.info(torch.round(softmax(train_output).transpose(1, 3).transpose(2, 3)[1], decimals=3))
-                            #     log.info(targets[1])
-                            #     log.info(torch.round(y_onehot.transpose(1, 3).transpose(2, 3)[2], decimals=3))
-                            #     log.info(torch.round(softmax(train_output).transpose(1, 3).transpose(2, 3)[2], decimals=3))
-                            #     log.info(targets[2])
-                            #
-                            # log.info(f"targets.shape: {targets.shape}")
-                            # log.info(f"targets.dtype: {targets.dtype}")
-                        
                         if cfg.train.mixup_targets_argmax == True:
                             # -----------------------------------------------------------------------
                             # reweighted targets (one-hot) -> Label encoding (n_classes = 6)
@@ -378,108 +327,6 @@ def train(
         elif cfg.train.scheduler in ["Plateau"]:
             scheduler.step()
 
-        # ---------------------------------------------------------------------------
-        # Validation
-        # ---------------------------------------------------------------------------
-        val_preds = []
-        val_gt = []
-        val_losses = []
-        model.eval()
-        with torch.no_grad():
-            n_batches = 0
-            for idx, (sample, target) in enumerate(val_loader):
-
-                #############################################
-                # Data preparation
-                #############################################
-                if cfg.model.model_name in ["cnn-ae"] and cfg.model.pretrain == True:
-                    if sample.size(0) != cfg.train.batch_size:
-                        continue  # skip
-                    if torch.sum(torch.isnan(sample)) > 0:
-                        continue  # skip
-                    window_size = len(sample[0][0])
-                    sample = sample.reshape(cfg.train.batch_size * 20, window_size, 3)  # (BS, T, CH)
-                    target = target.reshape(cfg.train.batch_size * 20, 1, 50)  # (BS, 1, T)
-                    x = sample.transpose(1, 2).unsqueeze(3)  # (BS, CH, T, 1)
-                    y = target.transpose(1, 2)  # (BS, T, 1)
-                else:
-                    x = sample.transpose(1, 3)
-                    y = target.transpose(1, 2)
-
-                inputs = x.to(DEVICE, dtype=torch.float)
-                targets = y.to(DEVICE, dtype=torch.long)
-                targets = utils.convert_torch_labels(targets, label_species)
-
-                if "flatten-linear" in cfg.model.out_layer_type:
-                    # Reshape the targets
-                    targets_list = []
-                    for i in range(0, targets.shape[0]):
-                        # print(f"{i}: {targets[i][-1]}")
-                        targets_list.extend(targets[i][-1])
-                    _targets = torch.tensor(targets_list)
-                    targets = _targets.to(device=DEVICE, dtype=torch.long)
-
-                #############################################
-                # Feed Data to the model and calculate loss
-                #############################################
-                if cfg.model.model_name == "cnn-ae" and cfg.model.pretrain == True:
-                    val_output, x_decoded, x_encoded = model(inputs)
-                    val_loss = torch.nn.functional.mse_loss(inputs, x_decoded)
-                else:
-                    val_output, _, _ = model(
-                        inputs,
-                        targets,
-                        mixup=False,
-                        mixup_alpha=cfg.train.mixup_alpha
-                    )
-                    val_loss = criterion(val_output, targets)
-                val_losses.append(val_loss.item())
-
-                # prediction
-                val_output = torch.nn.functional.softmax(val_output, dim=1)
-                y_preds = np.argmax(
-                    val_output.cpu().numpy(),
-                    axis=1).flatten()
-                val_preds = np.concatenate(
-                    (np.array(val_preds, int),
-                     np.array(y_preds, int)))
-
-                # ground truth
-                y_true = targets.cpu().numpy().flatten()
-                val_gt = np.concatenate(
-                    (np.array(val_gt, int),
-                     np.array(y_true, int)))
-
-                n_batches += 1
-
-            # evaluation
-            val_loss_mean = np.mean(val_losses)
-            if cfg.model.model_name == "cnn-ae" and cfg.model.pretrain == True:
-                m1 = f"Val Loss: {np.sum(val_losses):.6f}"
-                print(f'{m1}')
-                # log.info(f'{m1}')
-                val_accuracy = 0
-                val_f1 = 0
-            else:
-                val_accuracy = jaccard_score(val_gt, val_preds, average='macro')
-                val_precision = precision_score(val_gt, val_preds, average='macro')
-                val_recall = recall_score(val_gt, val_preds, average='macro')
-                val_f1 = f1_score(val_gt, val_preds, average='macro')
-                m1 = f"Val Loss:   {val_loss_mean:.3f}"
-                m2 = f"Acc: {val_accuracy:.3f}"
-                m3 = f"Precision: {val_precision:.3f}"
-                m4 = f"Recall: {val_recall:.3f}"
-                m5 = f"F1: {val_f1:.3f}"
-                # log.info(f'{m1} {m2} {m3} {m4} {m5}')
-                print(f'{m1} {m2} {m3} {m4} {m5}')
-
-            # start monitoring validation loss after min_epoch
-            # save the best model as "best_model_weights.pt" -> see EarlyStopping init
-            if epoch + 1 >= cfg.train.min_epoch:
-                early_stopping(val_loss_mean, model)
-
-            if cfg.train.scheduler in ["Plateau"]:
-                scheduler.step(metrics=val_loss_mean)
 
         # ---------------------------------------------------------------------------
         # Test result

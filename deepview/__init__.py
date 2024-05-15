@@ -36,6 +36,10 @@ from deepview.clustering_pytorch import (
     # video_inference_superanimal,
 )
 
+from deepview.supv_learning_pytorch import (
+    train_sup_network,
+)
+
 
 # def extract_save_all_maps(config, shuffle, Indices):
 #     return None

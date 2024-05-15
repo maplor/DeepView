@@ -91,19 +91,7 @@ class CreateTrainingDataset(DefaultTab):
         )
         # Check that training data files were indeed created.
         trainingsetfolder = get_unsupervised_set_folder()  # training-datasets/../..
-        # filenames = list(
-        #     get_data_and_metadata_filenames(
-        #         trainingsetfolder,
-        #         # self.root.cfg["TrainingFraction"][0],
-        #         # self.shuffle.value(),
-        #         self.root.cfg,
-        #     )
-        # )
 
-        # if all(
-        #         os.path.exists(os.path.join(self.root.project_folder, file))
-        #         for file in filenames
-        # ):
         if os.path.exists(os.path.join(self.root.project_folder, trainingsetfolder)):
             # generate a pop-up window
             msg = _create_message_box(

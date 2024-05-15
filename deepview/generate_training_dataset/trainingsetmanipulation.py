@@ -176,9 +176,10 @@ def read_process_csv(file, sample_rate):
     timestamp: transfer string to unixtime
     """
     df = pd.read_csv(file)
-    # todo: check if timestamp and label columns exist
 
     df = format_timestamp(df)
+    # calculate sampling rate, the input is timestamp
+    INTERMEDIATE_SAMPLING_RATE = int(np.mean(1/np.diff(df['unixtime'].values)))
 
     # divide data if time_gap exists
     df_list = divide_df_if_timestamp_gap_detected_2(df, int(sample_rate) * 5 * 60)
@@ -186,6 +187,7 @@ def read_process_csv(file, sample_rate):
     # change sampling rate
     df = run_resampling_and_concat_df(df_list,
                                       int(sample_rate),
+                                      INTERMEDIATE_SAMPLING_RATE,
                                       remove_sec=3,
                                       check_df=False)
 
@@ -210,7 +212,8 @@ def preprocess_datasets(cfg, allsetfolder, sample_rate):
     for file in sorted_filenames:
         parent, filename, _ = _robust_path_split(file)
         file_path = os.path.join(
-            allsetfolder, filename+f'_{cfg["scorer"]}.pkl'
+            allsetfolder, filename+f'_%s.pkl'%sample_rate
+            # allsetfolder, filename+f'_{cfg["scorer"]}.pkl'
         )
         # reading raw data here...
         try:
@@ -220,7 +223,6 @@ def preprocess_datasets(cfg, allsetfolder, sample_rate):
                 #     data = pickle.load(f)
             else:
                 data = read_process_csv(file, sample_rate)  # return dataframe
-                # todo 检查是否正确存储
                 with open(file_path, 'wb') as f:
                     pickle.dump(data, f)
             # conversioncode.guarantee_multiindex_rows(data)
@@ -379,11 +381,8 @@ def create_training_dataset(
         )
     """
 
-
     # Loading metadata from config.yaml file:
     cfg = auxiliaryfunctions.read_config(config)  # project_path/config.yaml
-    # dlc_root_path = auxiliaryfunctions.get_deepview_path()
-
 
    # remove if multianimal
    #  scorer = cfg["scorer"]  # part of project name, string
@@ -403,9 +402,6 @@ def create_training_dataset(
         Path(os.path.join(project_path, trainingsetfolder)),
         sample_rate,
     )
-    # if Data is None:
-    #     print('No data preprocessed.')
-    #     return
 
 
     ################################################################################

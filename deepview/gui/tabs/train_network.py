@@ -218,13 +218,6 @@ class TrainNetwork(DefaultTab):
     def train_network(self):
         config = self.root.config
 
-        # 将unsupervised model所需的参数赋值，传入train_network
-        # shuffle = int(self.shuffle.value())
-        # max_snapshots_to_keep = int(self.snapshots.value())
-        # displayiters = int(self.display_iters_spin.value())
-        # saveiters = int(self.save_iters_spin.value())
-        # maxiters = int(self.max_iters_spin.value())
-
         net_type = str(self.net_type.upper())
         learning_rate = float(self.save_iters_spin.text())
         batch_size = int(self.batchsize_spin.text())
@@ -232,7 +225,7 @@ class TrainNetwork(DefaultTab):
         max_iter = int(self.display_iters_spin.text())
 
         data_length = int(self.display_datalen_spin.text())
-        # todo: bug
+
         newSelectFilename = []
         for cb in self.display_dataset_cb_list:
             if cb.isChecked():
