@@ -347,8 +347,8 @@ class LabelWithInteractivePlot(QWidget):
 
         # update spots
         for reg in self.regions[0]:
+            idx_begin, idx_end = self._to_idx(int(reg.getRegion()[0]), int(reg.getRegion()[1]))
             for spot in spots:
-                idx_begin, idx_end = self._to_idx(int(reg.getRegion()[0]), int(reg.getRegion()[1]))
                 if idx_begin < spot['data'][1] and idx_end > spot['data'][2]:
                     spot['brush'] = reg.brush
 
