@@ -538,7 +538,7 @@ class LabelWithInteractivePlot(QWidget):
 
     def handleSaveButton(self):
         os.makedirs(os.path.join(self.cfg["project_path"], "edit-data",), exist_ok=True)
-        edit_data_path = os.path.join(self.cfg["project_path"], "edit-data", self.RawDatacomboBox.currentText())
+        edit_data_path = os.path.join(self.cfg["project_path"], "edit-data", self.RawDatacomboBox.currentText().replace(".pkl", ".csv"))
         self.data.to_csv(edit_data_path)
 
     def createRawDataComboBox(self):
