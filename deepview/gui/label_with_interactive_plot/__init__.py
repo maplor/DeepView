@@ -247,13 +247,16 @@ class LabelWithInteractivePlot(QWidget):
         for i, _ in enumerate(self.regions):
             for reg in self.regions[i]:
                 if reg.getRegion()[0] < pos.x() and reg.getRegion()[1] > pos.x():
+                    #  TODO 选中项回显
                     if set_val is None:
                         dialog = LabelOption()
                         if dialog.exec() == QDialog.Accepted:
                             set_val = dialog.confirm_selection()
                         else:
-                            set_val = 'None'
+                            set_val = None
                     reg.setBrush(self.checkColor(set_val))
+                    # custom properties "label"
+                    reg.label = set_val
         start_idx, end_idx = self._to_idx(int(reg.getRegion()[0]), int(reg.getRegion()[1]))
         print(f'Edit region({start_idx}, {end_idx}) label: {set_val}')
 
@@ -537,9 +540,19 @@ class LabelWithInteractivePlot(QWidget):
         self.settingPannel.addWidget(saveButton)
 
     def handleSaveButton(self):
+        for reg in self.regions[0]:
+            if reg.label:
+                regionRange = reg.getRegion()
+                self.data.loc[(self.data['datetime'] >= int(regionRange[0])) & (self.data['datetime'] <= int(regionRange[1])), 'label'] = reg.label
+
         os.makedirs(os.path.join(self.cfg["project_path"], "edit-data",), exist_ok=True)
         edit_data_path = os.path.join(self.cfg["project_path"], "edit-data", self.RawDatacomboBox.currentText().replace(".pkl", ".csv"))
-        self.data.to_csv(edit_data_path)
+        try:
+            self.data.to_csv(edit_data_path)
+        except:
+            print('save data error!')
+        else:
+            print('save success')
 
     def createRawDataComboBox(self):
         # find data at here:C:\Users\dell\Desktop\aa-bbb-2024-04-28\unsupervised-datasets\allDataSet
