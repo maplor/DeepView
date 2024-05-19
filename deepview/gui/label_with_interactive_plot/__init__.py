@@ -72,18 +72,7 @@ class LabelWithInteractivePlot(QWidget):
         # init main_layout & top_layout & bottom_layout
         self.initLayout()
 
-        # TODO simulation training time, delete it after finishing
         self.computeTimer = QTimer()
-
-        # remove hardcode column name, read from data
-        self.columnList = []
-        full_columns = list(data.columns.values)
-        for column in full_columns:
-            if ('label' not in column) and ('time' not in column):
-                self.columnList.append(column)
-
-        self.selectColumn = self.columnList
-        # self.selectColumn = ['acc_x', 'acc_y', 'acc_z']
 
         self.data = data
         self.cfg = cfg
@@ -92,10 +81,7 @@ class LabelWithInteractivePlot(QWidget):
         self.isTarining = False
         self.mode = 'add'
 
-        self.createCheckBoxList()
-        self.createLeftPlot()
-        self.createCenterPlot()
-        self.createRightSettingPannel()
+        self.createTopArea()
 
         self.updateBtn()
 
@@ -105,9 +91,11 @@ class LabelWithInteractivePlot(QWidget):
         self.setLayout(self.main_layout)
 
         self.top_layout = QHBoxLayout()
+        self.checkbox_layout = QHBoxLayout()
         self.bottom_layout = QHBoxLayout()
 
         self.main_layout.addLayout(self.top_layout)
+        self.main_layout.addLayout(self.checkbox_layout)
         self.main_layout.addLayout(self.bottom_layout)
 
     '''
@@ -117,18 +105,145 @@ class LabelWithInteractivePlot(QWidget):
     ==================================================
     '''
 
-    def createCheckBoxList(self):
+    def createTopArea(self):
+        RawDataComboBoxLabel, RawDatacomboBox = self.createRawDataComboBox()
+        self.top_layout.addWidget(RawDataComboBoxLabel, alignment=Qt.AlignLeft)
+        self.top_layout.addWidget(RawDatacomboBox, alignment=Qt.AlignLeft)
+        
+        modelComboBoxLabel, modelComboBox = self.createModelComboBox()
+        self.top_layout.addWidget(modelComboBoxLabel, alignment=Qt.AlignLeft)
+        self.top_layout.addWidget(modelComboBox, alignment=Qt.AlignLeft)
+        
+        featureExtractBtn = self.createFeatureExtractButton()
+        self.top_layout.addWidget(featureExtractBtn, alignment=Qt.AlignLeft)
+
+        self.top_layout.addStretch()
+
+    def createRawDataComboBox(self):
+        # find data at here:C:\Users\dell\Desktop\aa-bbb-2024-04-28\unsupervised-datasets\allDataSet
+        RawDataComboBoxLabel = QLabel('Select raw data:')
+
+        RawDatacomboBox = QComboBox()
+        from deepview.utils import auxiliaryfunctions
+        unsup_data_path = auxiliaryfunctions.get_unsupervised_set_folder()
+        rawdata_file_path_list = list(
+        Path(os.path.join(self.cfg["project_path"], unsup_data_path)).glob('*.pkl'),
+        )
+        for path in rawdata_file_path_list:
+            RawDatacomboBox.addItem(str(path.name))
+        # RawDatacomboBox.currentIndexChanged.connect(self.handleRawDataComboBoxChange)
+        self.RawDatacomboBox = RawDatacomboBox
+        
+        return RawDataComboBoxLabel, RawDatacomboBox
+
+    # def handleRawDataComboBoxChange(self):
+    #     # self.updateRawData()
+    #     self.resetLeftPlot()
+    #
+    #     self.updateLeftPlotList()
+
+    # def updateRawData(self):
+    #     edit_data_path = os.path.join(self.cfg["project_path"],"edit-data", self.RawDatacomboBox.currentText().replace(".pkl", ".csv"))
+    #     if Path(edit_data_path).exists():
+    #         self.data = pd.read_csv(edit_data_path)
+    #     else:
+    #         raw_data_path = os.path.join(self.cfg["project_path"], "raw-data", self.RawDatacomboBox.currentText())
+    #         self.data = pd.read_csv(raw_data_path)
+    #         self.data['label'] = ""
+    #
+    #     self.data['datetime'] = pd.to_datetime(self.data['timestamp']).apply(lambda x: x.timestamp())
+    
+    def createModelComboBox(self):
+        modelComboBoxLabel = QLabel('Select model:')
+
+        modelComboBox = QComboBox()
+        from deepview.utils import auxiliaryfunctions
+        # Read file path for pose_config file. >> pass it on
+        config = self.root.config
+        cfg = auxiliaryfunctions.read_config(config)
+        unsup_model_path = auxiliaryfunctions.get_unsup_model_folder(cfg)
+
+        model_path_list = auxiliaryfunctions.grab_files_in_folder_deep(
+            os.path.join(self.cfg["project_path"], unsup_model_path),
+            ext='*.pth')
+        self.model_path_list = model_path_list
+        for path in model_path_list:
+            modelComboBox.addItem(str(Path(path).name))
+        # modelComboBox.currentIndexChanged.connect(self.handleModelComboBoxChange)
+        
+        return modelComboBoxLabel, modelComboBox
+    
+    # def handleModelComboBoxChange(self):
+    #     print('ModelComboBox changed')
+
+    def createFeatureExtractButton(self):
+        featureExtractBtn = QPushButton('Extract feature')
+        self.featureExtractBtn = featureExtractBtn
+        featureExtractBtn.setFixedWidth(160)
+        featureExtractBtn.setEnabled(False)
+        featureExtractBtn.clicked.connect(self.handleCompute)
+        
+        return featureExtractBtn
+    
+    def handleCompute(self):
+        print('start trainning...')
+        self.isTarining = True
+        self.updateBtn()
+
+        self.computeTimer.singleShot(1500, self.handleComputeAsyn)
+
+    def handleComputeAsyn(self):
+        self.renderColumnList()
+
+        self.createLeftPlot()
+        self.createCenterPlot()
+        self.createRightSettingPannel()
+
+        self.renderRightPlot()  # feature extraction function here
+        self.updateLeftPlotList()
+    
+        self.isTarining = False
+        self.updateBtn()
+
+    def updateBtn(self):
+        # enabled
+        if self.isTarining:
+            self.featureExtractBtn.setEnabled(False)
+        else:
+            self.featureExtractBtn.setEnabled(True)
+
+        # text
+        if self.isTarining:
+            self.featureExtractBtn.setText('Extracting feature...')
+        else:
+            self.featureExtractBtn.setText('Feature extraction')
+
+    def renderColumnList(self):
+        # 清空 layout
+        for i in reversed(range(self.checkbox_layout.count())):
+            self.checkbox_layout.itemAt(i).widget().deleteLater()
+
+        # TODO 从 data 和 选择的模型中读取列
+        self.columnList = []
+        full_columns = list(self.data.columns.values)
+        for column in full_columns:
+            if ('label' not in column) and ('time' not in column):
+                self.columnList.append(column)
+
+        self.selectColumn = self.columnList
+        # self.selectColumn = ['acc_x', 'acc_y', 'acc_z']
+
         self.checkboxList = []
         for column in self.columnList:
             cb = QCheckBox(column)
             if column in self.selectColumn:
                 cb.setChecked(True)
-            self.top_layout.addWidget(cb)
+            self.checkbox_layout.addWidget(cb)
             self.checkboxList.append(cb)
             cb.stateChanged.connect(self.handleCheckBoxStateChange)
 
         # add a stretch to fill the remaining area and keep the checkbox on the left
-        self.top_layout.addStretch()
+        self.checkbox_layout.addStretch()
 
     def handleCheckBoxStateChange(self):
         newSelectColumn = []
@@ -160,7 +275,7 @@ class LabelWithInteractivePlot(QWidget):
         self.regions = []
         for _ in range(len(self.columnList)):
             self.regions.append([])
-        self.bottom_layout.addLayout(viewL)
+        self.bottom_layout.addLayout(viewL, 2)
 
         self.resetLeftPlot()
         self.splitter.setSizes([100] * len(self.columnList))
@@ -279,42 +394,6 @@ class LabelWithInteractivePlot(QWidget):
 
     '''
     ==================================================
-    bottom center area: button
-    - self.computeBtn QPushButton
-    ==================================================
-    '''
-
-    def handleCompute(self):
-        print('start trainning...')
-        self.isTarining = True
-        self.updateBtn()
-
-        # TODO: simulation training time
-        self.computeTimer.singleShot(1500, self.handleComputeFinish)
-
-    def handleComputeFinish(self):
-        #print('finish train')
-        self.isTarining = False
-        self.updateBtn()
-
-        self.renderRightPlot()  # feature extraction function here
-        self.updateLeftPlotList()
-
-    def updateBtn(self):
-        # enabled
-        if len(self.selectColumn) == 0 or self.isTarining:
-            self.computeBtn.setEnabled(False)
-        else:
-            self.computeBtn.setEnabled(True)
-
-        # text
-        if self.isTarining:
-            self.computeBtn.setText('Extracting feature...')
-        else:
-            self.computeBtn.setText('Feature extraction')
-
-    '''
-    ==================================================
     bottom center area: result plot
     - self.viewC PlotWidget
     - self.selectRect QRect
@@ -325,7 +404,7 @@ class LabelWithInteractivePlot(QWidget):
     def createCenterPlot(self):
         viewC = pg.PlotWidget()
         self.viewC = viewC
-        self.bottom_layout.addWidget(viewC)
+        self.bottom_layout.addWidget(viewC, 2)
 
     def checkColor(self, label):
         if label == 'flying':
@@ -496,43 +575,13 @@ class LabelWithInteractivePlot(QWidget):
 
         self.settingPannel.setAlignment(Qt.AlignTop)
 
-        self.createRawDataComboBox()
-
-        self.createModelComboBox()
-        self.createFeatureExtractButton()
+        # self.createRawDataComboBox()
+        # 
+        # self.createModelComboBox()
+        # self.createFeatureExtractButton()
 
         self.createLabelButton()
         self.createSaveButton()
-
-    def createModelComboBox(self):
-        modelComboBoxLabel = QLabel('Select model:')
-        self.settingPannel.addWidget(modelComboBoxLabel)
-        modelComboBox = QComboBox()
-        from deepview.utils import auxiliaryfunctions
-        # Read file path for pose_config file. >> pass it on
-        config = self.root.config
-        cfg = auxiliaryfunctions.read_config(config)
-        unsup_model_path = auxiliaryfunctions.get_unsup_model_folder(cfg)
-
-        model_path_list = auxiliaryfunctions.grab_files_in_folder_deep(
-            os.path.join(self.cfg["project_path"], unsup_model_path),
-            ext='*.pth')
-        self.model_path_list = model_path_list
-        for path in model_path_list:
-            modelComboBox.addItem(str(Path(path).name))
-        modelComboBox.currentIndexChanged.connect(self.handleModelComboBoxChange)
-        self.settingPannel.addWidget(modelComboBox)
-
-    def createFeatureExtractButton(self):
-        computeBtn = QPushButton('Extract feature')
-        self.computeBtn = computeBtn
-        computeBtn.setFixedWidth(160)
-        computeBtn.setEnabled(False)
-        computeBtn.clicked.connect(self.handleCompute)
-        self.settingPannel.addWidget(computeBtn)
-
-    def handleModelComboBoxChange(self):
-        print('ModelComboBox changed')
 
     def createSaveButton(self):
         saveButton = QPushButton('Save')
@@ -553,39 +602,6 @@ class LabelWithInteractivePlot(QWidget):
             print('save data error!')
         else:
             print('save success')
-
-    def createRawDataComboBox(self):
-        # find data at here:C:\Users\dell\Desktop\aa-bbb-2024-04-28\unsupervised-datasets\allDataSet
-        RawDataComboBoxLabel = QLabel('Select raw data:')
-        self.settingPannel.addWidget(RawDataComboBoxLabel)
-        RawDatacomboBox = QComboBox()
-        from deepview.utils import auxiliaryfunctions
-        unsup_data_path = auxiliaryfunctions.get_unsupervised_set_folder()
-        rawdata_file_path_list = list(
-        Path(os.path.join(self.cfg["project_path"], unsup_data_path)).glob('*.pkl'),
-        )
-        for path in rawdata_file_path_list:
-            RawDatacomboBox.addItem(str(path.name))
-        RawDatacomboBox.currentIndexChanged.connect(self.handleRawDataComboBoxChange)
-        self.settingPannel.addWidget(RawDatacomboBox)
-        self.RawDatacomboBox = RawDatacomboBox
-
-    def handleRawDataComboBoxChange(self):
-        self.updateRawData()
-        self.resetLeftPlot()
-
-        self.updateLeftPlotList()
-
-    def updateRawData(self):
-        edit_data_path = os.path.join(self.cfg["project_path"],"edit-data", self.RawDatacomboBox.currentText())
-        if Path(os.path.join(self.cfg["project_path"],"edit-data", self.RawDatacomboBox.currentText())).exists():
-            self.data = pd.read_csv(edit_data_path)
-        else:
-            raw_data_path = os.path.join(self.cfg["project_path"], "raw-data", self.RawDatacomboBox.currentText())
-            self.data = pd.read_csv(raw_data_path)
-            self.data['label'] = ""
-
-        self.data['datetime'] = pd.to_datetime(self.data['timestamp']).apply(lambda x: x.timestamp())
 
     def createLabelButton(self):
         self.add_mode = QPushButton("Label Add Mode", self)
