@@ -198,7 +198,8 @@ def run_resampling_and_concat_df(df_list,
     df = df_concat
     # Reset index because we removed the first several seconds
     df.reset_index(inplace=True, drop=True)
-    df = df.drop("index", axis=1)
+    if 'index' in df.columns:
+        df = df.drop("index", axis=1)
     # if check_df == True:
     #     display(df.head(5))
     #     print("Length of concatenated df: ", len(df))
