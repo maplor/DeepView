@@ -1,20 +1,19 @@
 # deepview.yaml
 
-#DeepLabCut2.0 Toolbox (deeplabcut.org)
-#© A. & M.W. Mathis Labs
+# extend from DeepLabCut2.0 Toolbox (deeplabcut.org)© A. & M.W. Mathis Labs
 #https://github.com/DeepLabCut/DeepLabCut
 #Please see AUTHORS for contributors.
 
 #https://github.com/DeepLabCut/DeepLabCut/blob/master/AUTHORS
 #Licensed under GNU Lesser General Public License v3.0
 #
-# DeepLabCut environment
+# deepview environment
 # FIRST: INSTALL CORRECT DRIVER for GPU, see https://stackoverflow.com/questions/30820513/what-is-the-correct-version-of-cuda-for-my-nvidia-driver/30820690
 #
 # AFTER THIS FILE IS INSTALLED, if you have a GPU be sure to install `conda forge cudnn`
 #
-# install: conda env create -f DEEPLABCUT.yaml
-# update:  conda env update -f DEEPLABCUT.yaml
+# install: conda env create -f deepview.yaml
+# update:  conda env update -f deepview.yaml
 name: deepview
 channels:
   - conda-forge
@@ -29,5 +28,8 @@ dependencies:
   - ffmpeg
   - pyqtgraph
   - seaborn
+  - omegaconf
+  - timm
+  - fastdtw
   - pip:
     - "deeplabcut[gui,tf]"
