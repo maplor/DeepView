@@ -136,7 +136,8 @@ def create_new_project(
     label_path = project_path / "labeled-data"
     shuffles_path = project_path / "training-datasets"
     results_path = project_path / "dview-models"
-    for p in [file_path, label_path, shuffles_path, results_path]:
+    unsupervised_path = project_path / "unsupervised-datasets"
+    for p in [file_path, label_path, shuffles_path, results_path, unsupervised_path, unsupervised_path / "allDataSet"]:
         p.mkdir(parents=True, exist_ok=DEBUG)
         print('Created "{}"'.format(p))
 
