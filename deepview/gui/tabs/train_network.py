@@ -66,7 +66,7 @@ class TrainNetwork(DefaultTab):
 
         # ---------
         self.main_layout.addWidget(_create_label_widget("Data Attributes", "font:bold"))
-        self.dataset_attributes_dataset = _create_grid_layout(margins=(20, 5, 5, 5))
+        self.dataset_attributes_dataset = _create_grid_layout(margins=(20, 0, 0, 0))
         self._generate_layout_attributes_dataset(self.dataset_attributes_dataset)
         self.main_layout.addLayout(self.dataset_attributes_dataset)
         # ---------
@@ -129,16 +129,24 @@ class TrainNetwork(DefaultTab):
         # layout.addWidget()
 
     def _generate_layout_attributes_dataset(self, layout):
-        layout.setColumnMinimumWidth(3, 300)
-
         trainingsetfolder = auxiliaryfunctions.get_unsupervised_set_folder()
-        # todo todo: 需要做成复选框，选多个csv文件
+        
         select_label = QtWidgets.QLabel("Select dataset file")
-        # self.display_dataset_cb = QtWidgets.QComboBox()
-        self.display_dataset_container = QtWidgets.QHBoxLayout()
+
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scrollContent = QtWidgets.QWidget(scroll)
+        grid = QtWidgets.QGridLayout(scrollContent)
+        grid.setAlignment(Qt.AlignTop)
+        scrollContent.setLayout(grid)
+        scroll.setWidget(scrollContent)
+
+        # self.display_dataset_container = QtWidgets.QHBoxLayout()
         self.display_dataset_cb_list = []
 
         column_list = []
+
+        rowNum = 3
 
         if os.path.exists(os.path.join(self.root.project_folder, trainingsetfolder)):
             for filename in auxiliaryfunctions.grab_files_in_folder(
@@ -149,7 +157,7 @@ class TrainNetwork(DefaultTab):
                     df = pd.read_pickle(filename)
                     column_list = list(df.columns)
                 cb = QtWidgets.QCheckBox(os.path.split(filename)[-1])
-                self.display_dataset_container.addWidget(cb)
+                grid.addWidget(cb, len(self.display_dataset_cb_list) // rowNum, len(self.display_dataset_cb_list) % rowNum)
                 self.display_dataset_cb_list.append(cb)
 
         net_label = QtWidgets.QLabel("Input data columns")
@@ -175,7 +183,7 @@ class TrainNetwork(DefaultTab):
 
 
         layout.addWidget(select_label, 0, 0)
-        layout.addLayout(self.display_dataset_container, 0, 1)
+        layout.addWidget(scroll, 0, 1)
         layout.addWidget(net_label, 1, 0)
         layout.addLayout(self.display_column_container, 1, 1)
         layout.addWidget(dispiters_label, 2, 0)

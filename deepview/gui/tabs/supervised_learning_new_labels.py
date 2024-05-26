@@ -11,6 +11,7 @@ from matplotlib.backends.backend_qt5agg import (
 from matplotlib.figure import Figure
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import QPushButton, QFileDialog, QLineEdit
 from deepview.utils import auxiliaryfunctions
 
@@ -45,6 +46,10 @@ class SupervisedLearningNewLabels(DefaultTab):
         # self.bodyparts_to_use = self.root.all_bodyparts
         self.root = root
 
+        # self._set_page()
+
+    # 在第一次渲染 tab 时才构造内容
+    def firstShowEvent(self, event: QShowEvent) -> None:
         self._set_page()
 
     def _set_page(self):
@@ -93,13 +98,21 @@ class SupervisedLearningNewLabels(DefaultTab):
 
 
     def _generate_layout_attributes_dataset(self, layout):
-        layout.setColumnMinimumWidth(3, 300)
+        # layout.setColumnMinimumWidth(3, 300)
 
         trainingsetfolder = auxiliaryfunctions.get_unsupervised_set_folder()
-        # todo todo: 需要做成复选框，选多个csv文件
         select_train_label = QtWidgets.QLabel("Select training dataset file")
-        # self.display_dataset_cb = QtWidgets.QComboBox()
-        self.display_train_dataset_container = QtWidgets.QHBoxLayout()
+
+        scroll_1 = QtWidgets.QScrollArea()
+        scroll_1.setWidgetResizable(True)
+        scrollContent_1 = QtWidgets.QWidget(scroll_1)
+        grid_1 = QtWidgets.QGridLayout(scrollContent_1)
+        grid_1.setAlignment(Qt.AlignTop)
+        scrollContent_1.setLayout(grid_1)
+        scroll_1.setWidget(scrollContent_1)
+
+        rowNum = 3
+
         self.display_dataset_train_list = []
         self.display_dataset_test_list = []
 
@@ -111,20 +124,26 @@ class SupervisedLearningNewLabels(DefaultTab):
                 relative=False,
             ):
                 cb = QtWidgets.QCheckBox(os.path.split(filename)[-1])
-                self.display_train_dataset_container.addWidget(cb)
+                grid_1.addWidget(cb, len(self.display_dataset_train_list) // rowNum, len(self.display_dataset_train_list) % rowNum)
                 self.display_dataset_train_list.append(cb)
 
         valsetfolder = auxiliaryfunctions.get_unsupervised_set_folder()
         select_val_label = QtWidgets.QLabel("Select test dataset file")
-        # select_val_label = QtWidgets.QLabel("Select validation dataset file")
-        # self.display_dataset_cb = QtWidgets.QComboBox()
-        self.display_val_dataset_container = QtWidgets.QHBoxLayout()
+        
+        scroll_2 = QtWidgets.QScrollArea()
+        scroll_2.setWidgetResizable(True)
+        scrollContent_2 = QtWidgets.QWidget(scroll_2)
+        grid_2 = QtWidgets.QGridLayout(scrollContent_2)
+        grid_2.setAlignment(Qt.AlignTop)
+        scrollContent_2.setLayout(grid_2)
+        scroll_2.setWidget(scrollContent_2)
+        
         for filename in auxiliaryfunctions.grab_files_in_folder(
                 os.path.join(self.root.project_folder, valsetfolder),
                 relative=False,
         ):
             cb = QtWidgets.QCheckBox(os.path.split(filename)[-1])
-            self.display_val_dataset_container.addWidget(cb)
+            grid_2.addWidget(cb, len(self.display_dataset_test_list) // rowNum, len(self.display_dataset_test_list) % rowNum)
             self.display_dataset_test_list.append(cb)
 
         testsetfolder = auxiliaryfunctions.get_unsupervised_set_folder()
@@ -138,9 +157,9 @@ class SupervisedLearningNewLabels(DefaultTab):
             self.display_test_dataset_container.addWidget(cb)
 
         layout.addWidget(select_train_label, 0, 0)
-        layout.addLayout(self.display_train_dataset_container, 0, 1)
+        layout.addWidget(scroll_1, 0, 1)
         layout.addWidget(select_val_label, 1, 0)
-        layout.addLayout(self.display_val_dataset_container, 1, 1)
+        layout.addWidget(scroll_2, 1, 1)
         # layout.addWidget(select_test_label, 2, 0)
         # layout.addWidget(self.display_test_dataset_container, 2, 1)
 
