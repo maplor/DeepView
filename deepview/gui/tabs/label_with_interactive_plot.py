@@ -4,6 +4,7 @@ from pathlib import Path
 
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import QPushButton, QFileDialog, QLineEdit
 from PySide6.QtWidgets import QLabel
 from deepview.utils import auxiliaryfunctions
@@ -23,8 +24,11 @@ class LabelWithInteractivePlotTab(DefaultTab):
         super(LabelWithInteractivePlotTab, self).__init__(root, parent, h1_description)
         self.root = root
 
-        self._set_page()
+        # self._set_page()
 
+    # 在第一次渲染 tab 时才构造内容
+    def firstShowEvent(self, event: QShowEvent) -> None:
+        self._set_page()
 
     def _set_page(self):
         config = self.root.config  # project/config.yaml
