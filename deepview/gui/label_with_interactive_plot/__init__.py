@@ -15,13 +15,13 @@ from PySide6.QtWidgets import (
     QDialog,
     QRadioButton,
     QSplitter,
+    QFrame,
 )
 from PySide6.QtCore import QTimer, QRectF, Qt
 from PySide6.QtGui import QColor
 import numpy as np
 import pandas as pd
 import pyqtgraph as pg
-from PySide6.QtWidgets import QCheckBox
 from functools import partial
 import os
 from pathlib import Path
@@ -190,7 +190,7 @@ class LabelWithInteractivePlot(QWidget):
         self.isTarining = True
         self.updateBtn()
 
-        self.computeTimer.singleShot(1500, self.handleComputeAsyn)
+        self.computeTimer.singleShot(100, self.handleComputeAsyn)
 
     def handleComputeAsyn(self):
         self.renderColumnList()
@@ -223,7 +223,6 @@ class LabelWithInteractivePlot(QWidget):
         for i in reversed(range(self.checkbox_layout.count())):
             self.checkbox_layout.itemAt(i).widget().deleteLater()
 
-        # TODO 从 data 和 选择的模型中读取列
         self.columnList = []
         full_columns = list(self.data.columns.values)
         for column in full_columns:
@@ -254,7 +253,7 @@ class LabelWithInteractivePlot(QWidget):
         print('selectColumn: %s'%(newSelectColumn))
 
         self.updateLeftPlotList()
-        self.updateBtn()
+        # self.updateBtn()
 
     '''
     ==================================================
@@ -311,6 +310,11 @@ class LabelWithInteractivePlot(QWidget):
         selected_indices = self.data[(self.data['datetime'] >= start_ts)
                                      & (self.data['datetime'] <= end_ts)].index
         return selected_indices.values[0], selected_indices.values[-1]
+    
+    def _to_time(self, start_idx, end_idx):
+        start_ts = self.data.loc[start_idx, 'datetime']
+        end_ts = self.data.loc[end_idx, 'datetime']
+        return start_ts, end_ts
 
     def _add_region(self, pos):
         if self.click_begin:    # 记录开始位置
@@ -581,6 +585,7 @@ class LabelWithInteractivePlot(QWidget):
         # self.createFeatureExtractButton()
 
         self.createLabelButton()
+        self.createRegionBtn()
         self.createSaveButton()
 
     def createSaveButton(self):
@@ -617,9 +622,87 @@ class LabelWithInteractivePlot(QWidget):
         self.settingPannel.addWidget(self.del_mode)
         self.settingPannel.addWidget(self.refresh)
 
+        # Add horizontal line
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Sunken)
+        self.settingPannel.addWidget(line)
+
     def _change_mode(self, mode: str):
         print(f'Change mode to "{mode}"')
         self.mode = mode
+
+    def createRegionBtn(self):
+        addRegionBtn = QPushButton('Add region')
+        addRegionBtn.clicked.connect(self.handleAddRegion)
+        toLabelBtn = QPushButton('Save to label')
+        toLabelBtn.clicked.connect(self.handleToLabel)
+        self.settingPannel.addWidget(addRegionBtn)
+        self.settingPannel.addWidget(toLabelBtn)
+
+        # Add horizontal line
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Sunken)
+        self.settingPannel.addWidget(line)
+
+    def handleAddRegion(self):
+        rect = self.viewC.viewRect()
+        w = rect.width()
+        h = rect.height()
+        x = rect.x()
+        y = rect.y()
+
+        # create ROI
+        roi = pg.ROI([x + w * 0.45, y + h * 0.45], [w * 0.1, h * 0.1])
+        # 上
+        roi.addScaleHandle([0.5, 1], [0.5, 0])
+        # 右
+        roi.addScaleHandle([1, 0.5], [0, 0.5])
+        # 下
+        roi.addScaleHandle([0.5, 0], [0.5, 1])
+        # 左
+        roi.addScaleHandle([0, 0.5], [1, 0.5])
+        # 右下
+        roi.addScaleHandle([1, 0], [0, 1])
+
+        self.viewC.addItem(roi)
+
+        self.rightRegionRoi = roi
+        # cache select region
+        self.rightRegionRect = QRectF(0, 0, 1, 1)
+
+        # roi.sigRegionChanged.connect(self.handleROIChange)
+        # roi.sigRegionChangeFinished.connect(self.handleROIChangeFinished)
+        # self.handleROIChange(roi)
+        # self.handleROIChangeFinished(roi)
+
+    def handleToLabel(self):
+        print('Save to label')
+        if not self.rightRegionRoi:
+            return
+        
+        pos: pg.Point = self.rightRegionRoi.pos()
+        size: pg.Point = self.rightRegionRoi.size()
+
+        self.rightRegionRect.setRect(pos.x(), pos.y(), size.x(), size.y())
+        points = self.scatterItem.pointsAt(self.rightRegionRect)
+
+        # TODO 是否需要合并区间？
+        for p in points:
+            # get data attribute
+            index, start, end = p.data()
+
+            startTime, endTime = self._to_time(start, end)
+
+            for i, plot in enumerate(self.plot_widgets):
+                region = pg.LinearRegionItem([startTime, endTime], brush=(0, 0, 255, 100))
+                region.sigRegionChanged.connect(self._region_changed)
+
+                plot.addItem(region)
+                self.regions[i].append(region)
+
+
 
 def split_dataframe(df, segment_size):
     '''
