@@ -5,6 +5,8 @@ import os
 from PySide6 import QtWidgets, QtGui
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QProgressBar
 
 from deepview.gui.components import (
     DefaultTab,
@@ -23,6 +25,9 @@ from deepview.utils.auxiliaryfunctions import (
 
 
 class CreateTrainingDataset(DefaultTab):
+    # 定义进度信号
+    progress_update = Signal(int)
+
     def __init__(self, root, parent, h1_description):
         super(CreateTrainingDataset, self).__init__(root, parent, h1_description)
 
@@ -33,11 +38,20 @@ class CreateTrainingDataset(DefaultTab):
         self._generate_layout_attributes(self.layout_attributes)
         self.main_layout.addLayout(self.layout_attributes)
 
+        # set processing window
+        self.setWindowTitle("Progress Demo")
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+
         self.ok_button = QtWidgets.QPushButton("Create Training Dataset")
         self.ok_button.setMinimumWidth(150)
         self.ok_button.clicked.connect(self.create_training_dataset)
 
+        self.main_layout.addWidget(self.progress_bar)
         self.main_layout.addWidget(self.ok_button, alignment=Qt.AlignRight)
+
+        # 连接信号和槽
+        self.progress_update.connect(self.updateProgress)
 
     def _generate_layout_attributes(self, layout):
         layout.setColumnMinimumWidth(3, 300)
@@ -80,9 +94,12 @@ class CreateTrainingDataset(DefaultTab):
         self.root.logger.info(f"Image augmentation set to {augmentation.upper()}")
 
     def create_training_dataset(self):
+        self.progress_bar.setValue(0)
+
         # 这是处理raw data的函数，包括生成folder，preprocess data和生成config
         # 三个入参为DeepView界面上的三个选项
         deepview.create_training_dataset(
+            self.progress_update,
             self.root.config,
             # shuffle,
             # Shuffles=[self.shuffle.value()],
@@ -109,6 +126,8 @@ class CreateTrainingDataset(DefaultTab):
             self.root.writer.write("Training dataset creation failed.")
 
 
+    def updateProgress(self, value):
+        self.progress_bar.setValue(value)
 
 #--------------message box setting-------------------------
 def _create_message_box(text, info_text):

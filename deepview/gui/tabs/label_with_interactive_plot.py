@@ -66,11 +66,11 @@ def get_plot_data(config):
         print('can not find raw data')
         return
 
-    edit_data_path = os.path.join(cfg["project_path"],"edit-data", rawdata_file.name)
-    if Path(os.path.join(cfg["project_path"],"edit-data", rawdata_file.name)).exists():
+    edit_data_path = os.path.join(cfg["project_path"], "edit-data", rawdata_file.name)
+    if Path(os.path.join(cfg["project_path"], "edit-data", rawdata_file.name)).exists():
         df = pd.read_csv(edit_data_path)
     else:
-        df = pd.read_csv(rawdata_file)
+        df = pd.read_csv(rawdata_file, low_memory=False)
         df['label'] = "" 
 
     df['datetime'] = pd.to_datetime(df['timestamp']).apply(lambda x: x.timestamp())

@@ -14,6 +14,8 @@ from pathlib import Path
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon, QShowEvent
+from PySide6.QtWidgets import QProgressBar
+
 import pandas as pd
 
 from deepview.gui.components import (
@@ -27,8 +29,12 @@ from deepview.gui.widgets import ConfigEditor
 import deepview
 from deepview.utils import auxiliaryfunctions
 
+from PySide6.QtCore import Signal
+
 
 class TrainNetwork(DefaultTab):
+    # 定义进度信号
+    progress_update = Signal(int)
     def __init__(self, root, parent, h1_description):
         super(TrainNetwork, self).__init__(root, parent, h1_description)
 
@@ -71,18 +77,24 @@ class TrainNetwork(DefaultTab):
         self.main_layout.addLayout(self.dataset_attributes_dataset)
         # ---------
 
-        # self.edit_posecfg_btn = QtWidgets.QPushButton("Edit model_cfg.yaml")
-        # self.edit_posecfg_btn.setMinimumWidth(150)
-        # self.edit_posecfg_btn.clicked.connect(self.open_posecfg_editor)
+        # set processing window
+        self.setWindowTitle("Progress Demo")
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
 
         self.ok_button = QtWidgets.QPushButton("Train Network")
         self.ok_button.setMinimumWidth(150)
         self.ok_button.clicked.connect(self.train_network)
 
         # self.main_layout.addWidget(self.edit_posecfg_btn, alignment=Qt.AlignRight)
+        self.main_layout.addWidget(self.progress_bar)
         self.main_layout.addWidget(self.ok_button, alignment=Qt.AlignRight)
 
+        # 连接信号和槽
+        self.progress_update.connect(self.updateProgress)
 
+    def updateProgress(self, value):
+        self.progress_bar.setValue(value)
     def _generate_layout_attributes(self, layout):
         # Shuffle
         # shuffle_label = QtWidgets.QLabel("Shuffle")
@@ -130,7 +142,7 @@ class TrainNetwork(DefaultTab):
 
     def _generate_layout_attributes_dataset(self, layout):
         trainingsetfolder = auxiliaryfunctions.get_unsupervised_set_folder()
-        
+
         select_label = QtWidgets.QLabel("Select dataset file")
 
         scroll = QtWidgets.QScrollArea()
@@ -150,14 +162,15 @@ class TrainNetwork(DefaultTab):
 
         if os.path.exists(os.path.join(self.root.project_folder, trainingsetfolder)):
             for filename in auxiliaryfunctions.grab_files_in_folder(
-                os.path.join(self.root.project_folder, trainingsetfolder),
-                relative=False,
+                    os.path.join(self.root.project_folder, trainingsetfolder),
+                    relative=False,
             ):
                 if len(column_list) == 0:
                     df = pd.read_pickle(filename)
                     column_list = list(df.columns)
                 cb = QtWidgets.QCheckBox(os.path.split(filename)[-1])
-                grid.addWidget(cb, len(self.display_dataset_cb_list) // rowNum, len(self.display_dataset_cb_list) % rowNum)
+                grid.addWidget(cb, len(self.display_dataset_cb_list) // rowNum,
+                               len(self.display_dataset_cb_list) % rowNum)
                 self.display_dataset_cb_list.append(cb)
 
         net_label = QtWidgets.QLabel("Input data columns")
@@ -181,15 +194,12 @@ class TrainNetwork(DefaultTab):
         self.display_datalen_spin.setValue(int(self.data_length))
         self.display_datalen_spin.valueChanged.connect(self.log_display_datalen)
 
-
         layout.addWidget(select_label, 0, 0)
         layout.addWidget(scroll, 0, 1)
         layout.addWidget(net_label, 1, 0)
         layout.addLayout(self.display_column_container, 1, 1)
         layout.addWidget(dispiters_label, 2, 0)
         layout.addWidget(self.display_datalen_spin, 2, 1)
-
-
 
     def log_data_columns(self, value):
         self.root.logger.info(f"Select input data columns to {value}")
@@ -210,6 +220,7 @@ class TrainNetwork(DefaultTab):
 
     def log_batch_size(self, value):
         self.root.logger.info(f"Batch size set to {value}")
+
     def log_save_iters(self, value):
         self.root.logger.info(f"Save iters set to {value}")
 
@@ -224,6 +235,8 @@ class TrainNetwork(DefaultTab):
         editor.show()
 
     def train_network(self):
+        self.progress_bar.setValue(0)
+
         config = self.root.config
 
         net_type = str(self.net_type.upper())
@@ -246,8 +259,8 @@ class TrainNetwork(DefaultTab):
                 newSelectColumn.append(cb.text())
         data_column = newSelectColumn
 
-
         deepview.train_network(
+            self.progress_update,
             config,
             select_filenames,
             net_type=net_type,

@@ -41,6 +41,7 @@ def return_train_network_path(config, trainingsetindex=0, modelprefix=""):
 
 
 def train_network(
+    progress_update,
     config,
     select_filenames='',
     net_type='CNN_AE',
@@ -180,6 +181,7 @@ def train_network(
 
         print("Selecting single-animal trainer")
         train(
+            progress_update,
             str(poseconfigfile),
             select_filenames,
             net_type=net_type,
