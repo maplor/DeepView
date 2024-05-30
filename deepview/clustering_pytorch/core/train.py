@@ -41,6 +41,7 @@ from deepview.clustering_pytorch.nnet.train_utils import (
     AE_train_time_series,
 )
 import json
+from PySide6.QtWidgets import QProgressBar
 
 
 class LearningRate(object):
@@ -67,6 +68,7 @@ def get_batch_spec(cfg):
     }
 
 def train(
+    progress_update,
     config_yaml,
     select_filenames,
     net_type='CNN_AE',
@@ -115,11 +117,16 @@ def train(
     p_opti = 'sgd'
     optimizer = get_optimizer(p_opti, model)
 
+    # progress_bar = QProgressBar()
+    # progress_bar.setRange(0, 100)
+    # progress_bar.setValue(0)
+
     # training
     start_epoch = 0
     # i = 1  # 应该一只鸟一个trainloader，暂时全拼接到一起
     # print('Starting %s-th bird data' % str(i))
     for epoch in range(start_epoch, num_epochs):
+        progress_update.emit(int(epoch/num_epochs * 100))
         # Adjust lr
         lr = adjust_learning_rate(lr, optimizer, epoch, p_scheduler='cosine',p_epochs=num_epochs)
         print('Adjusted learning rate to {:.5f}'.format(lr))

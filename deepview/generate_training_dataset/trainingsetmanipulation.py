@@ -196,7 +196,7 @@ def read_process_csv(file, sample_rate):
 
     return df
 
-def preprocess_datasets(cfg, allsetfolder, sample_rate):
+def preprocess_datasets(progress_update, cfg, allsetfolder, sample_rate):
     """
     for each sensor data file, preprocess it and save as pkl file into
     rootpath/unsupervised-datasets/allDataSet folder
@@ -206,10 +206,12 @@ def preprocess_datasets(cfg, allsetfolder, sample_rate):
     # get raw sensor data full paths
     filenames = cfg["file_sets"]
     sorted_filenames = sorted(filenames)
-
+    filenum = len(filenames)
     # read data
     # AnnotationData = []
-    for file in sorted_filenames:
+    for idx, file in enumerate(sorted_filenames):
+        progress_update.emit(int(idx/filenum * 100))
+
         parent, filename, _ = _robust_path_split(file)
         file_path = os.path.join(
             allsetfolder, filename+f'_%s.pkl'%sample_rate
@@ -337,6 +339,7 @@ def preprocess_datasets_old(cfg, trainingsetfolder_full):
 
 
 def create_training_dataset(
+    progress_update,
     config,
     # num_shuffles=1,
     # Shuffles=None,
@@ -398,6 +401,7 @@ def create_training_dataset(
     # print('preprocessing data using min-max norm...')
 
     preprocess_datasets(
+        progress_update,
         cfg,
         Path(os.path.join(project_path, trainingsetfolder)),
         sample_rate,

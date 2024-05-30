@@ -507,7 +507,6 @@ class MainWindow(QMainWindow):
             parent=None,
             h1_description="Step 3. Evaluate unsupervised learning Network",
         )
-        # # TODO: remove this tab later and convert it to LabelWithInteractivePlotTab tab
         # self.mad_gui = LabelData(
         #     root=self,
         #     parent=None,

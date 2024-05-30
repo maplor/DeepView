@@ -16,7 +16,9 @@ from PySide6.QtWidgets import (
     QRadioButton,
     QSplitter,
     QFrame,
+    QLineEdit
 )
+
 from PySide6.QtCore import QTimer, QRectF, Qt
 from PySide6.QtGui import QColor
 import numpy as np
@@ -212,11 +214,11 @@ class LabelWithInteractivePlot(QWidget):
         else:
             self.featureExtractBtn.setEnabled(True)
 
-        # text
-        if self.isTarining:
-            self.featureExtractBtn.setText('Extracting feature...')
-        else:
-            self.featureExtractBtn.setText('Feature extraction')
+        # # text
+        # if self.isTarining:
+        #     self.featureExtractBtn.setText('Extracting feature...')
+        # else:
+        #     self.featureExtractBtn.setText('Feature extraction')
 
     def renderColumnList(self):
         # 清空 layout
@@ -366,7 +368,6 @@ class LabelWithInteractivePlot(QWidget):
         for i, _ in enumerate(self.regions):
             for reg in self.regions[i]:
                 if reg.getRegion()[0] < pos.x() and reg.getRegion()[1] > pos.x():
-                    #  TODO 选中项回显
                     if set_val is None:
                         dialog = LabelOption()
                         if dialog.exec() == QDialog.Accepted:
@@ -499,42 +500,9 @@ class LabelWithInteractivePlot(QWidget):
 
 
     def featureExtraction(self, target_data, model_path, model_name, data_length, column_names):
-        # TODO: Implement feature extraction function. Currently, the model output results in a NAN error, so random values are being used.
 
         # start_indice, end_indice, selected_dfs = self.select_random_continuous_seconds()
 
-        """
-        target_data = dataframe of selected data (oneday pkl file)
-        model_path = full path of model weight
-        model_name = unsupuervised model name in string format
-        data_length = length of input for unsupervised model in int format
-        column_names = ['acc_x', 'acc_y', 'acc_z']
-
-        # 2 get model from dv-models
-        modelcfg = load_config(modelconfigfile)
-        net_type = modelcfg["net_type"]
-        # project_path = cfg['project_path']
-        model_path = list(
-            Path(
-            os.path.join(
-                self.cfg["project_path"], str(modelfoldername), "train")
-            ).glob('*.pth')
-        )[0]
-        device = 'cpu'
-        model = get_model(p_backbone=net_type, p_setup='autoencoder')  # set backbone model=ResNet18, SSL=simclr, weight
-
-        checkpoint = torch.load(model_path, map_location='cpu')
-        model.load_state_dict(checkpoint)
-        model.to(device)
-        model.double()
-        output, _ = model(input)
-
-        output = output.detach().numpy().reshape(output.shape[0], -1)
-
-        pca = PCA(n_components=2)
-        pos = pca.fit_transform(output)
-
-        """
         # preprocessing: find column names in dataframe
         new_column_names = find_data_columns(target_data, column_names)
 
@@ -635,9 +603,14 @@ class LabelWithInteractivePlot(QWidget):
     def createRegionBtn(self):
         addRegionBtn = QPushButton('Add region')
         addRegionBtn.clicked.connect(self.handleAddRegion)
-        toLabelBtn = QPushButton('Save to label')
+
+        self.input_box = QLineEdit(self)
+        self.input_box.setPlaceholderText("Enter threshold")
+
+        toLabelBtn = QPushButton('Reflect to Data')  # Save to label
         toLabelBtn.clicked.connect(self.handleToLabel)
         self.settingPannel.addWidget(addRegionBtn)
+        self.settingPannel.addWidget(self.input_box)
         self.settingPannel.addWidget(toLabelBtn)
 
         # Add horizontal line
@@ -688,21 +661,47 @@ class LabelWithInteractivePlot(QWidget):
         self.rightRegionRect.setRect(pos.x(), pos.y(), size.x(), size.y())
         points = self.scatterItem.pointsAt(self.rightRegionRect)
 
-        # TODO 是否需要合并区间？
+        # 是否需要合并区间
+        rectangles = []
         for p in points:
-            # get data attribute
             index, start, end = p.data()
+            startT, endT = self._to_time(start, end)
+            rectangles.append((startT, endT))
+        combined_rectangles = combine_rectangles(rectangles, float(self.input_box.text()))
 
-            startTime, endTime = self._to_time(start, end)
-
+        for startT, endT in combined_rectangles:
             for i, plot in enumerate(self.plot_widgets):
-                region = pg.LinearRegionItem([startTime, endTime], brush=(0, 0, 255, 100))
-                region.sigRegionChanged.connect(self._region_changed)
-
-                plot.addItem(region)
+                region = pg.LinearRegionItem([startT, endT], brush=(0, 0, 255, 100))
                 self.regions[i].append(region)
 
+                region.sigRegionChanged.connect(self._region_changed)
+                plot.addItem(region)
 
+
+def combine_rectangles(rectangles, threshold_seconds=100):
+    if not rectangles:
+        return []
+
+    # 将矩形按开始时间排序
+    rectangles.sort(key=lambda x: x[0])
+
+    combined_rectangles = []
+    current_start, current_end = rectangles[0]
+
+    for start, end in rectangles[1:]:
+        # 如果当前时间段与下一个时间段间隔小于阈值
+        if (start - current_end) <= threshold_seconds:
+            # 合并时间段
+            current_end = max(current_end, end)
+        else:
+            # 否则，将当前时间段加入结果列表，并更新当前时间段
+            combined_rectangles.append((current_start, current_end))
+            current_start, current_end = start, end
+
+    # 添加最后一个时间段
+    combined_rectangles.append((current_start, current_end))
+
+    return combined_rectangles
 
 def split_dataframe(df, segment_size):
     '''
