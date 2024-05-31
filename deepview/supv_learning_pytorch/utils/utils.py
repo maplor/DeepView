@@ -507,67 +507,61 @@ class BaseDataset(Dataset):
     def __len__(self):
         return len(self.samples)
 
-class DatasetLogbot2(BaseDataset):
-    def __init__(self,
-                 samples=None,
-                 labels=None,
-                 paths=None,
-                 # augmentation=False,
-                 da_type='random',
-                 # da_param1=None,  # None -> default params
-                 # da_param2=None,
-                 in_ch=3):
-        super(DatasetLogbot2, self).__init__(samples, labels)
-        # self.paths = paths
-        # self.augmentation = augmentation
-        # self.da_type = da_type
-        # self.da_param1 = da_param1
-        # self.da_param2 = da_param2
-        # self.in_ch = in_ch
+# class DatasetLogbot2(BaseDataset):
+#     def __init__(self,
+#                  samples=None,
+#                  labels=None,
+#                  paths=None,
+#                  # augmentation=False,
+#                  da_type='random',
+#                  # da_param1=None,  # None -> default params
+#                  # da_param2=None,
+#                  in_ch=3):
+#         super(DatasetLogbot2, self).__init__(samples, labels)
+#         # self.paths = paths
+#         # self.augmentation = augmentation
+#         # self.da_type = da_type
+#         # self.da_param1 = da_param1
+#         # self.da_param2 = da_param2
+#         # self.in_ch = in_ch
+#
+#     def __getitem__(self, index):
+#         # if self.samples is None:
+#         #     # load data and get label
+#         #     npz = np.load(self.paths[index], allow_pickle=True)
+#         #     sample = npz["X"]
+#         #     target = npz["label_id"]
+#         # else:
+#         sample, target = self.samples[index], self.labels[index]
+#
+#         # check the shape of sample
+#         # print(f"sample.shape: {sample.shape}") # sample.shape: (1, 50, 3)
+#         # print(target.shape)
+#         # otsuka code: here is data augmentation
+#
+#         if isinstance(sample, np.ndarray):
+#             sample = torch.from_numpy(sample)
+#         return sample, target
+#
+#     def __len__(self):
+#         return len(self.samples)
+#         # return len(self.paths)
+#     #
+#     # def load(self, MAX_INSTS=MAX_INSTS):
+#     # def unload(self):
+
+
+class DatasetLogbot2(Dataset):
+    def __init__(self, samples, labels, device='cuda'):
+        self.samples = torch.from_numpy(samples.astype(float))  # activity label of the sensor segment
+        self.labels = torch.tensor(np.array(labels).astype(int))  # filename of the data belongs to
+        # self.label = torch.tensor(label)  # filename of the data belongs to
+        self.samples = self.samples.to(device=device, non_blocking=True, dtype=torch.float)
+        self.labels = self.labels.to(device=device, non_blocking=True, dtype=torch.int)
 
     def __getitem__(self, index):
-        # if self.samples is None:
-        #     # load data and get label
-        #     npz = np.load(self.paths[index], allow_pickle=True)
-        #     sample = npz["X"]
-        #     target = npz["label_id"]
-        # else:
-        sample, target = self.samples[index], self.labels[index]
-
-        # check the shape of sample
-        # print(f"sample.shape: {sample.shape}") # sample.shape: (1, 50, 3)
-        # print(target.shape)
-        # otsuka code: here is data augmentation
-
-        if isinstance(sample, np.ndarray):
-            sample = torch.from_numpy(sample)
-        return sample, target
+        labels, samples = self.labels[index], self.samples[index]
+        return samples, labels
 
     def __len__(self):
-        return len(self.samples)
-        # return len(self.paths)
-    #
-    # def load(self, MAX_INSTS=MAX_INSTS):
-    # def unload(self):
-
-
-# class DataLoaderNpz2(DataLoader):
-#     def __init__(self, dataset, batch_size=64, shuffle=False, drop_last=True):
-#         super(
-#             DataLoaderNpz2,
-#             self).__init__(
-#             dataset,
-#             batch_size=batch_size,
-#             shuffle=shuffle,
-#             drop_last=drop_last)
-#         self.shuffle = shuffle
-#
-#     def load(self, MAX_INSTS=MAX_INSTS):
-#         dataset = self.dataset.load(MAX_INSTS)
-#         return DataLoaderNpz2(dataset,
-#                               batch_size=self.batch_size,
-#                               shuffle=self.shuffle,
-#                               drop_last=self.drop_last)
-#
-#     def unload(self):
-#         self.dataset.unload()
+        return len(self.labels)

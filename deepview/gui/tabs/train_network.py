@@ -95,6 +95,7 @@ class TrainNetwork(DefaultTab):
 
     def updateProgress(self, value):
         self.progress_bar.setValue(value)
+
     def _generate_layout_attributes(self, layout):
         # Shuffle
         # shuffle_label = QtWidgets.QLabel("Shuffle")

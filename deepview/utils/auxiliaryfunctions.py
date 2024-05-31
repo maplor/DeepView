@@ -144,6 +144,20 @@ def get_sup_model_yaml(cfg, modelprefix=""):
         'model_cfg.yaml'
     )
 
+def get_sup_folder(cfg, modelprefix=""):
+    Task = cfg["Task"]
+    date = cfg["date"]
+    iterate = "iteration-" + str(cfg["iteration"])
+    return Path(
+        modelprefix,
+        "sup-models",
+        iterate,
+        Task
+        + date,
+        'train'
+    )
+
+
 def get_unsup_model_folder(cfg, modelprefix=""):
     Task = cfg["Task"]
     date = cfg["date"]
@@ -193,6 +207,12 @@ def get_unsupervised_set_folder():
     # iterate = "iteration-" + str(cfg["iteration"])
     return Path(
         os.path.join("unsupervised-datasets", "allDataSet")
+    )
+
+def get_edit_data_folder():
+    """get folder for data label edited by users"""
+    return Path(
+        os.path.join("edit-data")
     )
 
 def get_training_set_folder(cfg):
