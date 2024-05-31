@@ -157,6 +157,7 @@ def z_score_normalization(df):
     return normalized_df
 
 def format_timestamp(df):
+    # if 'datetime' not in df.columns:
     s = df['timestamp'].str.replace('T', ' ').str.replace('Z', '')
     df = df.drop('timestamp', axis=1)
     s_datetime = pd.to_datetime(s)  # to datetime64[ns]
@@ -170,7 +171,7 @@ def format_timestamp(df):
 
 #---------------------------read raw sensor data--------------------------------
 
-def read_process_csv(file, sample_rate):
+def read_process_csv(file, sample_rate=25):
     """
     data most contains rows: timestamp and label
     timestamp: transfer string to unixtime

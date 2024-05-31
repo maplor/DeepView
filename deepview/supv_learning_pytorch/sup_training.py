@@ -1,9 +1,8 @@
-
-
 import torch
 import numpy as np
 from pathlib import Path
 import os
+import pandas as pd
 
 from deepview.supv_learning_pytorch.utils.utils import (
     DatasetLogbot2,
@@ -15,13 +14,20 @@ from deepview.supv_learning_pytorch.core.trainer import train
 
 from deepview.utils.auxiliaryfunctions import (
     get_sup_model_yaml,
+    get_sup_folder,
+    # get_base_yaml,
     read_config,
 )
 
+from deepview.generate_training_dataset.trainingsetmanipulation import read_process_csv
+
 from torch.utils.data import DataLoader, Dataset
 
-
 import pickle
+
+from deepview.utils import (
+    auxiliaryfunctions,
+)
 
 def replace_str2int(label_dict, array):
     # Step 3: replace None with -1, to remove the nonclass data
@@ -39,19 +45,24 @@ def replace_str2int(label_dict, array):
 
     return int_array
 
-def prepare_data(label_dict, files, filenames):
-    batch_size = 128
-    window_len = 90
 
+def prepare_data(root, batch_size, window_len, label_dict, filenames, DEVICE):
+    # batch_size= 128
+    # window_len = 90
+    unsup_folder = auxiliaryfunctions.get_unsupervised_set_folder()
+    edit_label_folder = auxiliaryfunctions.get_edit_data_folder()
     samples, targets = [], []
-    for file in files:
-        for select_f in filenames:
-            if select_f in file:
-                with open(file, 'rb') as f:
-                    # todo: 以后可以自由选择columns
-                    tmpdata = pickle.load(f)
-                    samples.append(tmpdata[['acc_x', 'acc_y', 'acc_z']])
-                    targets.append(tmpdata['label'])
+    for select_f in filenames:
+        if select_f.endswith('.pkl'):
+            with open(os.path.join(root.project_folder, unsup_folder, select_f), 'rb') as f:
+                tmpdata = pickle.load(f)
+        elif select_f.endswith('.csv'):
+            tmpdata = pd.read_csv(os.path.join(root.project_folder, edit_label_folder, select_f))
+        else:  # todo output error
+            with open(select_f, 'rb') as f:
+                tmpdata = pickle.load(f)
+        samples.append(tmpdata[['acc_x', 'acc_y', 'acc_z']])
+        targets.append(tmpdata['label'])
 
     concat_samples = np.concatenate(samples)
     concat_targets = np.concatenate(targets)
@@ -72,6 +83,7 @@ def prepare_data(label_dict, files, filenames):
     data_dataset = DatasetLogbot2(
         samples=rest_samples,
         labels=rest_targets,
+        device=DEVICE
     )
     data_loader = DataLoader(data_dataset,
                              batch_size=batch_size,
@@ -79,44 +91,58 @@ def prepare_data(label_dict, files, filenames):
                              drop_last=False)
     return data_loader, data_dim
 
+
 def train_sup_network(
         root,
+        net_type,
+        learning_rate,
+        batch_size,
+        windowlen,
+        max_iter,
         allfiles,
         train_filenames,
         test_filenames
 ):
-    DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    DEVICE = 'cpu'
+    # DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('device using %s' % DEVICE)
 
     root_cfg = read_config(root.config)
     project_folder = root.project_folder
     sup_path = os.path.join(project_folder,
-                            get_sup_model_yaml(root_cfg)
+                            get_sup_folder(root_cfg)
                             )
-    config = read_config(sup_path)
 
-    label_dict = config['label_dict']
-    train_loader, data_dim = prepare_data(label_dict, allfiles, train_filenames)
-    test_loader, _ = prepare_data(label_dict, allfiles, test_filenames)
+    label_dict = root_cfg['label_dict']
+    train_loader, data_dim = prepare_data(root, batch_size, windowlen, label_dict, train_filenames, DEVICE)
+    test_loader, _ = prepare_data(root, batch_size, windowlen, label_dict, test_filenames, DEVICE)
 
-    model = DeepConvLstmV3(in_ch=data_dim, num_classes=5)
+    if net_type == 'DeepConvLSTM':
+        model = DeepConvLstmV3(in_ch=data_dim, num_classes=5)
+    else:
+        print('no model available')
     model.to(DEVICE)
 
     # initialize the optimizer and loss
-    if config["train"]["optimizer"] == "Adam":
-        optimizer = torch.optim.Adam(
-            model.parameters(),
-            lr=config["train"]["lr"],
-            weight_decay=config["train"]["weight_decay"]
-        )
-    elif config["train"]["optimizer"] == "SGD":
-        optimizer = torch.optim.SGD(
-            model.parameters(),
-            # lr=cfg.train.lr,
-            lr=0.01,
-            momentum=0.9,
-            weight_decay=0
-        )
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=learning_rate,
+        weight_decay=learning_rate
+    )
+    # if config["train"]["optimizer"] == "Adam":
+    #     optimizer = torch.optim.Adam(
+    #         model.parameters(),
+    #         lr=learning_rate,
+    #         weight_decay=config["train"]["weight_decay"]
+    #     )
+    # elif config["train"]["optimizer"] == "SGD":
+    #     optimizer = torch.optim.SGD(
+    #         model.parameters(),
+    #         # lr=cfg.train.lr,
+    #         lr=learning_rate,
+    #         momentum=0.9,
+    #         weight_decay=0
+    #     )
 
     # loss function
     criterion = torch.nn.CrossEntropyLoss()
@@ -124,12 +150,13 @@ def train_sup_network(
     # run training, and validate result using validation data
     best_model, df_log = train(
         model,
+        max_iter,
         optimizer,
         criterion,
         train_loader,
         test_loader,
         DEVICE,
-        config
+        sup_path
     )
 
     # save the training log
