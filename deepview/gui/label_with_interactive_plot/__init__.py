@@ -613,6 +613,9 @@ class LabelWithInteractivePlot(QWidget):
         self.settingPannel.addWidget(self.input_box)
         self.settingPannel.addWidget(toLabelBtn)
 
+        # cache select region
+        self.rightRegionRect = QRectF(0, 0, 1, 1)
+
         # Add horizontal line
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
@@ -620,6 +623,9 @@ class LabelWithInteractivePlot(QWidget):
         self.settingPannel.addWidget(line)
 
     def handleAddRegion(self):
+        if hasattr(self, 'rightRegionRoi'):
+            return
+        
         rect = self.viewC.viewRect()
         w = rect.width()
         h = rect.height()
@@ -642,8 +648,6 @@ class LabelWithInteractivePlot(QWidget):
         self.viewC.addItem(roi)
 
         self.rightRegionRoi = roi
-        # cache select region
-        self.rightRegionRect = QRectF(0, 0, 1, 1)
 
         # roi.sigRegionChanged.connect(self.handleROIChange)
         # roi.sigRegionChangeFinished.connect(self.handleROIChangeFinished)
@@ -651,7 +655,6 @@ class LabelWithInteractivePlot(QWidget):
         # self.handleROIChangeFinished(roi)
 
     def handleToLabel(self):
-        print('Save to label')
         if not self.rightRegionRoi:
             return
         
@@ -676,6 +679,9 @@ class LabelWithInteractivePlot(QWidget):
 
                 region.sigRegionChanged.connect(self._region_changed)
                 plot.addItem(region)
+
+        self.viewC.removeItem(self.rightRegionRoi)
+        del self.rightRegionRoi
 
 
 def combine_rectangles(rectangles, threshold_seconds=100):
