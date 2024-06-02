@@ -81,7 +81,7 @@ class LabelWithInteractivePlot(QWidget):
 
         # status
         self.isTarining = False
-        self.mode = 'add'
+        self.mode = ''
 
         self.createTopArea()
 
@@ -340,8 +340,8 @@ class LabelWithInteractivePlot(QWidget):
 
                 plot.addItem(region)
                 self.regions[i].append(region)
-            start_idx, end_idx = self._to_idx(int(region.getRegion()[0]), int(region.getRegion()[1]))
-            print(f'Selected range: from index {start_idx} to index {end_idx}')
+                start_idx, end_idx = self._to_idx(int(region.getRegion()[0]), int(region.getRegion()[1]))
+                print(f'Selected range: from index {start_idx} to index {end_idx}')
 
     def _region_changed(self, region):
         idx = 0
@@ -359,15 +359,17 @@ class LabelWithInteractivePlot(QWidget):
                 if reg.getRegion()[0] < pos.x() and reg.getRegion()[1] > pos.x():
                     pwidget.removeItem(reg)
                     self.regions[i].remove(reg)
+
+                    start_idx, end_idx = self._to_idx(int(reg.getRegion()[0]), int(reg.getRegion()[1]))
+                    print(f'Delete region({start_idx}, {int(end_idx)})')
                     break
-        start_idx, end_idx = self._to_idx(int(reg.getRegion()[0]), int(reg.getRegion()[1]))
-        print(f'Delete region({start_idx}, {int(end_idx)})')
 
     def _edit_region(self, pos):
         set_val = None
         for i, _ in enumerate(self.regions):
             for reg in self.regions[i]:
                 if reg.getRegion()[0] < pos.x() and reg.getRegion()[1] > pos.x():
+                    #  TODO 选中项回显
                     if set_val is None:
                         dialog = LabelOption()
                         if dialog.exec() == QDialog.Accepted:
@@ -377,12 +379,14 @@ class LabelWithInteractivePlot(QWidget):
                     reg.setBrush(self.checkColor(set_val))
                     # custom properties "label"
                     reg.label = set_val
-        start_idx, end_idx = self._to_idx(int(reg.getRegion()[0]), int(reg.getRegion()[1]))
-        print(f'Edit region({start_idx}, {end_idx}) label: {set_val}')
+
+                    start_idx, end_idx = self._to_idx(int(reg.getRegion()[0]), int(reg.getRegion()[1]))
+                    print(f'Edit region({start_idx}, {end_idx}) label: {set_val}')
 
     def mouse_clicked(self, event):
         if event.button() == Qt.LeftButton and hasattr(self, 'scatterItem'):
-            pos = self.plot_widgets[0].plotItem.vb.mapSceneToView(event.pos())
+            pos = self.plot_widgets[0].plotItem.vb.mapToView(event.pos())
+            # print(f'Clicked at {event.pos()} mapSceneToView {pos.x()},{pos.y()} mapToView {pos2.x()},{pos2.y()}')
 
             if self.mode == 'add':
                 self._add_region(pos)
