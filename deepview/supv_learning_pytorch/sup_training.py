@@ -30,23 +30,55 @@ from deepview.utils import (
 )
 
 def replace_str2int(label_dict, array):
-    # Step 3: replace None with -1, to remove the nonclass data
-    new_array = np.where(np.isnan(array[0]), -1, array)
+    new_array = np.full((len(array),), 0, dtype=int)
+    for idx, i in enumerate(array):
+        if type(i) == str:
+            new_array[idx] = label_dict[i]
+        else:
+            new_array[idx] = -1
+    # # Step 3: replace None with -1, to remove the nonclass data
+    # new_array = np.nan_to_num(array, nan=-1)
+    # new_array = np.where(np.isnan(array), -1, array)
+    # # Step 4: Create a function that performs the replacement
+    # def replace_string_with_int(value):
+    #     return label_dict.get(value, value)  # Return the value itself if not found in the dictionary
+    #
+    # # Step 5: Vectorize the function using numpy.vectorize
+    # vectorized_replace = np.vectorize(replace_string_with_int)
 
-    # Step 4: Create a function that performs the replacement
-    def replace_string_with_int(value):
-        return label_dict.get(value, value)  # Return the value itself if not found in the dictionary
+    # # Step 6: Apply the vectorized function to the numpy array
+    # int_array = vectorized_replace(new_array)
 
-    # Step 5: Vectorize the function using numpy.vectorize
-    vectorized_replace = np.vectorize(replace_string_with_int)
-
-    # Step 6: Apply the vectorized function to the numpy array
-    int_array = vectorized_replace(new_array)
-
-    return int_array
+    return new_array
 
 
-def prepare_data(root, batch_size, window_len, label_dict, filenames, DEVICE):
+def remove_unlabeled_data(samples, labels):
+    labels = labels.astype(float)
+
+    # 找到包含 NaN 值的行的索引
+    nan_row_indices = np.where(labels==-1)[0]
+
+    # 删除空行
+    new_labels = np.delete(labels, nan_row_indices, axis=0)
+    new_samples = np.delete(samples, nan_row_indices, axis=0)
+
+    return new_samples, new_labels
+
+def remove_labels_not_in_trainset(samples, labels, train_labels):
+    labels = labels.astype(float)
+    # 找到包含 NaN 值的行的索引
+    nan_row_indices = np.where(labels == -1)[0]
+    # 删除空行
+    labels = np.delete(labels, nan_row_indices, axis=0)
+    samples = np.delete(samples, nan_row_indices, axis=0)
+
+    nan_row_indices = np.where(labels not in train_labels)[0]
+    labels = np.delete(labels, nan_row_indices, axis=0)
+    samples = np.delete(samples, nan_row_indices, axis=0)
+
+    return samples, labels
+
+def prepare_data(root, batch_size, window_len, label_dict, filenames, DEVICE, train_labels=[], iftrain=False):
     # batch_size= 128
     # window_len = 90
     unsup_folder = auxiliaryfunctions.get_unsupervised_set_folder()
@@ -64,11 +96,25 @@ def prepare_data(root, batch_size, window_len, label_dict, filenames, DEVICE):
         samples.append(tmpdata[['acc_x', 'acc_y', 'acc_z']])
         targets.append(tmpdata['label'])
 
+    if (len(samples)==0) or (len(targets)==0):
+        print('Please select files for training and test.')
+        return None, None, None
+
     concat_samples = np.concatenate(samples)
     concat_targets = np.concatenate(targets)
 
     # transform labels
     concat_targets = replace_str2int(label_dict, concat_targets)
+
+
+    # remove unlabeled data and check if still data remain
+    if iftrain:
+        concat_samples, concat_targets = remove_unlabeled_data(concat_samples, concat_targets)
+        train_labels = np.unique(concat_targets)
+    else:
+        concat_samples, concat_targets = remove_labels_not_in_trainset(concat_samples, concat_targets, train_labels)
+    if len(concat_targets) == 0:
+        return None, None, None
 
     # convert data to window of data
     data_dim = concat_samples.shape[-1]
@@ -89,7 +135,7 @@ def prepare_data(root, batch_size, window_len, label_dict, filenames, DEVICE):
                              batch_size=batch_size,
                              shuffle=False,
                              drop_last=False)
-    return data_loader, data_dim
+    return data_loader, data_dim, train_labels
 
 
 def train_sup_network(
@@ -103,8 +149,8 @@ def train_sup_network(
         train_filenames,
         test_filenames
 ):
-    DEVICE = 'cpu'
-    # DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # DEVICE = 'cpu'
+    DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('device using %s' % DEVICE)
 
     root_cfg = read_config(root.config)
@@ -114,11 +160,25 @@ def train_sup_network(
                             )
 
     label_dict = root_cfg['label_dict']
-    train_loader, data_dim = prepare_data(root, batch_size, windowlen, label_dict, train_filenames, DEVICE)
-    test_loader, _ = prepare_data(root, batch_size, windowlen, label_dict, test_filenames, DEVICE)
+    train_loader, data_dim, train_labels = prepare_data(root, batch_size, windowlen,
+                                                  label_dict, train_filenames,
+                                                  DEVICE, train_labels=[], iftrain=True)
+    if train_loader == None:
+        print('No labels in training set, try other files again.')
+        return
 
+    test_loader, _, _ = prepare_data(root, batch_size, windowlen,
+                                     label_dict, test_filenames,
+                                     DEVICE, train_labels, iftrain=False)
+
+    if test_loader == None:
+        print('No labels in test sets, try other files again.')
+        return
+
+    uniquelabels = np.unique(list(label_dict.values()))
+    num_classes = len(uniquelabels[uniquelabels >= 0])
     if net_type == 'DeepConvLSTM':
-        model = DeepConvLstmV3(in_ch=data_dim, num_classes=5)
+        model = DeepConvLstmV3(in_ch=data_dim, num_classes=num_classes)
     else:
         print('no model available')
     model.to(DEVICE)
@@ -148,7 +208,7 @@ def train_sup_network(
     criterion = torch.nn.CrossEntropyLoss()
 
     # run training, and validate result using validation data
-    best_model, df_log = train(
+    best_model = train(
         model,
         max_iter,
         optimizer,
@@ -159,7 +219,7 @@ def train_sup_network(
         sup_path
     )
 
-    # save the training log
-    path = Path(sup_path, "log.csv")
-    df_log.to_csv(path, index=False)
+    # # save the training log
+    # path = Path(sup_path, "log.csv")
+    # df_log.to_csv(path, index=False)
     return

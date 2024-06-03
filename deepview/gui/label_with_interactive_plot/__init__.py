@@ -659,7 +659,8 @@ class LabelWithInteractivePlot(QWidget):
         # self.handleROIChangeFinished(roi)
 
     def handleToLabel(self):
-        if not self.rightRegionRoi:
+        if not hasattr(self, 'rightRegionRoi'):
+            print('Add region first.')
             return
         
         pos: pg.Point = self.rightRegionRoi.pos()

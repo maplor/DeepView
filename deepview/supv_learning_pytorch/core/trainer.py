@@ -120,15 +120,7 @@ def train(
         warmup_lr_init=0,
         warmup_prefix=False)
 
-    # initialization
-    epoch_list = []
-    train_loss_list = []
-    train_acc_list = []
-    train_f1_list = []
-    test_loss_list = []
-    test_acc_list = []
-    test_f1_list = []
-    learning_rate_list = []
+
     early_stopping_coutner_list = []
     patience_list = []
 
@@ -152,7 +144,7 @@ def train(
                              target.reshape(-1).long())
 
             output_list.append(output)
-            target_list.append(target[:, 0])
+            target_list.append(target)
 
             # zero accumulated gradients
             optimizer.zero_grad()
@@ -171,20 +163,15 @@ def train(
         accuracy = float(correct) * 100.0 / total
 
         output_concat = torch.concatenate(output_list)
+        output_concat = output_concat.reshape(-1, output_concat.shape[-1])
         target_concat = torch.concat(target_list)
+        target_concat = target_concat.reshape(-1, target_concat.shape[-1])
         top_p, top_class = output_concat.topk(1, dim=1)
         f1score = metrics.f1_score(target_concat.long().cpu(),
                                    top_class.cpu(),
                                    average='weighted') * 100.0
 
-        print(f'Test Loss     : {np.mean(train_losses):.4f} \t| \t accuracy     : {accuracy:2.4f}| \t weighted macro f1     : {f1score:2.4f}\n')
-
-        # save model weights
-        model_save_path = Path(
-            sup_path,
-            f"model_weights_epoch_{epoch:0=3}.pt")
-        # path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save({'model_state_dict': model.state_dict()}, model_save_path)
+        print(f'Train Loss     : {np.mean(train_losses):.4f} \t| \t train accuracy     : {accuracy:2.4f}| \t weighted macro f1     : {f1score:2.4f}\n')
 
 
         # ---------------------------------------------------------------------------
@@ -233,8 +220,7 @@ def train(
             output_concat = torch.concatenate(output_list)
             output_concat = output_concat.reshape(-1, output_concat.shape[-1])
             target_concat = torch.concat(target_list)
-            target_concat = target_concat.reshape(-1)
-            # target_concat = target_concat.reshape(-1, target_concat.shape[-1])
+            target_concat = target_concat.reshape(-1, target_concat.shape[-1])
             top_p, top_class = output_concat.topk(1, dim=1)
             f1score = metrics.f1_score(target_concat.long().cpu(),
                                        top_class.cpu(),
@@ -245,6 +231,13 @@ def train(
 
         early_stopping_coutner_list.append(early_stopping.counter)
         patience_list.append(early_stopping.patience)
+
+    # save model weights
+    model_save_path = Path(
+        sup_path,
+        f"model_weights_epoch_{epoch:0=3}.pt")
+    # path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save({'model_state_dict': model.state_dict()}, model_save_path)
 
 
     return best_model
