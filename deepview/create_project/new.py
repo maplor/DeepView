@@ -135,9 +135,9 @@ def create_new_project(
     file_path = project_path / "raw-data"
     label_path = project_path / "labeled-data"
     shuffles_path = project_path / "training-datasets"
-    results_path = project_path / "dview-models"
+    # results_path = project_path / "dview-models"
     unsupervised_path = project_path / "unsupervised-datasets"
-    for p in [file_path, label_path, shuffles_path, results_path, unsupervised_path, unsupervised_path / "allDataSet"]:
+    for p in [file_path, label_path, shuffles_path, unsupervised_path, unsupervised_path / "allDataSet"]:
         p.mkdir(parents=True, exist_ok=DEBUG)
         print('Created "{}"'.format(p))
 
@@ -273,6 +273,14 @@ def create_new_project(
     cfg_file["dotsize"] = 12  # for plots size of dots
     cfg_file["alphavalue"] = 0.7  # for plots transparency of markers
     cfg_file["colormap"] = "rainbow"  # for plots type of colormap
+    cfg_file["label_dict"] = {'stationary': 0,
+                              'preening': 0,
+                              'bathing': 1,
+                              'flight_take_off': 2,
+                              'flight_cruising': 3,
+                              'foraging_dive': 4,
+                              'surface_seizing': 5,
+                              'unknown': -1}  # labels
 
     projconfigfile = os.path.join(str(project_path), "config.yaml")
     # Write dictionary to yaml  config file

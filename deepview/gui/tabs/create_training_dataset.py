@@ -99,6 +99,7 @@ class CreateTrainingDataset(DefaultTab):
         # 这是处理raw data的函数，包括生成folder，preprocess data和生成config
         # 三个入参为DeepView界面上的三个选项
         deepview.create_training_dataset(
+            self.root,
             self.progress_update,
             self.root.config,
             # shuffle,

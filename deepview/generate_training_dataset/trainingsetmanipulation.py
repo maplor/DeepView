@@ -49,6 +49,10 @@ from deepview.generate_training_dataset.utils import (
     GYROSCOPE_SCALE,
 )
 
+from deepview.utils.auxiliaryfunctions import (
+    read_config,
+)
+
 
 def _robust_path_split(path):
     sep = "\\" if "\\" in path else "/"
@@ -171,7 +175,7 @@ def format_timestamp(df):
 
 #---------------------------read raw sensor data--------------------------------
 
-def read_process_csv(file, sample_rate=25):
+def read_process_csv(root, file, sample_rate=25):
     """
     data most contains rows: timestamp and label
     timestamp: transfer string to unixtime
@@ -192,12 +196,15 @@ def read_process_csv(file, sample_rate=25):
                                       remove_sec=3,
                                       check_df=False)
 
+    root_cfg = read_config(root.config)
+    label_dict = root_cfg['label_dict']
     # create label_id (int) for label (str)
-    df['label_id'] = df['label'].map(label_str2num)
+    df['label_id'] = df['label'].map(label_dict)
+    # df['label_id'] = df['label'].map(label_str2num)
 
     return df
 
-def preprocess_datasets(progress_update, cfg, allsetfolder, sample_rate):
+def preprocess_datasets(root, progress_update, cfg, allsetfolder, sample_rate):
     """
     for each sensor data file, preprocess it and save as pkl file into
     rootpath/unsupervised-datasets/allDataSet folder
@@ -225,7 +232,7 @@ def preprocess_datasets(progress_update, cfg, allsetfolder, sample_rate):
                 # with open(file_path, 'rb') as f:
                 #     data = pickle.load(f)
             else:
-                data = read_process_csv(file, sample_rate)  # return dataframe
+                data = read_process_csv(root, file, sample_rate)  # return dataframe
                 with open(file_path, 'wb') as f:
                     pickle.dump(data, f)
             # conversioncode.guarantee_multiindex_rows(data)
@@ -239,107 +246,108 @@ def preprocess_datasets(progress_update, cfg, allsetfolder, sample_rate):
     return
 #---------------------------read raw sensor data--------------------------------
 
-def read_process_csv_old(file, filename, string_to_value):
-    # load data
-    df = pd.read_csv(file)
-    needed_column = ['logger_id', 'animal_tag', 'timestamp', 'acc_x', 'acc_y', 'acc_z',
-                     'latitude', 'longitude', 'gyro_x', 'gyro_y', 'gyro_z',
-                     'mag_x', 'mag_y', 'mag_z', 'illumination', 'pressure', 'temperature',
-                     'activity_class', 'label']
+# def read_process_csv_old(file, filename, string_to_value):
+#     # load data
+#     df = pd.read_csv(file)
+#     needed_column = ['logger_id', 'animal_tag', 'timestamp', 'acc_x', 'acc_y', 'acc_z',
+#                      'latitude', 'longitude', 'gyro_x', 'gyro_y', 'gyro_z',
+#                      'mag_x', 'mag_y', 'mag_z', 'illumination', 'pressure', 'temperature',
+#                      'activity_class', 'label']
+#
+#     # normalize data
+#     cols = ["acc_x", "acc_y", "acc_z"]
+#     df[cols] = z_score_normalization(df[cols])
+#     # df[cols] = df[cols] / GRAVITATIONAL_ACCELERATION
+#     cols_1 = ["gyro_x", "gyro_y", "gyro_z"]
+#     df[cols_1] = z_score_normalization(df[cols_1])
+#
+#     # calculate
+#     tmpdata = df[needed_column]
+#     # nan = 0
+#     tmpdata['labelid'] = tmpdata['label'].apply(lambda x: label_str2num[x] if x in label_str_list else 0)
+#     tmpdata['velocity'] = tmpdata.apply(calculate_velocity, axis=1)
+#     tmpdata['timestamp'] = tmpdata['timestamp'].map(
+#         lambda x: pd.to_datetime(datetime.strptime(x, date_format)) + np.timedelta64(9,
+#                                                                                      'h'))  # adjust time zone to Japan
+#     tmpdata['filename'] = filename
+#
+#     # Convert numpy.datetime64 to Unix timestamp (seconds since 1970-01-01 00:00:00 UTC)
+#     tmpdata['time'] = tmpdata.timestamp.map(lambda x: (x - np.datetime64('1970-01-01T00:00:00')) / np.timedelta64(1, 'us'))
+#     tmpdata['domainid'] = tmpdata['filename'].map(string_to_value)
+#     return tmpdata
 
-    # normalize data
-    cols = ["acc_x", "acc_y", "acc_z"]
-    df[cols] = z_score_normalization(df[cols])
-    # df[cols] = df[cols] / GRAVITATIONAL_ACCELERATION
-    cols_1 = ["gyro_x", "gyro_y", "gyro_z"]
-    df[cols_1] = z_score_normalization(df[cols_1])
-
-    # calculate
-    tmpdata = df[needed_column]
-    # nan = 0
-    tmpdata['labelid'] = tmpdata['label'].apply(lambda x: label_str2num[x] if x in label_str_list else 0)
-    tmpdata['velocity'] = tmpdata.apply(calculate_velocity, axis=1)
-    tmpdata['timestamp'] = tmpdata['timestamp'].map(
-        lambda x: pd.to_datetime(datetime.strptime(x, date_format)) + np.timedelta64(9,
-                                                                                     'h'))  # adjust time zone to Japan
-    tmpdata['filename'] = filename
-
-    # Convert numpy.datetime64 to Unix timestamp (seconds since 1970-01-01 00:00:00 UTC)
-    tmpdata['time'] = tmpdata.timestamp.map(lambda x: (x - np.datetime64('1970-01-01T00:00:00')) / np.timedelta64(1, 'us'))
-    tmpdata['domainid'] = tmpdata['filename'].map(string_to_value)
-    return tmpdata
-
-def preprocess_datasets_old(cfg, trainingsetfolder_full):
-    """
-    This file preprocess raw sensor data and store new files into 'labeled_data' folder
-    #------by xia---------
-    the csv file contains every sample filename and the label positions (by human)
-    """
-
-    AnnotationData = []
-    data_path = Path(os.path.join(cfg["project_path"], "labeled-data"))
-    files = cfg["file_sets"].keys()
-
-    # get filenames
-    filenames = []
-    for file in files:
-        _, filename, _ = _robust_path_split(file)
-        filenames.append(filename)
-    string_to_value = {string: index + 1 for index, string in enumerate(filenames)}
-
-    for file in files:
-        _, filename, _ = _robust_path_split(file)
-        file_path = os.path.join(
-            data_path / filename, f'CollectedData_{cfg["scorer"]}.pkl'
-        )
-        # reading raw data here...
-        try:
-            if os.path.isfile(file_path):
-                with open(file_path, 'rb') as f:
-                    data = pickle.load(f)
-            else:
-                data = read_process_csv(file, filename, string_to_value)  # return dataframe
-                with open(file_path, 'wb') as f:
-                     pickle.dump(data, f)
-            conversioncode.guarantee_multiindex_rows(data)
-            AnnotationData.append(data)
-        except FileNotFoundError:
-            print(file_path, " not found (perhaps not annotated).")
-
-    if not len(AnnotationData):
-        print(
-            "Annotation data was not found by splitting video paths (from config['video_sets']). An alternative route is taken..."
-        )
-        AnnotationData = conversioncode.merge_windowsannotationdataONlinuxsystem(cfg)
-        if not len(AnnotationData):
-            print("No data was found!")
-            return
-
-    AnnotationData = pd.concat(AnnotationData).sort_index()
-
-    # When concatenating DataFrames with misaligned column labels,
-    # all sorts of reordering may happen (mainly depending on 'sort' and 'join')
-    # Ensure the 'bodyparts' level agrees with the order in the config file.
-    # bodyparts = cfg["bodyparts"]
-    # AnnotationData = AnnotationData.reindex(
-    #     bodyparts, axis=1, level=AnnotationData.columns.names.index("bodyparts")
-    # )
-
-    # save data, data is dataframe, include raw data and annotations (by human)
-    # (deeplabcut) row: sample name, column: label types
-    # (deepview) todo: change the dataframe, I want to label the start and end time of activities for each channel
-    filename = os.path.join(trainingsetfolder_full, f'CollectedData_{cfg["scorer"]}')
-    # AnnotationData.to_hdf(filename + ".h5", key="df_with_missing", mode="w")
-    with open(filename + ".pkl", 'wb') as f:
-        pickle.dump(AnnotationData, f)
-    # human readable. human labels of every samples
-    AnnotationData.to_csv(filename + ".csv")
-
-    return AnnotationData
-    # return splits
+# def preprocess_datasets_old(cfg, trainingsetfolder_full):
+#     """
+#     This file preprocess raw sensor data and store new files into 'labeled_data' folder
+#     #------by xia---------
+#     the csv file contains every sample filename and the label positions (by human)
+#     """
+#
+#     AnnotationData = []
+#     data_path = Path(os.path.join(cfg["project_path"], "labeled-data"))
+#     files = cfg["file_sets"].keys()
+#
+#     # get filenames
+#     filenames = []
+#     for file in files:
+#         _, filename, _ = _robust_path_split(file)
+#         filenames.append(filename)
+#     string_to_value = {string: index + 1 for index, string in enumerate(filenames)}
+#
+#     for file in files:
+#         _, filename, _ = _robust_path_split(file)
+#         file_path = os.path.join(
+#             data_path / filename, f'CollectedData_{cfg["scorer"]}.pkl'
+#         )
+#         # reading raw data here...
+#         try:
+#             if os.path.isfile(file_path):
+#                 with open(file_path, 'rb') as f:
+#                     data = pickle.load(f)
+#             else:
+#                 data = read_process_csv(root, file, filename, string_to_value)  # return dataframe
+#                 with open(file_path, 'wb') as f:
+#                      pickle.dump(data, f)
+#             conversioncode.guarantee_multiindex_rows(data)
+#             AnnotationData.append(data)
+#         except FileNotFoundError:
+#             print(file_path, " not found (perhaps not annotated).")
+#
+#     if not len(AnnotationData):
+#         print(
+#             "Annotation data was not found by splitting video paths (from config['video_sets']). An alternative route is taken..."
+#         )
+#         AnnotationData = conversioncode.merge_windowsannotationdataONlinuxsystem(cfg)
+#         if not len(AnnotationData):
+#             print("No data was found!")
+#             return
+#
+#     AnnotationData = pd.concat(AnnotationData).sort_index()
+#
+#     # When concatenating DataFrames with misaligned column labels,
+#     # all sorts of reordering may happen (mainly depending on 'sort' and 'join')
+#     # Ensure the 'bodyparts' level agrees with the order in the config file.
+#     # bodyparts = cfg["bodyparts"]
+#     # AnnotationData = AnnotationData.reindex(
+#     #     bodyparts, axis=1, level=AnnotationData.columns.names.index("bodyparts")
+#     # )
+#
+#     # save data, data is dataframe, include raw data and annotations (by human)
+#     # (deeplabcut) row: sample name, column: label types
+#     # (deepview) todo: change the dataframe, I want to label the start and end time of activities for each channel
+#     filename = os.path.join(trainingsetfolder_full, f'CollectedData_{cfg["scorer"]}')
+#     # AnnotationData.to_hdf(filename + ".h5", key="df_with_missing", mode="w")
+#     with open(filename + ".pkl", 'wb') as f:
+#         pickle.dump(AnnotationData, f)
+#     # human readable. human labels of every samples
+#     AnnotationData.to_csv(filename + ".csv")
+#
+#     return AnnotationData
+#     # return splits
 
 
 def create_training_dataset(
+        root,
     progress_update,
     config,
     # num_shuffles=1,
@@ -402,6 +410,7 @@ def create_training_dataset(
     # print('preprocessing data using min-max norm...')
 
     preprocess_datasets(
+        root,
         progress_update,
         cfg,
         Path(os.path.join(project_path, trainingsetfolder)),
