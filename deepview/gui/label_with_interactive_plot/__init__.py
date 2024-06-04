@@ -567,7 +567,7 @@ class LabelWithInteractivePlot(QWidget):
 
     def handleSaveButton(self):
         for reg in self.regions[0]:
-            if reg.label:
+            if hasattr(reg, 'label') and reg.label:
                 regionRange = reg.getRegion()
                 self.data.loc[(self.data['datetime'] >= int(regionRange[0])) & (self.data['datetime'] <= int(regionRange[1])), 'label'] = reg.label
 
@@ -625,6 +625,12 @@ class LabelWithInteractivePlot(QWidget):
         line.setFrameShape(QFrame.HLine)
         line.setFrameShadow(QFrame.Sunken)
         self.settingPannel.addWidget(line)
+
+        # Clear empty region
+        clearEmptyRegionBtn = QPushButton('Clear Empty Region')
+        clearEmptyRegionBtn.clicked.connect(self.handleClearEmptyRegion)
+        self.settingPannel.addWidget(clearEmptyRegionBtn)
+
 
     def handleAddRegion(self):
         if hasattr(self, 'rightRegionRoi'):
@@ -687,6 +693,18 @@ class LabelWithInteractivePlot(QWidget):
 
         self.viewC.removeItem(self.rightRegionRoi)
         del self.rightRegionRoi
+
+    def handleClearEmptyRegion(self):
+        for i, pwidget in enumerate(self.plot_widgets):
+            # 使用新数组缓存，防止 list.remove 影响循环顺序
+            newRegionList = []
+            for reg in self.regions[i]:
+                if hasattr(reg, 'label') and reg.label:
+                    newRegionList.append(reg)
+                else:    
+                    pwidget.removeItem(reg)
+
+            self.regions[i] = newRegionList
 
 
 def combine_rectangles(rectangles, threshold_seconds=100):
