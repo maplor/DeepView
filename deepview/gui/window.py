@@ -502,11 +502,11 @@ class MainWindow(QMainWindow):
             root=self, parent=None,
             h1_description="Step 2. Train unsupervised learning network",
         )
-        self.evaluate_network = EvaluateNetwork(
-            root=self,
-            parent=None,
-            h1_description="Step 3. Evaluate unsupervised learning Network",
-        )
+        # self.evaluate_network = EvaluateNetwork(
+        #     root=self,
+        #     parent=None,
+        #     h1_description="Step 3. Evaluate unsupervised learning Network",
+        # )
         # self.mad_gui = LabelData(
         #     root=self,
         #     parent=None,

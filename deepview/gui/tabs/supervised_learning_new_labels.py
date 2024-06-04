@@ -11,6 +11,7 @@ from matplotlib.backends.backend_qt5agg import (
 from matplotlib.figure import Figure
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import QPushButton, QFileDialog, QLineEdit
 from deepview.utils import auxiliaryfunctions
 
@@ -45,7 +46,10 @@ class SupervisedLearningNewLabels(DefaultTab):
         # self.bodyparts_to_use = self.root.all_bodyparts
         self.root = root
 
+    # 在第一次渲染 tab 时才构造内容
+    def firstShowEvent(self, event: QShowEvent) -> None:
         self._set_page()
+
 
     def _set_page(self):
 
