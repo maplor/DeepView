@@ -10,7 +10,7 @@ import os
 import glob
 import copy
 from pathlib import Path
-from omegaconf import OmegaConf
+# from omegaconf import OmegaConf
 import numpy as np
 import pandas as pd
 import torch
@@ -30,12 +30,12 @@ import sklearn.metrics as metrics
 
 MODEL_LIST_01 = [
     "mlp",
-    "cnn", 
-    "lstm", 
+    "cnn",
+    "lstm",
     "dcl",
     "dcl-v3", # DCL mixup after LSTM version
-    "dcl-sa", 
-    "resnet-l-sa", 
+    "dcl-sa",
+    "resnet-l-sa",
     "transformer",
     "cnn-ae-wo",
     "cnn-ae",
@@ -54,7 +54,7 @@ def setup_model(cfg):
     elif cfg.model.model_name == 'dcl-sa': # DCLSA
         model = models.dcl_sa.DeepConvLSTMSelfAttn(cfg)
     elif cfg.model.model_name == 'resnet-l-sa': # DCLSA-RN (ResNet version of DCLSA)
-        model = models.resnet_l_sa.resnet_lstm_selfattn(cfg) 
+        model = models.resnet_l_sa.resnet_lstm_selfattn(cfg)
     elif cfg.model.model_name == 'transformer':
         model = models.transformer.Transformer(cfg)
     elif cfg.model.model_name in ['cnn-ae']: # CNN_AE5 for unsupervised pre-training
@@ -73,15 +73,15 @@ def setup_scheduler(cfg, optimizer):
     if cfg.train.scheduler in ["CosineLR", True]:
         # https://timm.fast.ai/SGDR
         scheduler = CosineLRScheduler(
-            optimizer, 
-            t_initial=cfg.train.n_epoch, 
-            lr_min=1e-6, 
-            warmup_t=0, 
-            warmup_lr_init=0, 
+            optimizer,
+            t_initial=cfg.train.n_epoch,
+            lr_min=1e-6,
+            warmup_t=0,
+            warmup_lr_init=0,
             warmup_prefix=False)
     elif cfg.train.scheduler == "Plateau":
         scheduler = ReduceLROnPlateau(
-            optimizer, 
+            optimizer,
             mode='min',
             factor=0.5,
             patience=7, # default 10
@@ -93,7 +93,7 @@ def setup_scheduler(cfg, optimizer):
             verbose=False)
     else:
         scheduler = None
-        
+
     return scheduler
 
 
@@ -307,7 +307,8 @@ def generate_results_save_path(path_list, checkpoints_fname=None):
 
 def load_and_setup_test_config(config_path, TEST_CUDA_ID, checkpoints_fname=None):
     
-    cfg = OmegaConf.load(config_path)
+    # cfg = OmegaConf.load(config_path)
+    cfg = np.load(config_path)
     print(f"test_animal_id: {cfg.dataset.test_animal_id}")
     print(cfg.dataset.labelled.animal_id_list.test)
 

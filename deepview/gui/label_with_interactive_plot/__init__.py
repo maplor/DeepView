@@ -19,6 +19,10 @@ from PySide6.QtWidgets import (
     QLineEdit
 )
 
+from deepview.utils.auxiliaryfunctions import (
+    read_config,
+)
+
 from PySide6.QtCore import QTimer, QRectF, Qt
 from PySide6.QtGui import QColor
 import numpy as np
@@ -31,18 +35,28 @@ from pathlib import Path
 clickedPen = pg.mkPen('b', width=2)
 
 class LabelOption(QDialog):
-    def __init__(self):
+    def __init__(self, root):
         super().__init__()
 
         layout = QVBoxLayout()
 
-        self.radio_button1 = QRadioButton("flying")
-        self.radio_button2 = QRadioButton("stationary")
-        self.radio_button3 = QRadioButton("foraging")
+        # get labels
+        root_cfg = read_config(root.config)
+        self.label_dict = root_cfg['label_dict']
+        # labels = list(self.label_dict.keys())
 
-        layout.addWidget(self.radio_button1)
-        layout.addWidget(self.radio_button2)
-        layout.addWidget(self.radio_button3)
+        self.radio_buttons = {}
+        for label, lid in self.label_dict.items():
+            self.radio_buttons[lid] = QRadioButton(label)
+            layout.addWidget(self.radio_buttons[lid])
+
+        # self.radio_button1 = QRadioButton("flying")
+        # self.radio_button2 = QRadioButton("stationary")
+        # self.radio_button3 = QRadioButton("foraging")
+        #
+        # layout.addWidget(self.radio_button1)
+        # layout.addWidget(self.radio_button2)
+        # layout.addWidget(self.radio_button3)
 
         self.confirm_button = QPushButton("Confirm")
         self.confirm_button.clicked.connect(self.confirm_selection)
@@ -51,17 +65,23 @@ class LabelOption(QDialog):
         self.setLayout(layout)
 
     def confirm_selection(self):
-        if self.radio_button1.isChecked():
-            selected_option = "flying"
-        elif self.radio_button2.isChecked():
-            selected_option = "stationary"
-        elif self.radio_button3.isChecked():
-            selected_option = "foraging"
-        else:
-            selected_option = None
+        for label, lid in self.label_dict.items():
+            if self.radio_buttons[lid].isChecked():
+                selected_option = label
+                self.accept()
+                return selected_option
+            else:
+                selected_option = None
+        # if self.radio_button1.isChecked():
+        #     selected_option = "flying"
+        # elif self.radio_button2.isChecked():
+        #     selected_option = "stationary"
+        # elif self.radio_button3.isChecked():
+        #     selected_option = "foraging"
+        # else:
+        #     selected_option = None
 
         self.accept()
-
         return selected_option
 
 class LabelWithInteractivePlot(QWidget):
@@ -188,7 +208,7 @@ class LabelWithInteractivePlot(QWidget):
         return featureExtractBtn
     
     def handleCompute(self):
-        print('start trainning...')
+        print('start training...')
         self.isTarining = True
         self.updateBtn()
 
@@ -371,7 +391,7 @@ class LabelWithInteractivePlot(QWidget):
                 if reg.getRegion()[0] < pos.x() and reg.getRegion()[1] > pos.x():
                     #  TODO 选中项回显
                     if set_val is None:
-                        dialog = LabelOption()
+                        dialog = LabelOption(self.root)
                         if dialog.exec() == QDialog.Accepted:
                             set_val = dialog.confirm_selection()
                         else:
