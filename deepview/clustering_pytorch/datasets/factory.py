@@ -86,7 +86,7 @@ def prep_dataset_umineko(data_path,
     extend_column.extend(['unixtime'])
     extend_column.extend(['label_id'])
 
-    datalist, timestamps, labels, domains, timestr = [], [], [], [], []
+    datalist, timestamps, labels, timestr = [], [], [], []
     for filename in filenames:
         full_file_path = os.path.join(data_path, filename)
         if os.path.exists(full_file_path):
@@ -97,9 +97,9 @@ def prep_dataset_umineko(data_path,
                                  len_sw)  # temp:['acc_x', 'acc_y', 'acc_z', 'timestamp', 'labelid', 'domain']
             if tmp.shape[1] != len_sw:
                 continue
-            datalist.append(tmp[:, :, :3])
-            timestamps.append(tmp[:, :, 3:4])
-            labels.append(tmp[:, :, 4:5])
+            datalist.append(tmp[:, :, :-2])
+            timestamps.append(tmp[:, :, -2:-1])
+            labels.append(tmp[:, :, -1:])
 
     return datalist, timestamps, labels
 
@@ -191,7 +191,6 @@ def prepare_all_data(data_path, select_filenames, data_len, data_column):  # tod
                                                     data_column)  # return dict: key=filename, value=[data, timestamps, labels]
 
     # concatenate list
-    # todo, 根据数据重新选择哪几个columns
     data_b = np.concatenate(data, axis=0)  # [B, Len, dim]
     timestamp_b = np.concatenate(timestamps, axis=0)  # [B, Len, dim]
     label_b = np.concatenate(labels, axis=0)  # [B, Len, dim]
@@ -199,7 +198,9 @@ def prepare_all_data(data_path, select_filenames, data_len, data_column):  # tod
     # train_loader = generate_dataloader_overlap(data, labels, domains, timestamps)
     train_loader = generate_dataloader(data_b, label_b, timestamp_b)
 
-    return train_loader  # return train_loader
+    # get model input channel
+    num_channel = data_b.shape[-1]
+    return train_loader, num_channel  # return train_loader
 
 
 def prepare_single_data(data_path):

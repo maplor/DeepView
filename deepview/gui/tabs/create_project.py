@@ -150,15 +150,6 @@ class ProjectCreator(QtWidgets.QDialog):
 
         # n_cameras = int(self.cam_combo.currentText())
         try:
-            # if n_cameras > 1:
-            #     # _ = deeplabcut.create_new_project_3d(
-            #     #     self.proj_default,
-            #     #     self.exp_default,
-            #     #     n_cameras,
-            #     #     self.loc_default,
-            #     # )
-            #     print('create_project.py, todo, create_new_project_3d')
-            # else:
             files = list(self.file_frame.selected_items)
             if not len(files):
                 print("Add at least a file to the project.")

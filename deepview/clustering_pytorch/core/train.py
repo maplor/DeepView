@@ -68,6 +68,7 @@ def get_batch_spec(cfg):
     }
 
 def train(
+    sensor_dict,
     progress_update,
     config_yaml,
     select_filenames,
@@ -97,7 +98,7 @@ def train(
     # data_path_new = os.path.join(project_path, cfg['dataset'][:-4]+'_new.pkl')
 
     # xia, dataloader,将Train network tab中选中的文件传入这个函数
-    train_dataloader = prepare_all_data(data_path,
+    train_dataloader, num_channel = prepare_all_data(data_path,
                                         select_filenames,
                                         data_len,
                                         data_column)
@@ -106,7 +107,9 @@ def train(
     # -------------------------核心的模型训练部分，计算loss----------------------------
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # get model
-    model = get_model(p_backbone=net_type, p_setup='autoencoder')  # set backbone model=ResNet18, SSL=simclr, weight
+    model = get_model(p_backbone=net_type,
+                      p_setup='autoencoder',
+                      num_channel=num_channel)  # set backbone model=ResNet18, SSL=simclr, weight
     model = model.to(device)
 
     # Criterion
@@ -116,10 +119,6 @@ def train(
     # Optimizer and scheduler
     p_opti = 'sgd'
     optimizer = get_optimizer(p_opti, model)
-
-    # progress_bar = QProgressBar()
-    # progress_bar.setRange(0, 100)
-    # progress_bar.setValue(0)
 
     # training
     start_epoch = 0
@@ -136,19 +135,19 @@ def train(
         # simclr_train_time_series(train_dataloader, model, criterion, optimizer, epoch)
         AE_train_time_series(train_dataloader, model, criterion, optimizer, epoch, device)
 
-        # # Checkpoint
-        # print('Checkpoint ...')
-        # torch.save({'optimizer': optimizer.state_dict(), 'model': model.state_dict(),
-        #             'epoch': epoch + 1}, p['pretext_checkpoint'])
+    sensor_str = ''
+    for i in data_column:
+        tmp = [k for k, v in sensor_dict.items() if i in v][0]  # get key according to value
+        if tmp not in sensor_str:
+            sensor_str = tmp + '-' + sensor_str
 
     # Save final model, xx\aaa-bbb-2024-04-24\unsup-models\iteration-0\aaaApr24\train
-    column_list = '-'.join(data_column).replace('_','')
+    # column_list = '-'.join(data_column).replace('_','')
     print('Saving model at: ' + net_type + '_epoch%s' % str(epoch)\
           + '_datalen%s_' % str(cfg['data_length']) \
-          + column_list + '.pth')
+          + sensor_str[:-1] + '.pth')
     torch.save(model.state_dict(), net_type + '_epoch%s' % str(epoch) +\
-               '_datalen%s_' % str(cfg['data_length']) + column_list + '.pth')
-
+               '_datalen%s_' % str(cfg['data_length']) + sensor_str[:-1] + '.pth')
 
     # return to original path.
     os.chdir(str(start_path))

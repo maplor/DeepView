@@ -175,6 +175,7 @@ def format_timestamp(df):
 
 #---------------------------read raw sensor data--------------------------------
 
+
 def read_process_csv(root, file, sample_rate=25):
     """
     data most contains rows: timestamp and label
@@ -182,15 +183,18 @@ def read_process_csv(root, file, sample_rate=25):
     """
     df = pd.read_csv(file)
 
+    # fulfill nan values
+    df = df.bfill().ffill()
+
     df = format_timestamp(df)
     # calculate sampling rate, the input is timestamp
     INTERMEDIATE_SAMPLING_RATE = int(np.mean(1/np.diff(df['unixtime'].values)))
 
-    # divide data if time_gap exists
+    # divide data if time_gap exists, todo, very long time
     df_list = divide_df_if_timestamp_gap_detected_2(df, int(sample_rate) * 5 * 60)
 
     # change sampling rate
-    df = run_resampling_and_concat_df(df_list,
+    newdf = run_resampling_and_concat_df(df_list,
                                       int(sample_rate),
                                       INTERMEDIATE_SAMPLING_RATE,
                                       remove_sec=3,
@@ -199,10 +203,10 @@ def read_process_csv(root, file, sample_rate=25):
     root_cfg = read_config(root.config)
     label_dict = root_cfg['label_dict']
     # create label_id (int) for label (str)
-    df['label_id'] = df['label'].map(label_dict)
+    newdf['label_id'] = newdf['label'].map(label_dict)  # todo, very long time
     # df['label_id'] = df['label'].map(label_str2num)
 
-    return df
+    return newdf
 
 def preprocess_datasets(root, progress_update, cfg, allsetfolder, sample_rate):
     """
@@ -222,7 +226,7 @@ def preprocess_datasets(root, progress_update, cfg, allsetfolder, sample_rate):
 
         parent, filename, _ = _robust_path_split(file)
         file_path = os.path.join(
-            allsetfolder, filename+f'_%s.pkl'%sample_rate
+            allsetfolder, filename+f'_%sHz.pkl'%sample_rate
             # allsetfolder, filename+f'_{cfg["scorer"]}.pkl'
         )
         # reading raw data here...
@@ -244,122 +248,13 @@ def preprocess_datasets(root, progress_update, cfg, allsetfolder, sample_rate):
     #     print("No data was found!")
     #     return
     return
-#---------------------------read raw sensor data--------------------------------
-
-# def read_process_csv_old(file, filename, string_to_value):
-#     # load data
-#     df = pd.read_csv(file)
-#     needed_column = ['logger_id', 'animal_tag', 'timestamp', 'acc_x', 'acc_y', 'acc_z',
-#                      'latitude', 'longitude', 'gyro_x', 'gyro_y', 'gyro_z',
-#                      'mag_x', 'mag_y', 'mag_z', 'illumination', 'pressure', 'temperature',
-#                      'activity_class', 'label']
-#
-#     # normalize data
-#     cols = ["acc_x", "acc_y", "acc_z"]
-#     df[cols] = z_score_normalization(df[cols])
-#     # df[cols] = df[cols] / GRAVITATIONAL_ACCELERATION
-#     cols_1 = ["gyro_x", "gyro_y", "gyro_z"]
-#     df[cols_1] = z_score_normalization(df[cols_1])
-#
-#     # calculate
-#     tmpdata = df[needed_column]
-#     # nan = 0
-#     tmpdata['labelid'] = tmpdata['label'].apply(lambda x: label_str2num[x] if x in label_str_list else 0)
-#     tmpdata['velocity'] = tmpdata.apply(calculate_velocity, axis=1)
-#     tmpdata['timestamp'] = tmpdata['timestamp'].map(
-#         lambda x: pd.to_datetime(datetime.strptime(x, date_format)) + np.timedelta64(9,
-#                                                                                      'h'))  # adjust time zone to Japan
-#     tmpdata['filename'] = filename
-#
-#     # Convert numpy.datetime64 to Unix timestamp (seconds since 1970-01-01 00:00:00 UTC)
-#     tmpdata['time'] = tmpdata.timestamp.map(lambda x: (x - np.datetime64('1970-01-01T00:00:00')) / np.timedelta64(1, 'us'))
-#     tmpdata['domainid'] = tmpdata['filename'].map(string_to_value)
-#     return tmpdata
-
-# def preprocess_datasets_old(cfg, trainingsetfolder_full):
-#     """
-#     This file preprocess raw sensor data and store new files into 'labeled_data' folder
-#     #------by xia---------
-#     the csv file contains every sample filename and the label positions (by human)
-#     """
-#
-#     AnnotationData = []
-#     data_path = Path(os.path.join(cfg["project_path"], "labeled-data"))
-#     files = cfg["file_sets"].keys()
-#
-#     # get filenames
-#     filenames = []
-#     for file in files:
-#         _, filename, _ = _robust_path_split(file)
-#         filenames.append(filename)
-#     string_to_value = {string: index + 1 for index, string in enumerate(filenames)}
-#
-#     for file in files:
-#         _, filename, _ = _robust_path_split(file)
-#         file_path = os.path.join(
-#             data_path / filename, f'CollectedData_{cfg["scorer"]}.pkl'
-#         )
-#         # reading raw data here...
-#         try:
-#             if os.path.isfile(file_path):
-#                 with open(file_path, 'rb') as f:
-#                     data = pickle.load(f)
-#             else:
-#                 data = read_process_csv(root, file, filename, string_to_value)  # return dataframe
-#                 with open(file_path, 'wb') as f:
-#                      pickle.dump(data, f)
-#             conversioncode.guarantee_multiindex_rows(data)
-#             AnnotationData.append(data)
-#         except FileNotFoundError:
-#             print(file_path, " not found (perhaps not annotated).")
-#
-#     if not len(AnnotationData):
-#         print(
-#             "Annotation data was not found by splitting video paths (from config['video_sets']). An alternative route is taken..."
-#         )
-#         AnnotationData = conversioncode.merge_windowsannotationdataONlinuxsystem(cfg)
-#         if not len(AnnotationData):
-#             print("No data was found!")
-#             return
-#
-#     AnnotationData = pd.concat(AnnotationData).sort_index()
-#
-#     # When concatenating DataFrames with misaligned column labels,
-#     # all sorts of reordering may happen (mainly depending on 'sort' and 'join')
-#     # Ensure the 'bodyparts' level agrees with the order in the config file.
-#     # bodyparts = cfg["bodyparts"]
-#     # AnnotationData = AnnotationData.reindex(
-#     #     bodyparts, axis=1, level=AnnotationData.columns.names.index("bodyparts")
-#     # )
-#
-#     # save data, data is dataframe, include raw data and annotations (by human)
-#     # (deeplabcut) row: sample name, column: label types
-#     # (deepview) todo: change the dataframe, I want to label the start and end time of activities for each channel
-#     filename = os.path.join(trainingsetfolder_full, f'CollectedData_{cfg["scorer"]}')
-#     # AnnotationData.to_hdf(filename + ".h5", key="df_with_missing", mode="w")
-#     with open(filename + ".pkl", 'wb') as f:
-#         pickle.dump(AnnotationData, f)
-#     # human readable. human labels of every samples
-#     AnnotationData.to_csv(filename + ".csv")
-#
-#     return AnnotationData
-#     # return splits
 
 
 def create_training_dataset(
         root,
     progress_update,
     config,
-    # num_shuffles=1,
-    # Shuffles=None,
-    # windows2linux=False,
-    # userfeedback=False,
-    # trainIndices=None,
-    # testIndices=None,
     sample_rate=None,
-    augmenter_type=None,
-    posecfg_template=None,
-    superanimal_name="",
 ):
     """Creates a training dataset.
     Returns
@@ -425,14 +320,13 @@ def create_training_dataset(
     unsup_modelfoldername = auxiliaryfunctions.get_unsup_model_folder(cfg)
 
     auxiliaryfunctions.attempt_to_make_folder(
-        str(Path(config).parents[0] / unsup_modelfoldername) + "/train"
+        str(Path(config).parents[0] / unsup_modelfoldername)
     )  # for all data
 
     path_unsup_train_config = str(
         os.path.join(
             cfg["project_path"],
             Path(unsup_modelfoldername),
-            "train",
             "model_cfg.yaml",
         )
     )
@@ -512,13 +406,9 @@ def create_training_dataset(
     print(
         "The training dataset is successfully created. Use the function 'train_network' to start training. Happy training!"
     )
-
     return
 
-
-
 # --------------make yaml files-------------------
-
 def ParseYaml(configfile):
     raw = open(configfile).read()
     docs = []

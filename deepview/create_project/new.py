@@ -282,6 +282,16 @@ def create_new_project(
                               'surface_seizing': 5,
                               'unknown': -1}  # labels
 
+    cfg_file['sensor_dict'] = {
+        'acceleration': ['acc_x', 'acc_y', 'acc_z'],
+        'gyroscope': ['gyro_x', 'gyro_y', 'gyro_z'],
+        'magnitude': ['mag_x', 'mag_y', 'mag_z'],
+        'gps': ['latitude', 'longitude'],
+        'illumination': ['illumination'],
+        'pressure': ['pressure'],
+        'temperature': ['temperature']
+    }
+
     projconfigfile = os.path.join(str(project_path), "config.yaml")
     # Write dictionary to yaml  config file
     auxiliaryfunctions.write_config(projconfigfile, cfg_file)

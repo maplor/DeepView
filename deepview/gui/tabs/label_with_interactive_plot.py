@@ -24,7 +24,6 @@ class LabelWithInteractivePlotTab(DefaultTab):
         super(LabelWithInteractivePlotTab, self).__init__(root, parent, h1_description)
         self.root = root
 
-        # self._set_page()
 
     # 在第一次渲染 tab 时才构造内容
     def firstShowEvent(self, event: QShowEvent) -> None:
@@ -32,15 +31,16 @@ class LabelWithInteractivePlotTab(DefaultTab):
 
     def _set_page(self):
         config = self.root.config  # project/config.yaml
-        df = get_plot_data(config)
-        if df is None:
-            self.main_layout.addWidget(QLabel('can not find raw data'))
-            return
+        # df = get_plot_data(config)
+        # if df is None:
+        #     self.main_layout.addWidget(QLabel('can not find raw data'))
+        #     return
         
         # Read file path for pose_config file. >> pass it on
         cfg = auxiliaryfunctions.read_config(config)
-        
-        self.main_layout.addWidget(LabelWithInteractivePlot(self.root, df, cfg))
+
+        # 在这里调用init文件
+        self.main_layout.addWidget(LabelWithInteractivePlot(self.root, cfg))
 
 def get_plot_data(config):
     """
