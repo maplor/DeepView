@@ -66,19 +66,11 @@ class CreateTrainingDataset(DefaultTab):
         # Neural Network
         nnet_label = QtWidgets.QLabel("Sampling rate (Hz)")
         self.samplerate_choice = QtWidgets.QLineEdit()
-        # self.net_choice = QtWidgets.QComboBox()
-        # nets = DVParams.NNETS.copy()  # a string list, string is model names
-        # if not self.root.is_multianimal:  # not false = true
-        #     nets.remove("dlcrnet_ms5")
-        # self.net_choice.addItems(nets)
         self.samplerate_choice.setText("25")
         self.samplerate_choice.textChanged.connect(self.log_samplerate_choice(self.samplerate_choice.text()))
 
-        # 添加验证器以确保只能输入整数
         validator = QtGui.QIntValidator()
         self.samplerate_choice.setValidator(validator)
-        # layout.addWidget(shuffle_label, 0, 0)
-        # layout.addWidget(self.shuffle, 0, 1)
         layout.addWidget(nnet_label, 0, 2)
         layout.addWidget(self.samplerate_choice, 0, 3)
         layout.addWidget(augmentation_label, 0, 4)
@@ -102,10 +94,8 @@ class CreateTrainingDataset(DefaultTab):
             self.root,
             self.progress_update,
             self.root.config,
-            # shuffle,
-            # Shuffles=[self.shuffle.value()],
             sample_rate=self.samplerate_choice.text(),  # sampling rate (int)
-            augmenter_type=self.aug_choice.currentText(),  # augmentation (string)
+            # augmenter_type=self.aug_choice.currentText(),  # augmentation (string)
         )
         # Check that training data files were indeed created.
         trainingsetfolder = get_unsupervised_set_folder()  # training-datasets/../..

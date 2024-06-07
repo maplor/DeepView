@@ -38,25 +38,26 @@ class TrainNetwork(DefaultTab):
     def __init__(self, root, parent, h1_description):
         super(TrainNetwork, self).__init__(root, parent, h1_description)
 
+        self.root = root
         # use the default model_cfg file for default values
-        default_pose_cfg_path = os.path.join(
+        default_unsupmodel_cfg_path = os.path.join(
             Path(deepview.__file__).parent, "model_cfg.yaml"
         )  # 检查路径是否是unsup-models下面的model_cfg.yaml
 
-        pose_cfg = auxiliaryfunctions.read_plainconfig(default_pose_cfg_path)
+        unsupmodel_cfg = auxiliaryfunctions.read_plainconfig(default_unsupmodel_cfg_path)
         # set default values of windows
-        # self.display_iters = str(pose_cfg["display_iters"])
-        # self.save_iters = str(pose_cfg["save_iters"])
-        # self.max_iters = str(pose_cfg["multi_step"][-1][-1])
+        self.net_type = str(unsupmodel_cfg['net_type'])
+        self.learning_rate = str(unsupmodel_cfg['lr_init'])
+        self.batch_size = str(unsupmodel_cfg['batch_size'])
+        self.max_iter = str(unsupmodel_cfg['max_epochs'])
 
-        self.net_type = str(pose_cfg['net_type'])
-        self.learning_rate = str(pose_cfg['lr_init'])
-        self.batch_size = str(pose_cfg['batch_size'])
-        self.max_iter = str(pose_cfg['max_epochs'])
+        self.data_length = str(unsupmodel_cfg['data_length'])
+        self.data_column = str(unsupmodel_cfg['data_columns'])
 
-        self.data_length = str(pose_cfg['data_length'])
-        self.data_column = str(pose_cfg['data_columns'])
-        # self._set_page()
+        # get sensor/columns dictionary from config.yaml
+        root_cfg = auxiliaryfunctions.read_config(self.root.config)
+        self.sensor_dict = root_cfg['sensor_dict']
+
 
     # 在第一次渲染 tab 时才构造内容
     def firstShowEvent(self, event: QShowEvent) -> None:
@@ -97,9 +98,6 @@ class TrainNetwork(DefaultTab):
         self.progress_bar.setValue(value)
 
     def _generate_layout_attributes(self, layout):
-        # Shuffle
-        # shuffle_label = QtWidgets.QLabel("Shuffle")
-        # self.shuffle = ShuffleSpinBox(root=self.root, parent=self)
         net_label = QtWidgets.QLabel("Network type")
         self.display_net_type = QtWidgets.QComboBox()
         self.display_net_type.addItems(['CNN_AE', 'DeepConvLSTM'])
@@ -115,6 +113,7 @@ class TrainNetwork(DefaultTab):
 
         # Save iterations
         saveiters_label = QtWidgets.QLabel("Learning rate")
+        saveiters_label.setFixedWidth(5)
         self.save_iters_spin = QtWidgets.QLineEdit()
         # self.save_iters_spin.setMinimum(1)
         # self.save_iters_spin.setMaximum(1)
@@ -137,9 +136,7 @@ class TrainNetwork(DefaultTab):
         layout.addWidget(self.save_iters_spin, 0, 5)
         layout.addWidget(maxiters_label, 0, 6)
         layout.addWidget(self.batchsize_spin, 0, 7)
-        # layout.addWidget(snapkeep_label, 0, 8)
-        # layout.addWidget(self.snapshots, 0, 9)
-        # layout.addWidget()
+
 
     def _generate_layout_attributes_dataset(self, layout):
         trainingsetfolder = auxiliaryfunctions.get_unsupervised_set_folder()
@@ -159,7 +156,7 @@ class TrainNetwork(DefaultTab):
 
         column_list = []
 
-        rowNum = 3
+        rowNum = 3  # default one row 3 columns
 
         if os.path.exists(os.path.join(self.root.project_folder, trainingsetfolder)):
             for filename in auxiliaryfunctions.grab_files_in_folder(
@@ -172,20 +169,19 @@ class TrainNetwork(DefaultTab):
                 cb = QtWidgets.QCheckBox(os.path.split(filename)[-1])
                 grid.addWidget(cb, len(self.display_dataset_cb_list) // rowNum,
                                len(self.display_dataset_cb_list) % rowNum)
-                self.display_dataset_cb_list.append(cb)
+                self.display_dataset_cb_list.append(cb)  # display filenames
 
         net_label = QtWidgets.QLabel("Input data columns")
         self.display_column_container = QtWidgets.QHBoxLayout()
         self.display_column_cb_list = []
-        # read from first data file
-        for column in column_list:
+
+        # create checkbox according to data columns
+        combined_columns = list(self.sensor_dict.keys())
+        # self.data_column = combined_columns
+        for column in combined_columns:
             cb = QtWidgets.QCheckBox(column)
             self.display_column_container.addWidget(cb)
             self.display_column_cb_list.append(cb)
-
-        # self.display_column_cb = QtWidgets.QComboBox()
-        # self.display_column_cb.addItems(['acc_x', 'acc_y', 'acc_z'])
-        # self.display_column_cb.currentIndexChanged.connect(self.log_data_columns)
 
         # Display iterations
         dispiters_label = QtWidgets.QLabel("Input data length")
@@ -243,7 +239,6 @@ class TrainNetwork(DefaultTab):
         net_type = str(self.net_type.upper())
         learning_rate = float(self.save_iters_spin.text())
         batch_size = int(self.batchsize_spin.text())
-        # self.batch_size = str(pose_cfg['batch_size'])
         max_iter = int(self.display_iters_spin.text())
 
         data_length = int(self.display_datalen_spin.text())
@@ -258,9 +253,12 @@ class TrainNetwork(DefaultTab):
         for i, cb in enumerate(self.display_column_cb_list):
             if cb.isChecked():
                 newSelectColumn.append(cb.text())
-        data_column = newSelectColumn
+        data_columns = []
+        for sensor in newSelectColumn:
+            data_columns.extend(self.sensor_dict[sensor])
 
         deepview.train_network(
+            self.sensor_dict,
             self.progress_update,
             config,
             select_filenames,
@@ -269,7 +267,7 @@ class TrainNetwork(DefaultTab):
             batch_size=batch_size,
             num_epochs=max_iter,
             data_len=data_length,
-            data_column=data_column
+            data_column=data_columns
         )
         msg = QtWidgets.QMessageBox()
         msg.setIcon(QtWidgets.QMessageBox.Information)
@@ -285,3 +283,24 @@ class TrainNetwork(DefaultTab):
         msg.setWindowIcon(QIcon(self.logo))
         msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
         msg.exec_()
+
+def get_sensor_columns(strings):
+    '''
+    其实放在config文件里更好，直接定义sensors，然后在代码中处理
+    define a list of sensors, find sensors used in target data
+    '''
+    combined_strings = []
+    current_combined = strings[0]
+
+    for i in range(1, len(strings)):
+        prefix_length = min(len(current_combined), len(strings[i]))
+        prefix_length = next((k for k in range(prefix_length, 0, -1) if current_combined[:k] == strings[i][:k]), 0)
+
+        if prefix_length > 0:
+            current_combined = current_combined[:prefix_length]
+        else:
+            combined_strings.append(current_combined)
+            current_combined = strings[i]
+
+    combined_strings.append(current_combined)
+    return combined_strings

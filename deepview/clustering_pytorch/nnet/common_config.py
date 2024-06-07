@@ -44,8 +44,8 @@ def get_feature_dimensions_backbone(p):
         raise NotImplementedError
 
 
-def get_model(p_backbone, p_setup, pretrain_path=None):
-    num_channel = 3
+def get_model(p_backbone, p_setup, num_channel=3, pretrain_path=None):
+    # num_channel = 3
 
     # Get backbone
     # if True:

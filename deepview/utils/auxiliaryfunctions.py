@@ -157,7 +157,6 @@ def get_sup_folder(cfg, modelprefix=""):
         'train'
     )
 
-
 def get_unsup_model_folder(cfg, modelprefix=""):
     Task = cfg["Task"]
     date = cfg["date"]

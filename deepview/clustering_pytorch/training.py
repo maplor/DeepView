@@ -41,6 +41,7 @@ def return_train_network_path(config, trainingsetindex=0, modelprefix=""):
 
 
 def train_network(
+    sensor_dict,
     progress_update,
     config,
     select_filenames='',
@@ -160,7 +161,7 @@ def train_network(
     modelfoldername = auxiliaryfunctions.get_unsup_model_folder(cfg)
     poseconfigfile = Path(
         os.path.join(
-            cfg["project_path"], str(modelfoldername), "train", "model_cfg.yaml"
+            cfg["project_path"], str(modelfoldername), "model_cfg.yaml"
         )
     )
     if not poseconfigfile.is_file():
@@ -181,6 +182,7 @@ def train_network(
 
         print("Selecting single-animal trainer")
         train(
+            sensor_dict,
             progress_update,
             str(poseconfigfile),
             select_filenames,

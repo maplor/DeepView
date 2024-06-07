@@ -1,61 +1,92 @@
-
 import sys
-from PySide6 import QtWidgets
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
+import os
+import pandas as pd
+import matplotlib.pyplot as plt
+from PySide6.QtWebEngineWidgets import QWebEngineView
+from PySide6.QtWidgets import QMainWindow, QVBoxLayout, QPushButton, QWidget, QFileDialog, QApplication, QScrollArea, \
+    QGridLayout
+import folium
 
 
-class PointClickHandler:
-    def __init__(self, ax, points):
-        self.ax = ax
-        self.points = points
-        self.text = ax.text(0, 0, "", visible=False, ha='center', va='center', fontsize=10)
-        self.cid = ax.figure.canvas.mpl_connect('button_press_event', self.on_click)
 
-    def on_click(self, event):
-        if event.inaxes == self.ax:
-            # Check if the click occurred within the axes
-            x, y = event.xdata, event.ydata
-            index = self.find_closest_point(x, y)
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("GPS Trajectories Plotter")
+        self.setGeometry(100, 100, 1200, 800)  # Set window size
 
-            # Display index on the figure
-            self.text.set_text(f"Index: {index}")
-            self.text.set_position((x, y))
-            self.text.set_visible(True)
-            self.ax.figure.canvas.draw()
-            # read and save index
-            print('clicked index is ' + str(index))
+        self.layout = QVBoxLayout()
 
-    def find_closest_point(self, x, y):
-        # Find the index of the closest point to the clicked coordinates
-        distances = [(i, (x - px) ** 2 + (y - py) ** 2) for i, (px, py) in enumerate(self.points)]
-        index, _ = min(distances, key=lambda x: x[1])
-        return index
+        self.select_files_button = QPushButton("Select CSV Files")
+        self.select_files_button.clicked.connect(self.select_files)
+        self.layout.addWidget(self.select_files_button)
 
+        self.scroll_area = QScrollArea()
+        self.scroll_area_widget = QWidget()
+        self.scroll_area_layout = QGridLayout()
+        self.scroll_area_widget.setLayout(self.scroll_area_layout)
+        self.scroll_area.setWidget(self.scroll_area_widget)
+        self.scroll_area.setWidgetResizable(True)
 
-class GridCanvas(QtWidgets.QDialog):
-    def __init__(self, points, parent=None):
-        super().__init__(parent)
-        self.points = points
-        layout = QtWidgets.QVBoxLayout(self)
-        self.figure = Figure()
-        self.ax = self.figure.add_subplot(111)
-        self.ax.scatter(*zip(*points))
-        self.canvas = FigureCanvas(self.figure)
-        layout.addWidget(self.canvas)
+        self.layout.addWidget(self.scroll_area)
 
-        # Create an instance of the PointClickHandler
-        self.click_handler = PointClickHandler(self.ax, points)
+        container = QWidget()
+        container.setLayout(self.layout)
+        self.setCentralWidget(container)
 
+    def select_files(self):
+        file_dialog = QFileDialog()
+        file_dialog.setFileMode(QFileDialog.ExistingFiles)
+        file_dialog.setNameFilter("CSV Files (*.csv)")
+        if file_dialog.exec():
+            self.selected_files = file_dialog.selectedFiles()
+            self.plot_trajectories()
 
-if __name__ == "__main__":
-    app = QtWidgets.QApplication(sys.argv)
+    def plot_trajectories(self):
+        row, col = 0, 0
+        for file in self.selected_files:
+            try:
+                tmpdf = pd.read_csv(file)
+                df = tmpdf[['timestamp', 'latitude', 'longitude']].copy()
+                df = df.dropna()
+                latitudes = df['latitude']
+                longitudes = df['longitude']
+                timestamps = pd.to_datetime(df['timestamp'])
 
-    # Example data: list of points (x, y)
-    points = [(1, 2), (3, 4), (5, 6), (7, 8)]
+                # Validate the data
+                if latitudes.isnull().any() or longitudes.isnull().any() or timestamps.isnull().any():
+                    print(f"Data in {file} contains null values. Please check the CSV file.")
+                    continue
 
-    # Create and show the dialog
-    window = GridCanvas(points)
-    window.show()
+                # Create a folium map centered around the average latitude and longitude
+                folium_map = folium.Map(location=[latitudes.mean(), longitudes.mean()], zoom_start=13)
 
-    sys.exit(app.exec_())
+                # Add the GPS trajectory to the map
+                coordinates = list(zip(latitudes, longitudes))
+                folium.PolyLine(locations=coordinates, color='blue', weight=2.5).add_to(folium_map)
+
+                # Save the map to an HTML file
+                output_file = os.path.splitext(file)[0] + '_trajectory.html'
+                folium_map.save(output_file)
+
+                # Load the HTML file into a QWebEngineView
+                web_view = QWebEngineView()
+                web_view.setFixedSize(400, 300)
+                web_view.setUrl(f'file:///{os.path.abspath(output_file)}')
+
+                # Add the QWebEngineView to the grid layout
+                self.scroll_area_layout.addWidget(web_view, row, col)
+                col += 1
+                if col >= 3:
+                    col = 0
+                    row += 1
+
+                print(f"Trajectory map saved to {output_file}")
+
+            except Exception as e:
+                print(f"An error occurred while processing {file}: {e}")
+
+app = QApplication(sys.argv)
+window = MainWindow()
+window.show()
+app.exec()

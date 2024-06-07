@@ -30,6 +30,7 @@ from deepview.gui.widgets import StreamReceiver, StreamWriter
 from deepview.gui.tabs.create_training_dataset import CreateTrainingDataset
 from deepview.gui.tabs.open_project import OpenProject
 from deepview.gui.tabs.train_network import TrainNetwork
+from deepview.gui.tabs.visualize_gps import GPSDisplayer
 from deepview.gui.tabs.evaluate_network import EvaluateNetwork
 from deepview.gui.tabs.label_data import LabelData
 from deepview.gui.tabs.interaction_plot import InteractionPlot
@@ -479,16 +480,7 @@ class MainWindow(QMainWindow):
         _attempt_attribute_update("testfile", self.testfile)
         _attempt_attribute_update("cfg_line", self.config)
 
-    # def is_transreid_available(self):
-    #     if self.is_multianimal:
-    #         try:
-    #             from deeplabcut.pose_tracking_pytorch import transformer_reID
-    #
-    #             return True
-    #         except ModuleNotFoundError:
-    #             return False
-    #     else:
-    #         return False
+
 
     def add_tabs(self):
         self.tab_widget = QtWidgets.QTabWidget()
@@ -501,6 +493,10 @@ class MainWindow(QMainWindow):
         self.train_network = TrainNetwork(
             root=self, parent=None,
             h1_description="Step 2. Train unsupervised learning network",
+        )
+        self.show_gps = GPSDisplayer(
+            root=self, parent=None,
+            h1_description="Step 3. Display GPS on the map",
         )
         # self.evaluate_network = EvaluateNetwork(
         #     root=self,
@@ -563,6 +559,7 @@ class MainWindow(QMainWindow):
         # self.tab_widget.addTab(self.evaluate_network, "Evaluate network")
         # self.tab_widget.addTab(self.mad_gui, "Label data")
         # self.tab_widget.addTab(self.interaction_plot, "Interaction plot")
+        self.tab_widget.addTab(self.show_gps, "Display GPS on the map")
         self.tab_widget.addTab(self.label_with_interactive_plot, "Label with interactive plot")
         self.tab_widget.addTab(self.supervised_learning_gui, "Supervised learning with new labels")
         # self.tab_widget.addTab(self.analyze_videos, "Analyze videos")

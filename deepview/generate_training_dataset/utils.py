@@ -195,17 +195,24 @@ def run_resampling_and_concat_df(df_list,
     else:
         print("Unknonw acc_sampling_rate")
 
-    df = df_concat
+    # df = df_concat
     # Reset index because we removed the first several seconds
-    df.reset_index(inplace=True, drop=True)
-    if 'index' in df.columns:
-        df = df.drop("index", axis=1)
+    df_concat.reset_index(inplace=True, drop=True)
+    if 'index' in df_concat.columns:
+        df_concat = df_concat.drop("index", axis=1)
     # if check_df == True:
     #     display(df.head(5))
     #     print("Length of concatenated df: ", len(df))
 
-    return df
+    return df_concat
 
+
+def check_if_has_str(listdata):
+    # check if a list contains string values
+    for l in listdata:
+        if type(l) == str:
+            return True
+    return False
 
 def resampling(df, intermediate_sampling_rate=100, output_sampling_rate=25):
     if np.sum(df['unixtime'].duplicated()) > 1:
@@ -224,9 +231,11 @@ def resampling(df, intermediate_sampling_rate=100, output_sampling_rate=25):
     # Create a new DataFrame to store the resampled values
     resampled_df = pd.DataFrame(index=new_time)
     for column in df.columns:
-        if column == 'label':  # todo 希望用数据类型作为判断条件
-            # Step 1: Extract unique characters from the column
-            unique_chars = df[column].unique()
+        # Step 1: Extract unique characters from the column
+        unique_chars = df[column].unique()
+
+        if check_if_has_str(unique_chars):
+
             # Step 2: Create a dictionary that maps each character to a unique integer
             char_to_int = {char: i for i, char in enumerate(unique_chars, start=1)}
             # Step 3: Use the dictionary to replace the characters with their corresponding integers

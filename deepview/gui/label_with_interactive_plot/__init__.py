@@ -21,7 +21,12 @@ from PySide6.QtWidgets import (
 
 from deepview.utils.auxiliaryfunctions import (
     read_config,
+    get_param_from_path,
+    get_unsupervised_set_folder,
+    get_unsup_model_folder,
+    grab_files_in_folder_deep
 )
+
 
 from PySide6.QtCore import QTimer, QRectF, Qt
 from PySide6.QtGui import QColor
@@ -31,32 +36,20 @@ import pyqtgraph as pg
 from functools import partial
 import os
 from pathlib import Path
+import pickle
 
 clickedPen = pg.mkPen('b', width=2)
 
 class LabelOption(QDialog):
-    def __init__(self, root):
+    def __init__(self, label_dict):
         super().__init__()
 
         layout = QVBoxLayout()
 
-        # get labels
-        root_cfg = read_config(root.config)
-        self.label_dict = root_cfg['label_dict']
-        # labels = list(self.label_dict.keys())
-
         self.radio_buttons = {}
-        for label, lid in self.label_dict.items():
-            self.radio_buttons[lid] = QRadioButton(label)
-            layout.addWidget(self.radio_buttons[lid])
-
-        # self.radio_button1 = QRadioButton("flying")
-        # self.radio_button2 = QRadioButton("stationary")
-        # self.radio_button3 = QRadioButton("foraging")
-        #
-        # layout.addWidget(self.radio_button1)
-        # layout.addWidget(self.radio_button2)
-        # layout.addWidget(self.radio_button3)
+        for label, lid in label_dict.items():
+            self.radio_buttons[label] = QRadioButton(label)
+            layout.addWidget(self.radio_buttons[label])
 
         self.confirm_button = QPushButton("Confirm")
         self.confirm_button.clicked.connect(self.confirm_selection)
@@ -66,38 +59,40 @@ class LabelOption(QDialog):
 
     def confirm_selection(self):
         for label, lid in self.label_dict.items():
-            if self.radio_buttons[lid].isChecked():
+            if self.radio_buttons[label].isChecked():
                 selected_option = label
                 self.accept()
                 return selected_option
             else:
                 selected_option = None
-        # if self.radio_button1.isChecked():
-        #     selected_option = "flying"
-        # elif self.radio_button2.isChecked():
-        #     selected_option = "stationary"
-        # elif self.radio_button3.isChecked():
-        #     selected_option = "foraging"
-        # else:
-        #     selected_option = None
-
         self.accept()
         return selected_option
 
+
 class LabelWithInteractivePlot(QWidget):
 
-    def __init__(self, root, data: pd.DataFrame, cfg) -> None:
+    def __init__(self, root, cfg) -> None:
         super().__init__()
 
+        self.featureExtractBtn = None
         self.root = root
+        root_cfg = read_config(root.config)
+        self.label_dict = root_cfg['label_dict']
+        self.sensor_dict = root_cfg['sensor_dict']
 
         # init main_layout & top_layout & bottom_layout
         self.initLayout()
 
         self.computeTimer = QTimer()
 
-        self.data = data
+        self.data = pd.DataFrame()
         self.cfg = cfg
+
+        # model parameters
+        self.model_path = []
+        self.model_name = ''
+        self.data_length = 90
+        self.column_names = []
 
         # status
         self.isTarining = False
@@ -146,57 +141,68 @@ class LabelWithInteractivePlot(QWidget):
         RawDataComboBoxLabel = QLabel('Select raw data:')
 
         RawDatacomboBox = QComboBox()
-        from deepview.utils import auxiliaryfunctions
-        unsup_data_path = auxiliaryfunctions.get_unsupervised_set_folder()
+        unsup_data_path = get_unsupervised_set_folder()
         rawdata_file_path_list = list(
-        Path(os.path.join(self.cfg["project_path"], unsup_data_path)).glob('*.pkl'),
+            Path(os.path.join(self.cfg["project_path"], unsup_data_path)).glob('*.pkl'),
         )
         for path in rawdata_file_path_list:
             RawDatacomboBox.addItem(str(path.name))
-        # RawDatacomboBox.currentIndexChanged.connect(self.handleRawDataComboBoxChange)
         self.RawDatacomboBox = RawDatacomboBox
-        
+
+        # combbox change
+        with open(rawdata_file_path_list[0], 'rb') as f:
+            self.data = pickle.load(f)
+        RawDatacomboBox.currentTextChanged.connect(
+            self.get_data_from_pkl
+        )
         return RawDataComboBoxLabel, RawDatacomboBox
 
-    # def handleRawDataComboBoxChange(self):
-    #     # self.updateRawData()
-    #     self.resetLeftPlot()
-    #
-    #     self.updateLeftPlotList()
+    def get_data_from_pkl(self, filename):
+        unsup_data_path = get_unsupervised_set_folder()
+        datapath = os.path.join(self.cfg["project_path"], unsup_data_path, filename)
+        with open(datapath, 'rb') as f:
+            self.data = pickle.load(f)
+        return
 
-    # def updateRawData(self):
-    #     edit_data_path = os.path.join(self.cfg["project_path"],"edit-data", self.RawDatacomboBox.currentText().replace(".pkl", ".csv"))
-    #     if Path(edit_data_path).exists():
-    #         self.data = pd.read_csv(edit_data_path)
-    #     else:
-    #         raw_data_path = os.path.join(self.cfg["project_path"], "raw-data", self.RawDatacomboBox.currentText())
-    #         self.data = pd.read_csv(raw_data_path)
-    #         self.data['label'] = ""
-    #
-    #     self.data['datetime'] = pd.to_datetime(self.data['timestamp']).apply(lambda x: x.timestamp())
-    
     def createModelComboBox(self):
         modelComboBoxLabel = QLabel('Select model:')
 
         modelComboBox = QComboBox()
-        from deepview.utils import auxiliaryfunctions
+        # from deepview.utils import auxiliaryfunctions
         # Read file path for pose_config file. >> pass it on
         config = self.root.config
-        cfg = auxiliaryfunctions.read_config(config)
-        unsup_model_path = auxiliaryfunctions.get_unsup_model_folder(cfg)
+        cfg = read_config(config)
+        unsup_model_path = get_unsup_model_folder(cfg)
 
-        model_path_list = auxiliaryfunctions.grab_files_in_folder_deep(
+        model_path_list = grab_files_in_folder_deep(
             os.path.join(self.cfg["project_path"], unsup_model_path),
             ext='*.pth')
         self.model_path_list = model_path_list
         for path in model_path_list:
             modelComboBox.addItem(str(Path(path).name))
         # modelComboBox.currentIndexChanged.connect(self.handleModelComboBoxChange)
-        
+
+        # if selection changed, run this code
+        model_name, data_length, column_names = \
+            get_param_from_path(modelComboBox.currentText())
+        self.model_path = modelComboBox.currentText()
+        self.model_name = model_name
+        self.data_length = data_length
+        self.column_names = column_names
+        modelComboBox.currentTextChanged.connect(
+            self.get_model_param_from_path
+        )
         return modelComboBoxLabel, modelComboBox
-    
-    # def handleModelComboBoxChange(self):
-    #     print('ModelComboBox changed')
+
+    def get_model_param_from_path(self, model_path):
+        # set model information according to model name
+        model_name, data_length, column_names = \
+            get_param_from_path(model_path)
+        self.model_path = model_path
+        self.model_name = model_name
+        self.data_length = data_length
+        self.column_names = column_names
+        return
 
     def createFeatureExtractButton(self):
         featureExtractBtn = QPushButton('Extract feature')
@@ -204,14 +210,12 @@ class LabelWithInteractivePlot(QWidget):
         featureExtractBtn.setFixedWidth(160)
         featureExtractBtn.setEnabled(False)
         featureExtractBtn.clicked.connect(self.handleCompute)
-        
         return featureExtractBtn
     
     def handleCompute(self):
         print('start training...')
         self.isTarining = True
         self.updateBtn()
-
         self.computeTimer.singleShot(100, self.handleComputeAsyn)
 
     def handleComputeAsyn(self):
@@ -234,31 +238,15 @@ class LabelWithInteractivePlot(QWidget):
         else:
             self.featureExtractBtn.setEnabled(True)
 
-        # # text
-        # if self.isTarining:
-        #     self.featureExtractBtn.setText('Extracting feature...')
-        # else:
-        #     self.featureExtractBtn.setText('Feature extraction')
 
     def renderColumnList(self):
         # 清空 layout
         for i in reversed(range(self.checkbox_layout.count())):
             self.checkbox_layout.itemAt(i).widget().deleteLater()
-
-        self.columnList = []
-        full_columns = list(self.data.columns.values)
-        for column in full_columns:
-            if ('label' not in column) and ('time' not in column):
-                self.columnList.append(column)
-
-        self.selectColumn = self.columnList
-        # self.selectColumn = ['acc_x', 'acc_y', 'acc_z']
-
         self.checkboxList = []
-        for column in self.columnList:
+        for column in self.column_names:
             cb = QCheckBox(column)
-            if column in self.selectColumn:
-                cb.setChecked(True)
+            cb.setChecked(True)
             self.checkbox_layout.addWidget(cb)
             self.checkboxList.append(cb)
             cb.stateChanged.connect(self.handleCheckBoxStateChange)
@@ -268,10 +256,10 @@ class LabelWithInteractivePlot(QWidget):
 
     def handleCheckBoxStateChange(self):
         newSelectColumn = []
-        for i, column in enumerate(self.columnList):
+        for i, column in enumerate(self.column_names):
             if self.checkboxList[i].isChecked():
                 newSelectColumn.append(column)
-        self.selectColumn = newSelectColumn
+        # self.selectColumn = newSelectColumn
         print('selectColumn: %s'%(newSelectColumn))
 
         self.updateLeftPlotList()
@@ -289,44 +277,42 @@ class LabelWithInteractivePlot(QWidget):
         viewL = QVBoxLayout()
         self.viewL = viewL
         self.splitter = QSplitter(Qt.Vertical)
-        self.plot_widgets = [None] * len(self.columnList)
+        self.plot_widgets = [None] * len(self.column_names)
         self.click_begin = True
-        self.start_line = [None] * len(self.columnList)
-        self.end_line = [None] * len(self.columnList)
+        self.start_line = [None] * len(self.column_names)
+        self.end_line = [None] * len(self.column_names)
         self.regions = []
-        for _ in range(len(self.columnList)):
+        for _ in range(len(self.column_names)):
             self.regions.append([])
         self.bottom_layout.addLayout(viewL, 2)
 
         self.resetLeftPlot()
-        self.splitter.setSizes([100] * len(self.columnList))
+        self.splitter.setSizes([100] * len(self.column_names))
         self.viewL.addWidget(self.splitter)
 
     def resetLeftPlot(self):
         # reset widget
-        for i in range(len(self.columnList)):
+        for i in range(len(self.column_names)):
             if self.plot_widgets[i] is not None:
                 self.splitter.removeWidget(self.plot_widgets[i])
                 self.plot_widgets[i].close()
                 self.plot_widgets[i] = None
-
+        import matplotlib.pyplot as plt
         # add widget
-        df = self.data
-        for i, column in enumerate(self.columnList):
-            # if (type(df[column].values[0]) == int) or (type(df[column].values[0]) == float):
-            plot = pg.PlotWidget(title=column, name=column, axisItems={'bottom': pg.DateAxisItem()})
-            plot.plot(df['datetime'], df[column], pen=pg.mkPen(i))
+        for i, columns in enumerate(self.column_names):
+            real_columns = self.sensor_dict[columns]
+            plot = pg.PlotWidget(title=columns, name=columns, axisItems={'bottom': pg.DateAxisItem()})
+            for j, c in enumerate(real_columns):
+                plot.plot(self.data['datetime'], self.data[c], pen=pg.mkPen(j))
+            # plot.plot(self.data['datetime'], self.data[columns[0]], pen=pg.mkPen(i))
             plot.scene().sigMouseClicked.connect(self.mouse_clicked)
             plot.scene().sigMouseMoved.connect(self.mouse_moved)
             self.plot_widgets[i] = plot
             self.splitter.addWidget(plot)
 
     def updateLeftPlotList(self):
-        for i, column in enumerate(self.columnList):
-            if column in self.selectColumn:
-                self.plot_widgets[i].show()
-            else:
-                self.plot_widgets[i].hide()
+        for i, column in enumerate(self.column_names):
+            self.plot_widgets[i].show()
 
     def _to_idx(self, start_ts, end_ts):
         selected_indices = self.data[(self.data['datetime'] >= start_ts)
@@ -389,13 +375,13 @@ class LabelWithInteractivePlot(QWidget):
         for i, _ in enumerate(self.regions):
             for reg in self.regions[i]:
                 if reg.getRegion()[0] < pos.x() and reg.getRegion()[1] > pos.x():
-                    #  TODO 选中项回显
                     if set_val is None:
-                        dialog = LabelOption(self.root)
+                        dialog = LabelOption(self.label_dict)
                         if dialog.exec() == QDialog.Accepted:
                             set_val = dialog.confirm_selection()
                         else:
                             set_val = None
+
                     reg.setBrush(self.checkColor(set_val))
                     # custom properties "label"
                     reg.label = set_val
@@ -436,14 +422,23 @@ class LabelWithInteractivePlot(QWidget):
         self.bottom_layout.addWidget(viewC, 2)
 
     def checkColor(self, label):
-        if label == 'flying':
-            return pg.mkBrush(0, 0, 255, 120)
-        elif label == 'stationary':
-            return pg.mkBrush(255, 0, 0, 120)
-        elif label == 'foraging':
-            return pg.mkBrush(0, 255, 0, 120)
-        else:
+        if label not in list(self.label_dict.keys()):
             return pg.mkBrush(255, 255, 255, 120)
+
+        list_color = [pg.mkBrush(0, 0, 255, 120),
+                      pg.mkBrush(255, 0, 0, 120),
+                      pg.mkBrush(0, 255, 0, 120),
+                      pg.mkBrush(255, 255, 255, 120),
+                      pg.mkBrush(255, 0, 255, 120),
+                      pg.mkBrush(0, 255, 255, 120),
+                      pg.mkBrush(255, 255, 0, 120),
+                      pg.mkBrush(5, 5, 5, 120)]
+        count = 0
+        for lstr, _ in self.label_dict.items():
+            if label == lstr:
+                return list_color[count]
+            count += 1
+
 
     def updateRightPlotColor(self):
         # reset spots
@@ -467,36 +462,18 @@ class LabelWithInteractivePlot(QWidget):
 
     def renderRightPlot(self):
         self.viewC.clear()
-        df = self.data
-
-        # rows = df.shape[0]
-
-        # get model parameters from model_path
-        # todo: 从下拉框中读取model_path
-        model_path = self.model_path_list[0]
-
-        from deepview.utils import auxiliaryfunctions
-        model_name, data_length, column_names = \
-            auxiliaryfunctions.get_param_from_path(model_path)  # todo now just test the first model
-
-
-        # mock scatter number
-        # n = 100
-        # step = math.floor(rows / n)
 
         scatterItem = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None))
-        # pos = np.random.normal(size=(2, n), scale=100)  # PCA result of latent feature
 
         # split the dataframe into segments to get latent feature and index
-        start_indice, end_indice, pos = self.featureExtraction(df,
-                                                               model_path,
-                                                               model_name,
-                                                               data_length,
-                                                               column_names)
+        start_indice, end_indice, pos = self.featureExtraction()
 
         # save something into data attribute
         n = len(start_indice)
-        spots = [{'pos': pos[i,:], 'data': (i, start_indice[i], end_indice[i]), 'brush': self.checkColor(self.data.loc[i*data_length,'label'])} for i in range(n)]
+        spots = [{'pos': pos[i,:],
+                  'data': (i, start_indice[i], end_indice[i]),
+                  'brush': self.checkColor(self.data.loc[i*self.data_length, 'label'])}
+                 for i in range(n)]
 
         # plot spots on the scatter figure
         scatterItem.addPoints(spots)
@@ -505,15 +482,14 @@ class LabelWithInteractivePlot(QWidget):
         self.viewC.addItem(scatterItem)
 
     def select_random_continuous_seconds(self, num_samples=100, points_per_second=90):
-        df = self.data
         selected_dfs = []
         start_indice = []
         end_indice = []
 
         while len(selected_dfs) < num_samples:
-            start_idx = np.random.randint(0, len(df) - points_per_second)
+            start_idx = np.random.randint(0, len(self.data) - points_per_second)
             end_idx = start_idx + points_per_second - 1
-            selected_range = df.iloc[start_idx:end_idx+1]
+            selected_range = self.data.iloc[start_idx:end_idx+1]
 
             if not selected_range[['acc_x', 'acc_y', 'acc_z']].isna().any().any():
                 selected_dfs.append(selected_range)  # dataframe segment from start_idx to end_idx
@@ -523,25 +499,30 @@ class LabelWithInteractivePlot(QWidget):
         return start_indice, end_indice, selected_dfs
 
 
-    def featureExtraction(self, target_data, model_path, model_name, data_length, column_names):
-
-        # start_indice, end_indice, selected_dfs = self.select_random_continuous_seconds()
-
+    def featureExtraction(self):
         # preprocessing: find column names in dataframe
-        new_column_names = find_data_columns(target_data, column_names)
+        new_column_names = find_data_columns(self.sensor_dict, self.column_names)
 
-        segments, start_indices = split_dataframe(target_data, data_length)
-        end_indices = [i + data_length for i in start_indices]
+        segments, start_indices = split_dataframe(self.data, self.data_length)
+        end_indices = [i + self.data_length for i in start_indices]
+
         # get latent feature
         from deepview.clustering_pytorch.nnet.common_config import get_model
         from deepview.clustering_pytorch.datasets.factory import prepare_unsup_dataset
         from deepview.clustering_pytorch.nnet.train_utils import AE_eval_time_series
 
-        model = get_model(p_backbone=model_name, p_setup='autoencoder')
-        model.load_state_dict(torch.load(model_path))
+        train_loader = prepare_unsup_dataset(segments, new_column_names)
+
+        config = self.root.config
+        cfg = read_config(config)
+        unsup_model_path = get_unsup_model_folder(cfg)
+        full_model_path = os.path.join(self.cfg["project_path"], unsup_model_path, self.model_path)
+
+        model = get_model(p_backbone=self.model_name, p_setup='autoencoder', num_channel=len(new_column_names))
+        model.load_state_dict(torch.load(full_model_path))
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model = model.to(device)
-        train_loader = prepare_unsup_dataset(segments, new_column_names)
+
         representation_list, _, _, _ = \
             AE_eval_time_series(train_loader, model, device)
 
@@ -549,8 +530,6 @@ class LabelWithInteractivePlot(QWidget):
         repre_concat = np.concatenate(representation_list)
         repre_reshape = repre_concat.reshape(repre_concat.shape[0], -1)
         repre_tsne = reduce_dimension_with_tsne(repre_reshape)
-
-        # pos = np.random.normal(size=(len(start_indice), 2), scale=100)
 
         return start_indices, end_indices, repre_tsne
 
@@ -571,11 +550,6 @@ class LabelWithInteractivePlot(QWidget):
 
         self.settingPannel.setAlignment(Qt.AlignTop)
 
-        # self.createRawDataComboBox()
-        # 
-        # self.createModelComboBox()
-        # self.createFeatureExtractButton()
-
         self.createLabelButton()
         self.createRegionBtn()
         self.createSaveButton()
@@ -592,9 +566,18 @@ class LabelWithInteractivePlot(QWidget):
                 self.data.loc[(self.data['datetime'] >= int(regionRange[0])) & (self.data['datetime'] <= int(regionRange[1])), 'label'] = reg.label
 
         os.makedirs(os.path.join(self.cfg["project_path"], "edit-data",), exist_ok=True)
-        edit_data_path = os.path.join(self.cfg["project_path"], "edit-data", self.RawDatacomboBox.currentText().replace(".pkl", ".csv"))
-        try:
-            self.data.to_csv(edit_data_path)
+        edit_data_path = os.path.join(self.cfg["project_path"], "edit-data", self.RawDatacomboBox.currentText())
+        # edit_data_path = os.path.join(self.cfg["project_path"], "edit-data", self.RawDatacomboBox.currentText().replace(".pkl", ".csv"))
+        try:  # 如果文件存在就新建
+            if os.path.exists(edit_data_path):
+                for num in range(1, 100, 1):
+                    firstname = edit_data_path.split('Hz')[0]
+                    new_path = firstname + '_' + str(num) + '.pkl'
+                    if not os.path.exists(new_path):
+                        self.data.to_csv(new_path)
+                        break
+            else:
+                self.data.to_csv(edit_data_path)
         except:
             print('save data error!')
         else:
@@ -776,14 +759,11 @@ def split_dataframe(df, segment_size):
 
     return segments, start_indices
 
-def find_data_columns(dataf, column_names):
+def find_data_columns(sensor_dict, column_names):
     new_column_names = []
-    original_columns = list(dataf.columns.values)
-    clean_columns = [i.replace('_', '') for i in original_columns]
     for column_name in column_names:
-        for orig_c, clean_c in zip(original_columns, clean_columns):
-            if column_name == clean_c:
-                new_column_names.append(orig_c)
+        real_names = sensor_dict[column_name]
+        new_column_names.extend(real_names)
     return new_column_names
 
 def reduce_dimension_with_tsne(array, method='tsne'):
