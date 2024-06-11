@@ -38,25 +38,17 @@ class TrainNetwork(DefaultTab):
     def __init__(self, root, parent, h1_description):
         super(TrainNetwork, self).__init__(root, parent, h1_description)
 
-        self.root = root
-        # use the default model_cfg file for default values
-        default_unsupmodel_cfg_path = os.path.join(
-            Path(deepview.__file__).parent, "model_cfg.yaml"
-        )  # 检查路径是否是unsup-models下面的model_cfg.yaml
-
-        unsupmodel_cfg = auxiliaryfunctions.read_plainconfig(default_unsupmodel_cfg_path)
-        # set default values of windows
-        self.net_type = str(unsupmodel_cfg['net_type'])
-        self.learning_rate = str(unsupmodel_cfg['lr_init'])
-        self.batch_size = str(unsupmodel_cfg['batch_size'])
-        self.max_iter = str(unsupmodel_cfg['max_epochs'])
-
-        self.data_length = str(unsupmodel_cfg['data_length'])
-        self.data_column = str(unsupmodel_cfg['data_columns'])
-
         # get sensor/columns dictionary from config.yaml
         root_cfg = auxiliaryfunctions.read_config(self.root.config)
         self.sensor_dict = root_cfg['sensor_dict']
+
+        self.models = ['AutoEncoder_CNN_AE', 'SimCLR_LSTM']
+        self.select_column = []
+        self.max_iter = 30
+        self.learning_rate = 0.0005
+        self.batch_size = 32
+        self.net_type = self.models[0]
+        self.data_length = 180
 
 
     # 在第一次渲染 tab 时才构造内容
@@ -100,7 +92,7 @@ class TrainNetwork(DefaultTab):
     def _generate_layout_attributes(self, layout):
         net_label = QtWidgets.QLabel("Network type")
         self.display_net_type = QtWidgets.QComboBox()
-        self.display_net_type.addItems(['CNN_AE', 'DeepConvLSTM'])
+        self.display_net_type.addItems(self.models)
         self.display_net_type.currentIndexChanged.connect(self.log_net_choice)
 
         # Display iterations
@@ -108,7 +100,7 @@ class TrainNetwork(DefaultTab):
         self.display_iters_spin = QtWidgets.QSpinBox()
         self.display_iters_spin.setMinimum(1)
         self.display_iters_spin.setMaximum(10000)
-        self.display_iters_spin.setValue(int(self.max_iter))
+        self.display_iters_spin.setValue(30)
         self.display_iters_spin.valueChanged.connect(self.log_display_iters)
 
         # Save iterations
@@ -117,7 +109,7 @@ class TrainNetwork(DefaultTab):
         self.save_iters_spin = QtWidgets.QLineEdit()
         # self.save_iters_spin.setMinimum(1)
         # self.save_iters_spin.setMaximum(1)
-        self.save_iters_spin.setText(self.learning_rate)
+        self.save_iters_spin.setText("0.0005")
         self.save_iters_spin.textChanged.connect(self.log_init_lr)
 
         # Max iterations
@@ -125,7 +117,7 @@ class TrainNetwork(DefaultTab):
         self.batchsize_spin = QtWidgets.QSpinBox()
         self.batchsize_spin.setMinimum(1)
         self.batchsize_spin.setMaximum(10000)
-        self.batchsize_spin.setValue(int(self.batch_size))
+        self.batchsize_spin.setValue(32)
         self.batchsize_spin.valueChanged.connect(self.log_batch_size)
 
         layout.addWidget(net_label, 0, 0)
@@ -181,6 +173,7 @@ class TrainNetwork(DefaultTab):
         for column in combined_columns:
             cb = QtWidgets.QCheckBox(column)
             self.display_column_container.addWidget(cb)
+            cb.stateChanged.connect(self.log_data_columns)
             self.display_column_cb_list.append(cb)
 
         # Display iterations
@@ -199,24 +192,40 @@ class TrainNetwork(DefaultTab):
         layout.addWidget(self.display_datalen_spin, 2, 1)
 
     def log_data_columns(self, value):
-        self.root.logger.info(f"Select input data columns to {value}")
+        self.root.logger.info(f"Select input data columns to {self.select_column}")
+        sender = self.sender()
+        if sender.isChecked():
+            if sender.text() not in self.select_column:
+                self.select_column.append(sender.text())
+        else:
+            if sender.text() in self.select_column:
+                self.select_column.remove(sender.text())
+        print(self.select_column)
 
     def log_display_datalen(self, value):
         self.root.logger.info(f"Display input data length set to {value}")
+        print(int(value))
+        self.data_length = int(value)
 
     def log_net_choice(self, net):
-        # todo, bug, when selecting DeepConvLSTM, bug
-        self.root.logger.info(f"Network type set to {net.upper()}")
-        # self.root.logger.info(f"TODO: test dataset set to {net.upper()}")
+        self.root.logger.info(f"Network type set to {self.display_net_type.currentText()}")
+        print(self.display_net_type.currentText())
+        self.net_type = self.display_net_type.currentText()
 
     def log_display_iters(self, value):
         self.root.logger.info(f"Run iters (epochs) set to {value}")
+        print(int(value))
+        self.max_iter = int(value)
 
     def log_init_lr(self, value):
         self.root.logger.info(f"Learning rate set to {value}")
+        print(float(value))
+        self.learning_rate = float(value)
 
     def log_batch_size(self, value):
         self.root.logger.info(f"Batch size set to {value}")
+        print(int(value))
+        self.batch_size = int(value)
 
     def log_save_iters(self, value):
         self.root.logger.info(f"Save iters set to {value}")

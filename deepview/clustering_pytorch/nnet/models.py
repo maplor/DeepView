@@ -449,3 +449,90 @@ class AE_linear(nn.Module):
         else:
             out = self.classifier(x_encoded)
             return out, x_decoded
+
+# ----------------------------------------Backbone for SimCLR--------------------------------------
+
+class FCN(nn.Module):
+    def __init__(self, n_channels, out_channels=128, backbone=True):
+        super(FCN, self).__init__()
+
+        self.conv_block1 = nn.Sequential(nn.Conv1d(n_channels, 32, kernel_size=8, stride=1, bias=False, padding=4),
+                                         nn.BatchNorm1d(32),
+                                         nn.ReLU(),
+                                         nn.MaxPool1d(kernel_size=2, stride=2, padding=1),
+                                         nn.Dropout(0.35))
+        self.conv_block2 = nn.Sequential(nn.Conv1d(32, 64, kernel_size=8, stride=1, bias=False, padding=4),
+                                         nn.BatchNorm1d(64),
+                                         nn.ReLU(),
+                                         nn.MaxPool1d(kernel_size=2, stride=2, padding=1))
+        self.conv_block3 = nn.Sequential(nn.Conv1d(64, out_channels, kernel_size=8, stride=1, bias=False, padding=4),
+                                         nn.BatchNorm1d(out_channels),
+                                         nn.ReLU(),
+                                         nn.MaxPool1d(kernel_size=2, stride=2, padding=1))
+
+    def forward(self, x_in):
+        # x_in: (batch, len, dim)
+        x_in = x_in.permute(0, 2, 1)
+        # x_in: (batch, dim(channel), len)
+        x = self.conv_block1(x_in)
+        x = self.conv_block2(x)
+        x = self.conv_block3(x)
+
+        # return: (batch, feature_dim)
+        # feature_dim = out_channels * 25
+        return x.reshape(x.shape[0], -1)
+
+class DeepConvLSTM(nn.Module):
+    def __init__(self, n_channels, conv_kernels=64, kernel_size=5, LSTM_units=128, backbone=True):
+        super(DeepConvLSTM, self).__init__()
+
+
+        self.conv1 = nn.Conv2d(1, conv_kernels, (kernel_size, 1))
+        self.conv2 = nn.Conv2d(conv_kernels, conv_kernels, (kernel_size, 1))
+        self.conv3 = nn.Conv2d(conv_kernels, conv_kernels, (kernel_size, 1))
+        self.conv4 = nn.Conv2d(conv_kernels, conv_kernels, (kernel_size, 1))
+
+        self.dropout = nn.Dropout(0.5)
+        self.lstm = nn.LSTM(n_channels * conv_kernels, LSTM_units, num_layers=2)
+
+        self.out_dim = LSTM_units
+
+        self.activation = nn.ReLU()
+
+    def forward(self, x):
+        # x_in: (batch, len, dim)
+        self.lstm.flatten_parameters()
+        x = x.unsqueeze(1)
+        x = self.activation(self.conv1(x))
+        x = self.activation(self.conv2(x))
+        x = self.activation(self.conv3(x))
+        x = self.activation(self.conv4(x))
+
+        x = x.permute(2, 0, 3, 1)
+        x = x.reshape(x.shape[0], x.shape[1], -1)
+
+        x = self.dropout(x)
+
+        x, h = self.lstm(x)
+        x = x[-1, :, :]
+
+        # return: (batch, LSTM_units)
+        return x
+
+class LSTM(nn.Module):
+    def __init__(self, n_channels, LSTM_units=128, backbone=True):
+        super(LSTM, self).__init__()
+
+        self.backbone = backbone
+        self.lstm = nn.LSTM(n_channels, LSTM_units, num_layers=2)
+        self.out_dim = LSTM_units
+
+    def forward(self, x):
+        # x_in: (batch, len, dim)
+        self.lstm.flatten_parameters()
+        x = x.permute(1, 0, 2)
+        x, (h, c) = self.lstm(x)
+        x = x[-1, :, :]
+
+        # return: (batch, LSTM_units)
+        return x
