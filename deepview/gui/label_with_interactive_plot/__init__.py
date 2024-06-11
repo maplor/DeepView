@@ -152,6 +152,7 @@ class LabelWithInteractivePlot(QWidget):
         # combbox change
         with open(rawdata_file_path_list[0], 'rb') as f:
             self.data = pickle.load(f)
+            self.data['_timestamp'] = pd.to_datetime(self.data['datetime']).apply(lambda x: x.timestamp())
         RawDatacomboBox.currentTextChanged.connect(
             self.get_data_from_pkl
         )
@@ -162,6 +163,7 @@ class LabelWithInteractivePlot(QWidget):
         datapath = os.path.join(self.cfg["project_path"], unsup_data_path, filename)
         with open(datapath, 'rb') as f:
             self.data = pickle.load(f)
+            self.data['_timestamp'] = pd.to_datetime(self.data['datetime']).apply(lambda x: x.timestamp())
         return
 
     def createModelComboBox(self):
@@ -303,7 +305,7 @@ class LabelWithInteractivePlot(QWidget):
             real_columns = self.sensor_dict[columns]
             plot = pg.PlotWidget(title=columns, name=columns, axisItems={'bottom': pg.DateAxisItem()})
             for j, c in enumerate(real_columns):
-                plot.plot(self.data['datetime'], self.data[c], pen=pg.mkPen(j))
+                plot.plot(self.data['_timestamp'], self.data[c], pen=pg.mkPen(j))
             # plot.plot(self.data['datetime'], self.data[columns[0]], pen=pg.mkPen(i))
             plot.scene().sigMouseClicked.connect(self.mouse_clicked)
             plot.scene().sigMouseMoved.connect(self.mouse_moved)
@@ -315,13 +317,13 @@ class LabelWithInteractivePlot(QWidget):
             self.plot_widgets[i].show()
 
     def _to_idx(self, start_ts, end_ts):
-        selected_indices = self.data[(self.data['datetime'] >= start_ts)
-                                     & (self.data['datetime'] <= end_ts)].index
+        selected_indices = self.data[(self.data['_timestamp'] >= start_ts)
+                                     & (self.data['_timestamp'] <= end_ts)].index
         return selected_indices.values[0], selected_indices.values[-1]
 
     def _to_time(self, start_idx, end_idx):
-        start_ts = self.data.loc[start_idx, 'datetime']
-        end_ts = self.data.loc[end_idx, 'datetime']
+        start_ts = self.data.loc[start_idx, '_timestamp']
+        end_ts = self.data.loc[end_idx, '_timestamp']
         return start_ts, end_ts
 
     def _add_region(self, pos):
@@ -574,7 +576,7 @@ class LabelWithInteractivePlot(QWidget):
         for reg in self.regions[0]:
             if hasattr(reg, 'label') and reg.label:
                 regionRange = reg.getRegion()
-                self.data.loc[(self.data['datetime'] >= int(regionRange[0])) & (self.data['datetime'] <= int(regionRange[1])), 'label'] = reg.label
+                self.data.loc[(self.data['_timestamp'] >= int(regionRange[0])) & (self.data['_timestamp'] <= int(regionRange[1])), 'label'] = reg.label
 
         os.makedirs(os.path.join(self.cfg["project_path"], "edit-data",), exist_ok=True)
         edit_data_path = os.path.join(self.cfg["project_path"], "edit-data", self.RawDatacomboBox.currentText())
