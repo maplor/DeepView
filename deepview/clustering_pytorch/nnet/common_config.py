@@ -12,9 +12,13 @@ from deepview.clustering_pytorch.nnet.collate import collate_custom
 
 
 def get_criterion(p):
-    if p == 'mse':
+    if p == 'autoencoder':
         from deepview.clustering_pytorch.nnet.losses import MSEloss
         criterion = MSEloss()
+    elif p == 'simclr':
+        # TODO: temperature 这个参数有什么用？
+        from deepview.clustering_pytorch.nnet.losses import SimCLRLoss
+        criterion = SimCLRLoss(temperature=1)
     # elif p['criterion'] == 'simclr':
     #     from losses import SimCLRLoss
     #     criterion = SimCLRLoss(**p['criterion_kwargs'])
@@ -49,9 +53,18 @@ def get_model(p_backbone, p_setup, num_channel=3, pretrain_path=None):
 
     # Get backbone
     # if True:
-    if p_backbone == 'CNN_AE':
+    if 'CNN_AE'.upper() in p_backbone.upper():
         from deepview.clustering_pytorch.nnet.models import CNN_AE
         backbone = CNN_AE(n_channels=num_channel, out_channels=128)
+    elif 'FCN'.upper() in p_backbone.upper():
+        from deepview.clustering_pytorch.nnet.models import FCN
+        backbone = FCN(n_channels=num_channel, out_channels=128)
+    elif 'LSTM'.upper() in p_backbone.upper():
+        from deepview.clustering_pytorch.nnet.models import LSTM
+        backbone = LSTM(n_channels=num_channel, LSTM_units=128)
+    elif 'DeepConvLSTM'.upper() in p_backbone.upper():
+        from deepview.clustering_pytorch.nnet.models import DeepConvLSTM
+        backbone = DeepConvLSTM(n_channels=num_channel, LSTM_units=128)
     else:
         raise ValueError('Invalid backbone {}'.format(p_backbone))
 
@@ -63,6 +76,13 @@ def get_model(p_backbone, p_setup, num_channel=3, pretrain_path=None):
     if p_setup in ['autoencoder']:
         from deepview.clustering_pytorch.nnet.models import ReconstructionFramework
         model = ReconstructionFramework(backbone)
+    elif p_setup in ['simclr', 'moco']:
+        from deepview.clustering_pytorch.nnet.models import ContrastiveModel
+        backbone = {
+            'backbone': backbone,
+            'dim': 128
+        }
+        model = ContrastiveModel(backbone, 'mlp', 128).double()
     else:
         raise ValueError('Invalid setup {}'.format(p_setup))
 

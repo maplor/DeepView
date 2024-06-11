@@ -39,6 +39,7 @@ from deepview.clustering_pytorch.nnet.common_config import (
 
 from deepview.clustering_pytorch.nnet.train_utils import (
     AE_train_time_series,
+    simclr_train_time_series,
 )
 import json
 from PySide6.QtWidgets import QProgressBar
@@ -72,12 +73,12 @@ def train(
     progress_update,
     config_yaml,
     select_filenames,
-    net_type='CNN_AE',
-    lr=0.0005,
-    batch_size=32,
-    num_epochs=100,
-    data_len=180,
-    data_column=['acc_x']
+    net_type,
+    lr,
+    batch_size,
+    num_epochs,
+    data_len,
+    data_column
 ):
     # data_column_list = json.loads(data_column.replace('\'', '"'))
     start_path = os.getcwd()
@@ -107,13 +108,20 @@ def train(
     # -------------------------核心的模型训练部分，计算loss----------------------------
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # get model
+    if 'autoencoder'.upper() in net_type.upper():
+        p_setup = 'autoencoder'
+    elif 'simclr'.upper() in net_type.upper():
+        p_setup = 'simclr'
+    else:
+        raise ValueError('Unknown framework type: %s' % net_type)
+
     model = get_model(p_backbone=net_type,
-                      p_setup='autoencoder',
+                      p_setup=p_setup,
                       num_channel=num_channel)  # set backbone model=ResNet18, SSL=simclr, weight
     model = model.to(device)
 
     # Criterion
-    criterion = get_criterion('mse')
+    criterion = get_criterion(p_setup)
     criterion = criterion.to(device)
 
     # Optimizer and scheduler
@@ -133,7 +141,10 @@ def train(
         # Train: the same as simclr
         print('Train ...')
         # simclr_train_time_series(train_dataloader, model, criterion, optimizer, epoch)
-        AE_train_time_series(train_dataloader, model, criterion, optimizer, epoch, device)
+        if p_setup == 'autocoder':
+            AE_train_time_series(train_dataloader, model, criterion, optimizer, epoch, device)
+        elif p_setup == 'simclr':
+            simclr_train_time_series(train_dataloader, model, criterion, optimizer, epoch)
 
     sensor_str = ''
     for i in data_column:

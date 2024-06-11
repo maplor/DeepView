@@ -55,18 +55,15 @@ def simclr_train_time_series(train_loader, model, criterion, optimizer, epoch):
 
     model.train()
 
-    for i, (sample) in enumerate(train_loader):
+    for i, (sample, timestamp, label) in enumerate(tqdm(train_loader)):
         aug_sample1 = gen_aug(sample, 't_warp')  # t_warp, out.shape=batch64,width3,height900
         aug_sample2 = gen_aug(sample, 'negate')  # negate
-        # reshape data by adding channel to 1, and transpose height and width
-        aug_sample1 = (aug_sample1.unsqueeze(1)).permute(0, 1, 3, 2)
-        aug_sample2 = (aug_sample2.unsqueeze(1)).permute(0, 1, 3, 2)
 
-        b, c, h, w = aug_sample1.size()  # batch64, channel3, height32, width32
-        input_ = torch.cat([aug_sample1.unsqueeze(1), aug_sample2.unsqueeze(1)], dim=1)  # input_.shape=b,2,c,h,w
-        input_ = input_.view(-1, c, h, w)  # out.shape=b*2,c,h,w
+        b, l, d = aug_sample1.size()  # batch64, length180, dim6
+        input_ = torch.cat([aug_sample1.unsqueeze(1), aug_sample2.unsqueeze(1)], dim=1)  # input_.shape=b,2,l,d
+        input_ = input_.view(-1, l, d)  # out.shape=b*2,l,d
         # input_ = input_.cuda(non_blocking=True)
-        input_ = input_.to(device='cuda', non_blocking=True, dtype=torch.float)
+        # input_ = input_.to(device='cuda', non_blocking=True, dtype=torch.float)
         # targets = batch['target'].cuda(non_blocking=True)
 
         output = model(input_).view(b, 2, -1)  # output.shape=b,2,128, split the first dim into 2 parts
@@ -84,16 +81,16 @@ def simclr_eval_time_series(train_loader, model):
 
     representation_list = []
     sample_list = []
-    for i, (sample) in enumerate(train_loader):
+    for i, (sample, timestamp, label) in enumerate(train_loader):
         # reshape data by adding channel to 1, and transpose height and width
-        aug_sample1 = (sample.unsqueeze(1)).permute(0, 1, 3, 2)
+        # aug_sample1 = (sample.unsqueeze(1)).permute(0, 1, 3, 2)
         # aug_sample2 = (sample.unsqueeze(1)).permute(0, 1, 3, 2)
 
-        b, c, h, w = aug_sample1.size()  # batch64, channel3, height32, width32
-        input_ = torch.cat([aug_sample1.unsqueeze(1), aug_sample1.unsqueeze(1)], dim=1)  # input_.shape=b,2,c,h,w
-        input_ = input_.view(-1, c, h, w)  # out.shape=b*2,c,h,w
+        b, l, d = sample.size()  # batch64, channel3, height32, width32
+        input_ = torch.cat([sample.unsqueeze(1), sample.unsqueeze(1)], dim=1)  # input_.shape=b,2,c,h,w
+        input_ = input_.view(-1, l, d)  # out.shape=b*2,c,h,w
         # input_ = input_.cuda(non_blocking=True)
-        input_ = input_.to(device='cuda', non_blocking=True, dtype=torch.float)
+        # input_ = input_.to(device='cuda', non_blocking=True, dtype=torch.float)
         # targets = batch['target'].cuda(non_blocking=True)
 
         output = model(input_).view(b, 2, -1)  # output.shape=b,2,128, split the first dim into 2 parts

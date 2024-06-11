@@ -126,11 +126,11 @@ class LabelWithInteractivePlot(QWidget):
         RawDataComboBoxLabel, RawDatacomboBox = self.createRawDataComboBox()
         self.top_layout.addWidget(RawDataComboBoxLabel, alignment=Qt.AlignLeft)
         self.top_layout.addWidget(RawDatacomboBox, alignment=Qt.AlignLeft)
-        
+
         modelComboBoxLabel, modelComboBox = self.createModelComboBox()
         self.top_layout.addWidget(modelComboBoxLabel, alignment=Qt.AlignLeft)
         self.top_layout.addWidget(modelComboBox, alignment=Qt.AlignLeft)
-        
+
         featureExtractBtn = self.createFeatureExtractButton()
         self.top_layout.addWidget(featureExtractBtn, alignment=Qt.AlignLeft)
 
@@ -211,7 +211,7 @@ class LabelWithInteractivePlot(QWidget):
         featureExtractBtn.setEnabled(False)
         featureExtractBtn.clicked.connect(self.handleCompute)
         return featureExtractBtn
-    
+
     def handleCompute(self):
         print('start training...')
         self.isTarining = True
@@ -227,7 +227,7 @@ class LabelWithInteractivePlot(QWidget):
 
         self.renderRightPlot()  # feature extraction function here
         self.updateLeftPlotList()
-    
+
         self.isTarining = False
         self.updateBtn()
 
@@ -318,7 +318,7 @@ class LabelWithInteractivePlot(QWidget):
         selected_indices = self.data[(self.data['datetime'] >= start_ts)
                                      & (self.data['datetime'] <= end_ts)].index
         return selected_indices.values[0], selected_indices.values[-1]
-    
+
     def _to_time(self, start_idx, end_idx):
         start_ts = self.data.loc[start_idx, 'datetime']
         end_ts = self.data.loc[end_idx, 'datetime']
@@ -509,7 +509,7 @@ class LabelWithInteractivePlot(QWidget):
         # get latent feature
         from deepview.clustering_pytorch.nnet.common_config import get_model
         from deepview.clustering_pytorch.datasets.factory import prepare_unsup_dataset
-        from deepview.clustering_pytorch.nnet.train_utils import AE_eval_time_series
+        from deepview.clustering_pytorch.nnet.train_utils import AE_eval_time_series, simclr_eval_time_series
 
         train_loader = prepare_unsup_dataset(segments, new_column_names)
 
@@ -518,13 +518,24 @@ class LabelWithInteractivePlot(QWidget):
         unsup_model_path = get_unsup_model_folder(cfg)
         full_model_path = os.path.join(self.cfg["project_path"], unsup_model_path, self.model_path)
 
-        model = get_model(p_backbone=self.model_name, p_setup='autoencoder', num_channel=len(new_column_names))
+        if 'AUTOENCODER' in self.model_path.upper():
+            p_setup = 'autoencoder'
+        elif 'SIMCLR' in self.model_path.upper():
+            p_setup = 'simclr'
+        else:
+            raise ValueError("Invalid model type")
+
+        model = get_model(p_backbone=self.model_name, p_setup=p_setup, num_channel=len(new_column_names))
         model.load_state_dict(torch.load(full_model_path))
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model = model.to(device)
 
-        representation_list, _, _, _ = \
-            AE_eval_time_series(train_loader, model, device)
+        if p_setup == 'autocoder':
+            representation_list, _, _, _ = \
+                AE_eval_time_series(train_loader, model, device)
+        elif p_setup == 'simclr':
+            representation_list, _ = simclr_eval_time_series(train_loader, model)
+
 
         # PCA latent representation to shape=(2, len)
         repre_concat = np.concatenate(representation_list)
@@ -638,7 +649,7 @@ class LabelWithInteractivePlot(QWidget):
     def handleAddRegion(self):
         if hasattr(self, 'rightRegionRoi'):
             return
-        
+
         rect = self.viewC.viewRect()
         w = rect.width()
         h = rect.height()
@@ -671,7 +682,7 @@ class LabelWithInteractivePlot(QWidget):
         if not hasattr(self, 'rightRegionRoi'):
             print('Add region first.')
             return
-        
+
         pos: pg.Point = self.rightRegionRoi.pos()
         size: pg.Point = self.rightRegionRoi.size()
 
@@ -704,7 +715,7 @@ class LabelWithInteractivePlot(QWidget):
             for reg in self.regions[i]:
                 if hasattr(reg, 'label') and reg.label:
                     newRegionList.append(reg)
-                else:    
+                else:
                     pwidget.removeItem(reg)
 
             self.regions[i] = newRegionList

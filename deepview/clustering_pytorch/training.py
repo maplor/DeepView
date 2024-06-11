@@ -44,14 +44,13 @@ def train_network(
     sensor_dict,
     progress_update,
     config,
-    select_filenames='',
-    net_type='CNN_AE',
-    lr=0.0005,
-    batch_size=32,
-    num_epochs=10,
-    data_len=180,
-    data_column=['acc_x']
-
+    select_filenames,
+    net_type,
+    lr,
+    batch_size,
+    num_epochs,
+    data_len,
+    data_column
 ):
     """Trains the network with the labels in the training dataset.
 
