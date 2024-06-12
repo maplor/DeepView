@@ -46,7 +46,7 @@ def simclr_train(train_loader, model, criterion, optimizer, epoch):
             progress.display(i)
 
 
-def simclr_train_time_series(train_loader, model, criterion, optimizer, epoch):
+def simclr_train_time_series(train_loader, model, criterion, optimizer, epoch, device):
     """
     Train according to the scheme from SimCLR
     https://arxiv.org/abs/2002.05709
@@ -58,6 +58,8 @@ def simclr_train_time_series(train_loader, model, criterion, optimizer, epoch):
     for i, (sample, timestamp, label) in enumerate(tqdm(train_loader)):
         aug_sample1 = gen_aug(sample, 't_warp')  # t_warp, out.shape=batch64,width3,height900
         aug_sample2 = gen_aug(sample, 'negate')  # negate
+        aug_sample1 = aug_sample1.to(device=device, non_blocking=True, dtype=torch.double)
+        aug_sample2 = aug_sample2.to(device=device, non_blocking=True, dtype=torch.double)
 
         b, l, d = aug_sample1.size()  # batch64, length180, dim6
         input_ = torch.cat([aug_sample1.unsqueeze(1), aug_sample2.unsqueeze(1)], dim=1)  # input_.shape=b,2,l,d
@@ -76,7 +78,7 @@ def simclr_train_time_series(train_loader, model, criterion, optimizer, epoch):
     return
 
 
-def simclr_eval_time_series(train_loader, model):
+def simclr_eval_time_series(train_loader, model, device):
     model.eval()
 
     representation_list = []
@@ -85,6 +87,7 @@ def simclr_eval_time_series(train_loader, model):
         # reshape data by adding channel to 1, and transpose height and width
         # aug_sample1 = (sample.unsqueeze(1)).permute(0, 1, 3, 2)
         # aug_sample2 = (sample.unsqueeze(1)).permute(0, 1, 3, 2)
+        sample = sample.to(device=device, non_blocking=True, dtype=torch.double)
 
         b, l, d = sample.size()  # batch64, channel3, height32, width32
         input_ = torch.cat([sample.unsqueeze(1), sample.unsqueeze(1)], dim=1)  # input_.shape=b,2,c,h,w
@@ -116,10 +119,10 @@ def AE_train_time_series(train_loader, model, criterion, optimizer, epoch, devic
         # reshape data by adding channel to 1, and transpose height and width
         sample = sample.to(device=device, non_blocking=True, dtype=torch.float)
         # input_ = (sample).permute(0, 2, 1)  # input_.shape=b512,3channel,90width
-        input_ = sample  # input_.shape=b512,90width,3channel
+        # input_ = sample  # input_.shape=b512,90width,3channel
 
         # input of autoencoder will be 3D, the backbone is 1d-cnn
-        x_encoded, output = model(input_)  # x_encoded.shape=batch512,outchannel128,len13
+        x_encoded, output = model(sample)  # x_encoded.shape=batch512,outchannel128,len13
         loss = criterion(sample, output)
         losses.update(loss.item())
 
@@ -138,10 +141,10 @@ def AE_eval_time_series(train_loader, model, device):
     for i, (sample, timestamp, label) in enumerate(train_loader):
         sample = sample.to(device=device, non_blocking=True, dtype=torch.float)
         # input_ = (sample).permute(0, 2, 1)  # input.shape=b512,3channel,90width
-        input_ = sample
+        # input_ = sample
 
         # input of autoencoder will be 3D, the backbone is 1d-cnn
-        x_encoded, output = model(input_)  # x_encoded.shape=batch512,outchannel128,len13
+        x_encoded, output = model(sample)  # x_encoded.shape=batch512,outchannel128,len13
 
         # x_encoded, output = model(input_).view(b, 2, -1)  # output.shape=b,2,128, split the first dim into 2 parts
         tmp_representation = x_encoded.detach().cpu().numpy()
