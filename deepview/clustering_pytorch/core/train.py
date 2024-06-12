@@ -98,6 +98,7 @@ def train(
     data_path = os.path.join(project_path, auxiliaryfunctions.get_unsupervised_set_folder())
     # data_path_new = os.path.join(project_path, cfg['dataset'][:-4]+'_new.pkl')
 
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # xia, dataloader,将Train network tab中选中的文件传入这个函数
     train_dataloader, num_channel = prepare_all_data(data_path,
                                         select_filenames,
@@ -106,7 +107,7 @@ def train(
 
     # print(optimizer)
     # -------------------------核心的模型训练部分，计算loss----------------------------
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     # get model
     if 'autoencoder'.upper() in net_type.upper():
         p_setup = 'autoencoder'
@@ -144,7 +145,7 @@ def train(
         if p_setup == 'autocoder':
             AE_train_time_series(train_dataloader, model, criterion, optimizer, epoch, device)
         elif p_setup == 'simclr':
-            simclr_train_time_series(train_dataloader, model, criterion, optimizer, epoch)
+            simclr_train_time_series(train_dataloader, model, criterion, optimizer, epoch, device)
 
     sensor_str = ''
     for i in data_column:

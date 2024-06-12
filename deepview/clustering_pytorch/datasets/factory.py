@@ -155,8 +155,10 @@ class data_loader_umineko(Dataset):
         # self.labels = torch.tensor(labels)
         # self.domains = torch.tensor(domains)
         # self.timestamps = torch.tensor(timestamps)
-        self.samples = torch.tensor(torch.from_numpy(samples.astype(float)))
-        self.labels = torch.tensor(labels.astype(int))
+        # self.samples = torch.tensor(torch.from_numpy(samples.astype(float)))
+        self.samples = torch.tensor(samples)  # check data type
+        self.labels = torch.tensor(labels)  # check data type
+        # self.labels = torch.tensor(labels.astype(int))
         # self.domains = torch.tensor(domains.astype(int))
         self.timestamps = torch.tensor(timestamps.astype(float))
 

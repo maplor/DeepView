@@ -45,7 +45,7 @@ class LabelOption(QDialog):
         super().__init__()
 
         layout = QVBoxLayout()
-
+        self.label_dict = label_dict
         self.radio_buttons = {}
         for label, lid in label_dict.items():
             self.radio_buttons[label] = QRadioButton(label)
@@ -536,7 +536,7 @@ class LabelWithInteractivePlot(QWidget):
             representation_list, _, _, _ = \
                 AE_eval_time_series(train_loader, model, device)
         elif p_setup == 'simclr':
-            representation_list, _ = simclr_eval_time_series(train_loader, model)
+            representation_list, _ = simclr_eval_time_series(train_loader, model, device)
 
 
         # PCA latent representation to shape=(2, len)
