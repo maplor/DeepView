@@ -31,10 +31,6 @@ class LabelWithInteractivePlotTab(DefaultTab):
 
     def _set_page(self):
         config = self.root.config  # project/config.yaml
-        # df = get_plot_data(config)
-        # if df is None:
-        #     self.main_layout.addWidget(QLabel('can not find raw data'))
-        #     return
         
         # Read file path for pose_config file. >> pass it on
         cfg = auxiliaryfunctions.read_config(config)

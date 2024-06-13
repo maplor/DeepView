@@ -21,6 +21,8 @@ import pickle
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
+import pandas as pd
+import contextily as ctx
 
 
 class GPSDisplayer(DefaultTab):
@@ -51,9 +53,12 @@ class GPSDisplayer(DefaultTab):
 
 
     def _generate_layout_attributes(self, layout):
-        self.select_files_button = QPushButton("Select pkl Files")
+        self.select_files_button = QPushButton("Select csv Files")
         self.select_files_button.clicked.connect(self.select_files)
+        self.select_files_button1 = QPushButton("Select pkl Files (slower, upsampled)")
+        self.select_files_button1.clicked.connect(self.select_files)
         layout.addWidget(self.select_files_button, 0, 0)
+        layout.addWidget(self.select_files_button1, 1, 0)
 
         return
 
@@ -64,13 +69,15 @@ class GPSDisplayer(DefaultTab):
         self.scroll_area_widget.setLayout(self.scroll_area_layout)
         self.scroll_area.setWidget(self.scroll_area_widget)
         self.scroll_area.setWidgetResizable(True)
-        layout.addWidget(self.scroll_area, 1, 0)
+        layout.addWidget(self.scroll_area, 2, 0)
         return
 
     def select_files(self):
         file_dialog = QFileDialog()
         file_dialog.setFileMode(QFileDialog.ExistingFiles)
-        file_dialog.setNameFilter("Processed raw data Files (*.pkl)")
+        file_dialog.setNameFilter("Processed raw data Files (*.pkl *.csv)")
+
+        # Execute the file dialog
         if file_dialog.exec():
             self.selected_files = file_dialog.selectedFiles()
             self.plot_trajectories()
@@ -92,17 +99,26 @@ class GPSDisplayer(DefaultTab):
                     row += 1
             else:
                 try:
-                    with open(file, 'rb') as f:
-                        tmpdf = pickle.load(f)
-                    df = tmpdf[['datetime', 'latitude', 'longitude']].copy()
+                    if file.endswith('.pkl'):
+                        with open(file, 'rb') as f:
+                            tmpdf = pickle.load(f)
+                    elif file.endswith('.csv'):
+                        tmpdf = pd.read_csv(file, low_memory=False)
+                        # print('1')
+                    else:
+                        print('Cannot load GPS data, please check file type, should be csv or pkl files.')
+                        tmpdf = []
+                    # print('2')
+                    df = tmpdf[['latitude', 'longitude']].copy()
                     df = df.dropna()
                     latitudes = df['latitude']
                     longitudes = df['longitude']
-                    timestamps = df['datetime']
+                    # timestamps = df['datetime']
 
+                    # Project the GeoDataFrame to Web Mercator (EPSG:3857) for compatibility with contextily basemaps
                     gdf = gpd.GeoDataFrame(
                         df, geometry=gpd.points_from_xy(df.longitude, df.latitude),
-                        crs="EPSG:4326"
+                        crs="EPSG:3857"
                     )
                     # Create a plot
                     fig, ax = plt.subplots()
@@ -113,10 +129,13 @@ class GPSDisplayer(DefaultTab):
                     ax.set_xlabel('Longitude')
                     ax.set_ylabel('Latitude')
 
+                    # Add a basemap
+                    ctx.add_basemap(ax, crs=gdf.crs.to_string())
+
                     plt.savefig(img_file)
 
                     # Validate the data
-                    if latitudes.isnull().any() or longitudes.isnull().any() or timestamps.isnull().any():
+                    if latitudes.isnull().any() or longitudes.isnull().any():
                         print(f"Data in {file} contains null values. Please check the pkl file.")
                         continue
 

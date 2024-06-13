@@ -342,7 +342,7 @@ def create_training_dataset(
         "project_path": str(cfg["project_path"]),  # 最外层路径
         "dataset": Path(os.path.join(project_path, trainingsetfolder)),
         "sample_rate": int(sample_rate),
-        "net_type": "CNN_AE",
+        "net_type": "AE_CNN",
         "lr_init": 0.0001,
         'batch_size': 32,
         'max_epochs': 100,

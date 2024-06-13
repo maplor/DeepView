@@ -244,7 +244,7 @@ def create_new_project(
     # cfg_file["bodyparts"] = ["bodypart1", "bodypart2", "bodypart3", "objectA"]
     # cfg_file["skeleton"] = [["bodypart1", "bodypart2"], ["objectA", "bodypart3"]]
     cfg_file["default_augmenter"] = "default"
-    cfg_file["default_net_type"] = "CNN_AE"
+    cfg_file["default_net_type"] = "AE_CNN"
 
     # common parameters:
     cfg_file["Task"] = project

@@ -22,6 +22,9 @@ import pickle
 import pandas as pd
 from pathlib import Path
 
+from deepview.clustering_pytorch.nnet.util import (
+    gen_aug,
+)
 
 class DatasetFactory:
     _datasets = dict()
@@ -76,7 +79,10 @@ def sliding_window(data, len_sw):
     # print(" ..after sliding window: train inputs {0}".format(xlist.shape))
     return xlist
 
-
+def process_pressure_sensor(df, columns):
+    if 'pressure' in columns:
+        df['pressure'] = df['pressure'] - 1013.25
+    return df
 def prep_dataset_umineko(data_path,
                          filenames,
                          len_sw,
@@ -93,6 +99,8 @@ def prep_dataset_umineko(data_path,
             print('path to load pkl data: ' + data_path)
             with open(Path(full_file_path), 'rb') as f:
                 data = pickle.load(f)  # 2634 labeled segments (dataframe)
+            # process the pressure column by reducing 1013.25hPa
+            data = process_pressure_sensor(data, extend_column)
             tmp = sliding_window(data[extend_column],
                                  len_sw)  # temp:['acc_x', 'acc_y', 'acc_z', 'timestamp', 'labelid', 'domain']
             if tmp.shape[1] != len_sw:
@@ -148,40 +156,49 @@ class base_loader(Dataset):
 
 
 class data_loader_umineko(Dataset):
-    def __init__(self, samples, labels, timestamps):
-        # super().__init__(samples, labels, domains, timestamps)
-        # super(data_loader_umineko, self).__init__(samples, labels, domains, timestamps)
+    def __init__(self, samples, labels, timestamps, augment=False):
+        self.augment = augment
         # self.samples = torch.tensor(samples)
         # self.labels = torch.tensor(labels)
         # self.domains = torch.tensor(domains)
         # self.timestamps = torch.tensor(timestamps)
         # self.samples = torch.tensor(torch.from_numpy(samples.astype(float)))
-        self.samples = torch.tensor(samples)  # check data type
+        if self.augment:
+            self.aug_sample1 = gen_aug(samples, 't_warp')  # t_warp, out.shape=batch64,width3,height900
+            self.aug_sample2 = gen_aug(samples, 'negate')  # negate
+        else:
+            self.samples = torch.tensor(samples)  # check data type
         self.labels = torch.tensor(labels)  # check data type
         # self.labels = torch.tensor(labels.astype(int))
         # self.domains = torch.tensor(domains.astype(int))
         self.timestamps = torch.tensor(timestamps.astype(float))
 
+
     def __getitem__(self, index):
-        sample, target = self.samples[index], self.labels[index]
+        target = self.labels[index]
         timestamp = self.timestamps[index]
-        # timestr = self.timestr[index]
-        return sample, timestamp, target
+        if self.augment == False:
+            sample = self.samples[index]
+            return sample, timestamp, target
+        else:
+            sample1 = self.samples1[index]
+            sample2 = self.samples2[index]
+            return sample1, sample2, timestamp, target
 
     def __len__(self):
         return len(self.samples)
 
 
-def generate_dataloader(data, target, timestamps):
-    batch_size = 512
+def generate_dataloader(data, target, timestamps, batch_size=512, augment=False):
+    # batch_size = 512
     # dataloader
-    train_set_r = data_loader_umineko(data, target, timestamps)
+    train_set_r = data_loader_umineko(data, target, timestamps, augment)
     train_loader_r = DataLoader(train_set_r, batch_size=batch_size,
                                 shuffle=False, drop_last=False)
     return train_loader_r
 
 
-def prepare_all_data(data_path, select_filenames, data_len, data_column):  # todo, 传args，以后改成从model_cfg.yaml中读取
+def prepare_all_data(data_path, select_filenames, data_len, data_column, batch_size, augment=False):  # todo, 传args，以后改成从model_cfg.yaml中读取
     '''
     主要是训练集，需要全部数据做训练。读取数据
     :param data_path:
@@ -189,7 +206,9 @@ def prepare_all_data(data_path, select_filenames, data_len, data_column):  # tod
     :return:
     '''
     # if args.seabird_name == 'umineko':
-    data, timestamps, labels = prep_dataset_umineko(data_path, select_filenames, data_len,
+    data, timestamps, labels = prep_dataset_umineko(data_path,
+                                                    select_filenames,
+                                                    data_len,
                                                     data_column)  # return dict: key=filename, value=[data, timestamps, labels]
 
     # concatenate list
@@ -198,7 +217,7 @@ def prepare_all_data(data_path, select_filenames, data_len, data_column):  # tod
     label_b = np.concatenate(labels, axis=0)  # [B, Len, dim]
 
     # train_loader = generate_dataloader_overlap(data, labels, domains, timestamps)
-    train_loader = generate_dataloader(data_b, label_b, timestamp_b)
+    train_loader = generate_dataloader(data_b, label_b, timestamp_b, batch_size, augment)
 
     # get model input channel
     num_channel = data_b.shape[-1]

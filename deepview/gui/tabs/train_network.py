@@ -11,7 +11,7 @@
 import os
 from pathlib import Path
 
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtCore
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon, QShowEvent
 from PySide6.QtWidgets import QProgressBar
@@ -35,6 +35,7 @@ from PySide6.QtCore import Signal
 class TrainNetwork(DefaultTab):
     # 定义进度信号
     progress_update = Signal(int)
+
     def __init__(self, root, parent, h1_description):
         super(TrainNetwork, self).__init__(root, parent, h1_description)
 
@@ -42,14 +43,13 @@ class TrainNetwork(DefaultTab):
         root_cfg = auxiliaryfunctions.read_config(self.root.config)
         self.sensor_dict = root_cfg['sensor_dict']
 
-        self.models = ['AutoEncoder_CNN_AE', 'SimCLR_LSTM']
+        self.models = ['AE_CNN', 'SimCLR_LSTM']
         self.select_column = []
         self.max_iter = 30
         self.learning_rate = 0.0005
         self.batch_size = 32
         self.net_type = self.models[0]
         self.data_length = 180
-
 
     # 在第一次渲染 tab 时才构造内容
     def firstShowEvent(self, event: QShowEvent) -> None:
@@ -90,34 +90,43 @@ class TrainNetwork(DefaultTab):
         self.progress_bar.setValue(value)
 
     def _generate_layout_attributes(self, layout):
+        available_width = self.screen().availableGeometry().width()
         net_label = QtWidgets.QLabel("Network type")
+        net_label.setFixedWidth(available_width/10)
         self.display_net_type = QtWidgets.QComboBox()
         self.display_net_type.addItems(self.models)
+        self.display_net_type.setFixedWidth(available_width/10)
         self.display_net_type.currentIndexChanged.connect(self.log_net_choice)
 
         # Display iterations
         dispiters_label = QtWidgets.QLabel("Maximum iterations")
+        dispiters_label.setFixedWidth(available_width/10)
         self.display_iters_spin = QtWidgets.QSpinBox()
         self.display_iters_spin.setMinimum(1)
         self.display_iters_spin.setMaximum(10000)
         self.display_iters_spin.setValue(30)
+        self.display_iters_spin.setFixedWidth(available_width/10)
         self.display_iters_spin.valueChanged.connect(self.log_display_iters)
 
         # Save iterations
         saveiters_label = QtWidgets.QLabel("Learning rate")
-        saveiters_label.setFixedWidth(5)
+        saveiters_label.setFixedWidth(available_width/10)
         self.save_iters_spin = QtWidgets.QLineEdit()
+        self.save_iters_spin.setFixedWidth(2)
         # self.save_iters_spin.setMinimum(1)
         # self.save_iters_spin.setMaximum(1)
         self.save_iters_spin.setText("0.0005")
+        self.save_iters_spin.setFixedWidth(available_width/10)
         self.save_iters_spin.textChanged.connect(self.log_init_lr)
 
         # Max iterations
         maxiters_label = QtWidgets.QLabel("Batch size")
+        maxiters_label.setFixedWidth(available_width/10)
         self.batchsize_spin = QtWidgets.QSpinBox()
         self.batchsize_spin.setMinimum(1)
         self.batchsize_spin.setMaximum(10000)
         self.batchsize_spin.setValue(32)
+        self.batchsize_spin.setFixedWidth(available_width/10)
         self.batchsize_spin.valueChanged.connect(self.log_batch_size)
 
         layout.addWidget(net_label, 0, 0)
@@ -128,7 +137,6 @@ class TrainNetwork(DefaultTab):
         layout.addWidget(self.save_iters_spin, 0, 5)
         layout.addWidget(maxiters_label, 0, 6)
         layout.addWidget(self.batchsize_spin, 0, 7)
-
 
     def _generate_layout_attributes_dataset(self, layout):
         trainingsetfolder = auxiliaryfunctions.get_unsupervised_set_folder()
@@ -292,6 +300,7 @@ class TrainNetwork(DefaultTab):
         msg.setWindowIcon(QIcon(self.logo))
         msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
         msg.exec_()
+
 
 def get_sensor_columns(strings):
     '''

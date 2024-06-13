@@ -93,23 +93,30 @@ def train(
 
     cfg = load_config(config_yaml)
     project_path = cfg['project_path']
-    # data_path = os.path.join(project_path, cfg['dataset'])
     from deepview.utils import auxiliaryfunctions
     data_path = os.path.join(project_path, auxiliaryfunctions.get_unsupervised_set_folder())
-    # data_path_new = os.path.join(project_path, cfg['dataset'][:-4]+'_new.pkl')
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = 'cpu'
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # xia, dataloader,将Train network tab中选中的文件传入这个函数
+    if net_type in ['AE_CNN']:
+        augment = False
+    elif net_type in ['simclr']:
+        augment = True
+    else:
+        augment = False
     train_dataloader, num_channel = prepare_all_data(data_path,
-                                        select_filenames,
-                                        data_len,
-                                        data_column)
+                                                     select_filenames,
+                                                     data_len,
+                                                     data_column,
+                                                     batch_size,
+                                                     augment)
 
     # print(optimizer)
     # -------------------------核心的模型训练部分，计算loss----------------------------
 
     # get model
-    if 'autoencoder'.upper() in net_type.upper():
+    if 'AE_CNN'.upper() in net_type.upper():
         p_setup = 'autoencoder'
     elif 'simclr'.upper() in net_type.upper():
         p_setup = 'simclr'
@@ -136,13 +143,12 @@ def train(
     for epoch in range(start_epoch, num_epochs):
         progress_update.emit(int(epoch/num_epochs * 100))
         # Adjust lr
-        lr = adjust_learning_rate(lr, optimizer, epoch, p_scheduler='cosine',p_epochs=num_epochs)
+        lr = adjust_learning_rate(lr, optimizer, epoch, p_scheduler='cosine', p_epochs=num_epochs)
         print('Adjusted learning rate to {:.5f}'.format(lr))
 
         # Train: the same as simclr
         print('Train ...')
-        # simclr_train_time_series(train_dataloader, model, criterion, optimizer, epoch)
-        if p_setup == 'autocoder':
+        if p_setup == 'autoencoder':
             AE_train_time_series(train_dataloader, model, criterion, optimizer, epoch, device)
         elif p_setup == 'simclr':
             simclr_train_time_series(train_dataloader, model, criterion, optimizer, epoch, device)
