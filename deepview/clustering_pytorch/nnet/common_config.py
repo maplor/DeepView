@@ -53,7 +53,7 @@ def get_model(p_backbone, p_setup, num_channel=3, pretrain_path=None):
 
     # Get backbone
     # if True:
-    if 'CNN_AE'.upper() in p_backbone.upper():
+    if 'AE_CNN'.upper() in p_backbone.upper():
         from deepview.clustering_pytorch.nnet.models import CNN_AE
         backbone = CNN_AE(n_channels=num_channel, out_channels=128)
     elif 'FCN'.upper() in p_backbone.upper():

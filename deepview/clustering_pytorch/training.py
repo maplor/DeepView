@@ -52,94 +52,7 @@ def train_network(
     data_len,
     data_column
 ):
-    """Trains the network with the labels in the training dataset.
 
-        Parameters
-        ----------
-        config : string
-            Full path of the config.yaml file as a string.
-
-        shuffle: int, optional, default=1
-            Integer value specifying the shuffle index to select for training.
-
-        trainingsetindex: int, optional, default=0
-            Integer specifying which TrainingsetFraction to use.
-            Note that TrainingFraction is a list in config.yaml.
-
-        max_snapshots_to_keep: int or None
-            Sets how many snapshots are kept, i.e. states of the trained network. Every
-            saving iteration many times a snapshot is stored, however only the last
-            ``max_snapshots_to_keep`` many are kept! If you change this to None, then all
-            are kept.
-            See: https://github.com/DeepLabCut/DeepLabCut/issues/8#issuecomment-387404835
-
-        displayiters: optional, default=None
-            This variable is actually set in ``pose_config.yaml``. However, you can
-            overwrite it with this hack. Don't use this regularly, just if you are too lazy
-            to dig out the ``pose_config.yaml`` file for the corresponding project. If
-            ``None``, the value from there is used, otherwise it is overwritten!
-
-        saveiters: optional, default=None
-            This variable is actually set in ``pose_config.yaml``. However, you can
-            overwrite it with this hack. Don't use this regularly, just if you are too lazy
-            to dig out the ``pose_config.yaml`` file for the corresponding project.
-            If ``None``, the value from there is used, otherwise it is overwritten!
-
-        maxiters: optional, default=None
-            This variable is actually set in ``pose_config.yaml``. However, you can
-            overwrite it with this hack. Don't use this regularly, just if you are too lazy
-            to dig out the ``pose_config.yaml`` file for the corresponding project.
-            If ``None``, the value from there is used, otherwise it is overwritten!
-
-        allow_growth: bool, optional, default=True.
-            For some smaller GPUs the memory issues happen. If ``True``, the memory
-            allocator does not pre-allocate the entire specified GPU memory region, instead
-            starting small and growing as needed.
-            See issue: https://forum.image.sc/t/how-to-stop-running-out-of-vram/30551/2
-
-        gputouse: optional, default=None
-            Natural number indicating the number of your GPU (see number in nvidia-smi).
-            If you do not have a GPU put None.
-            See: https://nvidia.custhelp.com/app/answers/detail/a_id/3751/~/useful-nvidia-smi-queries
-
-        autotune: bool, optional, default=False
-            Property of TensorFlow, somehow faster if ``False``
-            (as Eldar found out, see https://github.com/tensorflow/tensorflow/issues/13317).
-
-        keepdeconvweights: bool, optional, default=True
-            Also restores the weights of the deconvolution layers (and the backbone) when
-            training from a snapshot. Note that if you change the number of bodyparts, you
-            need to set this to false for re-training.
-
-        modelprefix: str, optional, default=""
-            Directory containing the deeplabcut models to use when evaluating the network.
-            By default, the models are assumed to exist in the project folder.
-
-        superanimal_name: str, optional, default =""
-            Specified if transfer learning with superanimal is desired
-
-        superanimal_transfer_learning: bool, optional, default = False.
-            If set true, the training is transfer learning (new decoding layer). If set false,
-    and superanimal_name is True, then the training is fine-tuning (reusing the decoding layer)
-
-        Returns
-        -------
-        None
-
-        Examples
-        --------
-        To train the network for first shuffle of the training dataset
-
-        >>> deeplabcut.train_network('/analysis/project/reaching-task/config.yaml')
-
-        To train the network for second shuffle of the training dataset
-
-        >>> deeplabcut.train_network(
-                '/analysis/project/reaching-task/config.yaml',
-                shuffle=2,
-                keepdeconvweights=True,
-            )
-    """
     # if allow_growth:
     #     os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
 
@@ -174,8 +87,6 @@ def train_network(
         )
 
     try:
-        # cfg_dlc = auxiliaryfunctions.read_plainconfig(poseconfigfile)
-
         # remove if/elif for multianimal and animalzoo, keep simplist one
         from deepview.clustering_pytorch.core.train import train
 

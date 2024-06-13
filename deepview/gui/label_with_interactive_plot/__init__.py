@@ -520,9 +520,9 @@ class LabelWithInteractivePlot(QWidget):
         unsup_model_path = get_unsup_model_folder(cfg)
         full_model_path = os.path.join(self.cfg["project_path"], unsup_model_path, self.model_path)
 
-        if 'AUTOENCODER' in self.model_path.upper():
+        if 'AE_CNN' in self.model_path.upper():
             p_setup = 'autoencoder'
-        elif 'SIMCLR' in self.model_path.upper():
+        elif 'simclr' in self.model_path.upper():
             p_setup = 'simclr'
         else:
             raise ValueError("Invalid model type")
@@ -532,7 +532,7 @@ class LabelWithInteractivePlot(QWidget):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model = model.to(device)
 
-        if p_setup == 'autocoder':
+        if p_setup == 'autoencoder':
             representation_list, _, _, _ = \
                 AE_eval_time_series(train_loader, model, device)
         elif p_setup == 'simclr':
