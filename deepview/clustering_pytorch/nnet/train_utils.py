@@ -55,11 +55,13 @@ def simclr_train_time_series(train_loader, model, criterion, optimizer, epoch, d
 
     model.train()
 
-    for i, (sample, timestamp, label) in enumerate(tqdm(train_loader)):
-        aug_sample1 = gen_aug(sample, 't_warp')  # t_warp, out.shape=batch64,width3,height900
-        aug_sample2 = gen_aug(sample, 'negate')  # negate
-        aug_sample1 = aug_sample1.to(device=device, non_blocking=True, dtype=torch.double)
-        aug_sample2 = aug_sample2.to(device=device, non_blocking=True, dtype=torch.double)
+    for i, (aug_sample1, aug_sample2, timestamp, label) in enumerate(tqdm(train_loader)):
+        # aug_sample1 = gen_aug(sample, 't_warp')  # t_warp, out.shape=batch64,width3,height900
+        # aug_sample2 = gen_aug(sample, 'negate')  # negate
+        # aug_sample1 = aug_sample1.to(device=device, non_blocking=True, dtype=torch.double)
+        # aug_sample2 = aug_sample2.to(device=device, non_blocking=True, dtype=torch.double)
+        aug_sample1 = aug_sample1.to(dtype=torch.double)
+        aug_sample2 = aug_sample2.to(dtype=torch.double)
 
         b, l, d = aug_sample1.size()  # batch64, length180, dim6
         input_ = torch.cat([aug_sample1.unsqueeze(1), aug_sample2.unsqueeze(1)], dim=1)  # input_.shape=b,2,l,d
@@ -117,9 +119,8 @@ def AE_train_time_series(train_loader, model, criterion, optimizer, epoch, devic
     for i, (sample, timestamp, label) in enumerate(tqdm(train_loader)):
         # aug_sample1 = gen_aug(sample, 't_warp')  # t_warp, out.shape=batch64,width3,height900
         # reshape data by adding channel to 1, and transpose height and width
-        sample = sample.to(device=device, non_blocking=True, dtype=torch.float)
-        # input_ = (sample).permute(0, 2, 1)  # input_.shape=b512,3channel,90width
-        # input_ = sample  # input_.shape=b512,90width,3channel
+        # sample = sample.to(device=device, non_blocking=True, dtype=torch.float)
+        sample = sample.to(dtype=torch.float)
 
         # input of autoencoder will be 3D, the backbone is 1d-cnn
         x_encoded, output = model(sample)  # x_encoded.shape=batch512,outchannel128,len13

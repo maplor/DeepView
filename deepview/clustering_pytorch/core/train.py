@@ -96,8 +96,8 @@ def train(
     from deepview.utils import auxiliaryfunctions
     data_path = os.path.join(project_path, auxiliaryfunctions.get_unsupervised_set_folder())
 
-    device = 'cpu'
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # device = 'cpu'
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # xia, dataloader,将Train network tab中选中的文件传入这个函数
     if net_type in ['AE_CNN']:
         augment = False
@@ -110,7 +110,8 @@ def train(
                                                      data_len,
                                                      data_column,
                                                      batch_size,
-                                                     augment)
+                                                     augment,
+                                                     device)
 
     # print(optimizer)
     # -------------------------核心的模型训练部分，计算loss----------------------------

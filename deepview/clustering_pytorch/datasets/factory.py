@@ -156,7 +156,7 @@ class base_loader(Dataset):
 
 
 class data_loader_umineko(Dataset):
-    def __init__(self, samples, labels, timestamps, augment=False):
+    def __init__(self, samples, labels, timestamps, augment=False, device='cpu'):
         self.augment = augment
         # self.samples = torch.tensor(samples)
         # self.labels = torch.tensor(labels)
@@ -164,15 +164,14 @@ class data_loader_umineko(Dataset):
         # self.timestamps = torch.tensor(timestamps)
         # self.samples = torch.tensor(torch.from_numpy(samples.astype(float)))
         if self.augment:
-            self.aug_sample1 = gen_aug(samples, 't_warp')  # t_warp, out.shape=batch64,width3,height900
-            self.aug_sample2 = gen_aug(samples, 'negate')  # negate
+            self.aug_sample1 = gen_aug(samples, 't_warp').to(device)  # t_warp, out.shape=batch64,width3,height900
+            self.aug_sample2 = gen_aug(samples, 'negate').to(device)  # negate
         else:
-            self.samples = torch.tensor(samples)  # check data type
+            self.samples = torch.tensor(samples).to(device).to(device)  # check data type
         self.labels = torch.tensor(labels)  # check data type
         # self.labels = torch.tensor(labels.astype(int))
         # self.domains = torch.tensor(domains.astype(int))
-        self.timestamps = torch.tensor(timestamps.astype(float))
-
+        self.timestamps = torch.tensor(timestamps.astype(float)).to(device)
 
     def __getitem__(self, index):
         target = self.labels[index]
@@ -189,16 +188,16 @@ class data_loader_umineko(Dataset):
         return len(self.samples)
 
 
-def generate_dataloader(data, target, timestamps, batch_size=512, augment=False):
+def generate_dataloader(data, target, timestamps, batch_size=512, augment=False, device='cpu'):
     # batch_size = 512
     # dataloader
-    train_set_r = data_loader_umineko(data, target, timestamps, augment)
+    train_set_r = data_loader_umineko(data, target, timestamps, augment, device=device)
     train_loader_r = DataLoader(train_set_r, batch_size=batch_size,
                                 shuffle=False, drop_last=False)
     return train_loader_r
 
 
-def prepare_all_data(data_path, select_filenames, data_len, data_column, batch_size, augment=False):  # todo, 传args，以后改成从model_cfg.yaml中读取
+def prepare_all_data(data_path, select_filenames, data_len, data_column, batch_size, augment=False, device='cpu'):  # todo, 传args，以后改成从model_cfg.yaml中读取
     '''
     主要是训练集，需要全部数据做训练。读取数据
     :param data_path:
@@ -217,7 +216,7 @@ def prepare_all_data(data_path, select_filenames, data_len, data_column, batch_s
     label_b = np.concatenate(labels, axis=0)  # [B, Len, dim]
 
     # train_loader = generate_dataloader_overlap(data, labels, domains, timestamps)
-    train_loader = generate_dataloader(data_b, label_b, timestamp_b, batch_size, augment)
+    train_loader = generate_dataloader(data_b, label_b, timestamp_b, batch_size, augment, device)
 
     # get model input channel
     num_channel = data_b.shape[-1]
