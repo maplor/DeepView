@@ -164,10 +164,12 @@ class data_loader_umineko(Dataset):
         # self.timestamps = torch.tensor(timestamps)
         # self.samples = torch.tensor(torch.from_numpy(samples.astype(float)))
         if self.augment:
-            self.aug_sample1 = gen_aug(samples, 't_warp').to(device)  # t_warp, out.shape=batch64,width3,height900
-            self.aug_sample2 = gen_aug(samples, 'negate').to(device)  # negate
+            self.aug_sample1 = gen_aug(samples, 't_warp')
+            self.aug_sample1 = torch.tensor(self.aug_sample1).to(device)  # t_warp, out.shape=batch64,width3,height900
+            self.aug_sample2 = gen_aug(samples, 'negate')  # negate
+            self.aug_sample2 = torch.tensor(self.aug_sample2).to(device)
         else:
-            self.samples = torch.tensor(samples).to(device).to(device)  # check data type
+            self.samples = torch.tensor(samples).to(device)  # check data type
         self.labels = torch.tensor(labels)  # check data type
         # self.labels = torch.tensor(labels.astype(int))
         # self.domains = torch.tensor(domains.astype(int))
@@ -180,12 +182,12 @@ class data_loader_umineko(Dataset):
             sample = self.samples[index]
             return sample, timestamp, target
         else:
-            sample1 = self.samples1[index]
-            sample2 = self.samples2[index]
+            sample1 = self.aug_sample1[index]
+            sample2 = self.aug_sample2[index]
             return sample1, sample2, timestamp, target
 
     def __len__(self):
-        return len(self.samples)
+        return len(self.labels)
 
 
 def generate_dataloader(data, target, timestamps, batch_size=512, augment=False, device='cpu'):

@@ -98,10 +98,10 @@ def train(
 
     # device = 'cpu'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # xia, dataloader,将Train network tab中选中的文件传入这个函数
+    # xia, dataloader,将Train network tab中选中的文件传入这个函数， todo 目前写死了
     if net_type in ['AE_CNN']:
         augment = False
-    elif net_type in ['simclr']:
+    elif net_type in ['SIMCLR_LSTM']:
         augment = True
     else:
         augment = False
