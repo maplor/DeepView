@@ -423,7 +423,10 @@ class LabelWithInteractivePlot(QWidget):
         self.viewC = viewC
         self.bottom_layout.addWidget(viewC, 2)
 
-    def checkColor(self, label):
+    def checkColor(self, label, first=False):
+        if first:
+            return pg.mkBrush(255, 255, 255, 120)
+
         if label not in list(self.label_dict.keys()):
             return pg.mkBrush(255, 255, 255, 120)
 
@@ -438,17 +441,19 @@ class LabelWithInteractivePlot(QWidget):
         count = 0
         for lstr, _ in self.label_dict.items():
             if label == lstr:
-                return list_color[count]
+                return list_color[count % len(list_color)]
             count += 1
 
 
     def updateRightPlotColor(self):
-        # reset spots
+        # reset spots for each sensor data segment
         spots = []
         for spot in self.scatterItem.points():
             pos = spot.pos()
             i, start, end = spot.data()
-            color = self.checkColor(self.data.loc[start, 'label'])
+            # if first=False, use the label allready exists
+            # if first=True, use manual labels
+            color = self.checkColor(self.data.loc[start, 'label'], first=True)
             spot = {'pos': (pos.x(), pos.y()), 'data': (i, start, end),
                         'brush': pg.mkBrush(color)}
             spots.append(spot)
@@ -472,9 +477,9 @@ class LabelWithInteractivePlot(QWidget):
 
         # save something into data attribute
         n = len(start_indice)
-        spots = [{'pos': pos[i,:],
+        spots = [{'pos': pos[i, :],
                   'data': (i, start_indice[i], end_indice[i]),
-                  'brush': self.checkColor(self.data.loc[i*self.data_length, 'label'])}
+                  'brush': self.checkColor(self.data.loc[i*self.data_length, 'label'], first=True)}
                  for i in range(n)]
 
         # plot spots on the scatter figure
