@@ -31,6 +31,7 @@ from deepview.gui.tabs.create_training_dataset import CreateTrainingDataset
 from deepview.gui.tabs.open_project import OpenProject
 from deepview.gui.tabs.train_network import TrainNetwork
 from deepview.gui.tabs.visualize_gps import GPSDisplayer
+from deepview.gui.tabs.IMU_GPS_interact import GPSIMU_Interaction
 from deepview.gui.tabs.evaluate_network import EvaluateNetwork
 from deepview.gui.tabs.label_data import LabelData
 from deepview.gui.tabs.interaction_plot import InteractionPlot
@@ -498,6 +499,10 @@ class MainWindow(QMainWindow):
             root=self, parent=None,
             h1_description="Step 3. Display GPS on the map",
         )
+        self.imu_gps_interact = GPSIMU_Interaction(
+            root=self, parent=None,
+            h1_description="Step 4. GPS and IMU Interaction",
+        )
         # self.evaluate_network = EvaluateNetwork(
         #     root=self,
         #     parent=None,
@@ -560,6 +565,7 @@ class MainWindow(QMainWindow):
         # self.tab_widget.addTab(self.mad_gui, "Label data")
         # self.tab_widget.addTab(self.interaction_plot, "Interaction plot")
         self.tab_widget.addTab(self.show_gps, "Display GPS on the map")
+        self.tab_widget.addTab(self.imu_gps_interact, "IMU GPS interaction")
         self.tab_widget.addTab(self.label_with_interactive_plot, "Label with interactive plot")
         self.tab_widget.addTab(self.supervised_learning_gui, "Supervised learning with new labels")
         # self.tab_widget.addTab(self.analyze_videos, "Analyze videos")

@@ -153,7 +153,7 @@ class LabelWithInteractivePlot(QWidget):
         with open(rawdata_file_path_list[0], 'rb') as f:
             self.data = pickle.load(f)
             self.data['_timestamp'] = pd.to_datetime(self.data['datetime']).apply(lambda x: x.timestamp())
-        RawDatacomboBox.currentTextChanged.connect(
+        self.RawDatacomboBox.currentTextChanged.connect(
             self.get_data_from_pkl
         )
         return RawDataComboBoxLabel, RawDatacomboBox
