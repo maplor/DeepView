@@ -12,10 +12,10 @@ from deepview.utils import auxiliaryfunctions
 
 from deepview.gui.components import (
     DefaultTab,
-    TestfileSpinBox,
-    _create_horizontal_layout,
-    _create_label_widget,
-    _create_vertical_layout,
+    # TestfileSpinBox,
+    # _create_horizontal_layout,
+    # _create_label_widget,
+    # _create_vertical_layout,
 )
 from deepview.gui.label_with_interactive_plot import LabelWithInteractivePlot
 
