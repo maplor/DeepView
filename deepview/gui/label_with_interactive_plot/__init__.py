@@ -527,6 +527,8 @@ class LabelWithInteractivePlot(QWidget):
 
         if 'AE_CNN' in self.model_path.upper():
             p_setup = 'autoencoder'
+        elif 'SHORTAE' in self.model_path.upper():
+            p_setup = 'autoencoder'
         elif 'simclr' in self.model_path.upper():
             p_setup = 'simclr'
         else:

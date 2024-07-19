@@ -99,7 +99,7 @@ def train(
     # device = 'cpu'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # xia, dataloader,将Train network tab中选中的文件传入这个函数， todo 目前写死了
-    if net_type in ['AE_CNN']:
+    if net_type in ['AE_CNN', 'shortAE']:
         augment = False
     elif net_type in ['SIMCLR_LSTM']:
         augment = True
@@ -116,17 +116,18 @@ def train(
     # print(optimizer)
     # -------------------------核心的模型训练部分，计算loss----------------------------
 
-    # get model
-    if 'AE_CNN'.upper() in net_type.upper():
+    # get model, todo, combine to above
+    if net_type.upper() in ['AE_CNN'.upper(), 'shortAE'.upper()]:
         p_setup = 'autoencoder'
-    elif 'simclr'.upper() in net_type.upper():
+    elif net_type.upper() in ['simclr'.upper()]:
         p_setup = 'simclr'
     else:
         raise ValueError('Unknown framework type: %s' % net_type)
 
     model = get_model(p_backbone=net_type,
                       p_setup=p_setup,
-                      num_channel=num_channel)  # set backbone model=ResNet18, SSL=simclr, weight
+                      num_channel=num_channel,
+                      data_len=data_len)  # set backbone model=ResNet18, SSL=simclr, weight
     model = model.to(device)
 
     # Criterion
@@ -142,7 +143,7 @@ def train(
     # i = 1  # 应该一只鸟一个trainloader，暂时全拼接到一起
     # print('Starting %s-th bird data' % str(i))
     for epoch in range(start_epoch, num_epochs):
-        progress_update.emit(int(epoch/num_epochs * 100))
+        progress_update.emit(int((epoch+1)/num_epochs * 100))
         # Adjust lr
         lr = adjust_learning_rate(lr, optimizer, epoch, p_scheduler='cosine', p_epochs=num_epochs)
         print('Adjusted learning rate to {:.5f}'.format(lr))

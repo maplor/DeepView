@@ -137,6 +137,7 @@ class GPSIMU_Interaction(DefaultTab):
         self.gps_ax.set_ylabel("Latitude")
 
         # Plot IMU data using the index as x-axis
+        self.imu_ax = self.imu_fig.add_subplot(111)
         self.imu_ax.plot(self.data['index'], self.data['acc_x'], label='Accelerometer X',
                          color='blue')
         self.imu_ax.plot(self.data['index'], self.data['acc_y'], label='Accelerometer Y',
@@ -227,3 +228,7 @@ class GPSIMU_Interaction(DefaultTab):
             # Re-draw the original scatter plot
             ax.add_collection(scatter)
 
+
+    def update_result(self, result):
+        # self.result_label.setText(f"Result: {result}")
+        print(result)

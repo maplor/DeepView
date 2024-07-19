@@ -43,11 +43,11 @@ class TrainNetwork(DefaultTab):
         root_cfg = auxiliaryfunctions.read_config(self.root.config)
         self.sensor_dict = root_cfg['sensor_dict']
 
-        self.models = ['AE_CNN', 'SimCLR_LSTM']
+        self.models = ['AE_CNN', 'SimCLR_LSTM', 'shortAE']
         self.select_column = []
         self.max_iter = 30
         self.learning_rate = 0.0005
-        self.batch_size = 32
+        self.batch_size = 512
         self.net_type = self.models[0]
         self.data_length = 180
 
@@ -151,13 +151,19 @@ class TrainNetwork(DefaultTab):
         scrollContent.setLayout(grid)
         scroll.setWidget(scrollContent)
 
-        # self.display_dataset_container = QtWidgets.QHBoxLayout()
+        # 创建“全选”按钮
+        cb_label = QtWidgets.QLabel("Select all files")
+        self.select_all_checkbox = QtWidgets.QCheckBox("All")
+        selected = QtWidgets.QVBoxLayout()
+        selected.addWidget(self.select_all_checkbox)
+        # self.layout.addWidget(self.select_all_checkbox)
+        # 连接“全选”按钮的状态改变信号到槽函数
+        self.select_all_checkbox.stateChanged.connect(self.select_all)
+
         self.display_dataset_cb_list = []
-
         column_list = []
-
         rowNum = 3  # default one row 3 columns
-
+        self.checkboxes = QtWidgets.QCheckBox('')
         if os.path.exists(os.path.join(self.root.project_folder, trainingsetfolder)):
             for filename in auxiliaryfunctions.grab_files_in_folder(
                     os.path.join(self.root.project_folder, trainingsetfolder),
@@ -166,10 +172,17 @@ class TrainNetwork(DefaultTab):
                 if len(column_list) == 0:
                     df = pd.read_pickle(filename)
                     column_list = list(df.columns)
-                cb = QtWidgets.QCheckBox(os.path.split(filename)[-1])
-                grid.addWidget(cb, len(self.display_dataset_cb_list) // rowNum,
+                self.checkboxes = QtWidgets.QCheckBox(os.path.split(filename)[-1])
+                grid.addWidget(self.checkboxes, len(self.display_dataset_cb_list) // rowNum,
                                len(self.display_dataset_cb_list) % rowNum)
-                self.display_dataset_cb_list.append(cb)  # display filenames
+                self.display_dataset_cb_list.append(self.checkboxes)  # display filenames
+
+        # 标志位，用于控制槽函数逻辑
+        self.updating = False
+
+        # 连接各个选项的状态改变信号到槽函数
+        for checkbox in self.display_dataset_cb_list:
+            checkbox.stateChanged.connect(self.update_select_all_checkbox)
 
         net_label = QtWidgets.QLabel("Input data columns")
         self.display_column_container = QtWidgets.QHBoxLayout()
@@ -192,12 +205,44 @@ class TrainNetwork(DefaultTab):
         self.display_datalen_spin.setValue(int(self.data_length))
         self.display_datalen_spin.valueChanged.connect(self.log_display_datalen)
 
-        layout.addWidget(select_label, 0, 0)
-        layout.addWidget(scroll, 0, 1)
-        layout.addWidget(net_label, 1, 0)
-        layout.addLayout(self.display_column_container, 1, 1)
-        layout.addWidget(dispiters_label, 2, 0)
-        layout.addWidget(self.display_datalen_spin, 2, 1)
+        layout.addWidget(cb_label, 0, 0)
+        layout.addLayout(selected, 0, 1)
+        layout.addWidget(select_label, 1, 0)
+        layout.addWidget(scroll, 1, 1)
+        layout.addWidget(net_label, 2, 0)
+        layout.addLayout(self.display_column_container, 2, 1)
+        layout.addWidget(dispiters_label, 3, 0)
+        layout.addWidget(self.display_datalen_spin, 3, 1)
+
+    def select_all(self, state):
+        if not self.updating:
+            self.updating = True
+            # 根据“全选”按钮的状态设置各个选项的状态
+            for checkbox in self.display_dataset_cb_list:
+                checkbox.setChecked(state == Qt.Checked)
+            self.update_selected_items()
+            self.updating = False
+
+    def update_select_all_checkbox(self):
+        if not self.updating:
+            self.updating = True
+            # 检查所有选项的状态以更新“全选”按钮的状态
+            all_checked = all(checkbox.isChecked() for checkbox in self.display_dataset_cb_list)
+            any_unchecked = any(not checkbox.isChecked() for checkbox in self.display_dataset_cb_list)
+            if all_checked:
+                self.select_all_checkbox.setCheckState(Qt.Checked)
+            elif any_unchecked:
+                self.select_all_checkbox.setCheckState(Qt.Unchecked)
+            else:
+                self.select_all_checkbox.setTristate(False)
+                self.select_all_checkbox.setCheckState(Qt.PartiallyChecked)
+            self.update_selected_items()
+            self.updating = False
+
+    def update_selected_items(self):
+        # 更新当前选中的选项
+        selected_items = [checkbox.text() for checkbox in self.display_dataset_cb_list if checkbox.isChecked()]
+        print(f"当前选中的选项: {selected_items}")
 
     def log_data_columns(self, value):
         self.root.logger.info(f"Select input data columns to {self.select_column}")
@@ -272,7 +317,11 @@ class TrainNetwork(DefaultTab):
                 newSelectColumn.append(cb.text())
         data_columns = []
         for sensor in newSelectColumn:
-            data_columns.extend(self.sensor_dict[sensor])
+            # replace columns of GPS sensor
+            if sensor.upper() == "GPS":
+                data_columns.extend(['GPS_velocity', 'GPS_bearing'])
+            else:
+                data_columns.extend(self.sensor_dict[sensor])
 
         deepview.train_network(
             self.sensor_dict,

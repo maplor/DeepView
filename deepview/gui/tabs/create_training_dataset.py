@@ -56,12 +56,12 @@ class CreateTrainingDataset(DefaultTab):
     def _generate_layout_attributes(self, layout):
         layout.setColumnMinimumWidth(3, 300)
 
-        # Augmentation method
-        augmentation_label = QtWidgets.QLabel("Normalization method(TODO)")
-        self.aug_choice = QtWidgets.QComboBox()
-        self.aug_choice.addItems(DVParams.IMAGE_AUGMENTERS)
-        self.aug_choice.setCurrentText("imgaug")
-        self.aug_choice.currentTextChanged.connect(self.log_augmentation_choice)
+        # # Augmentation method
+        # augmentation_label = QtWidgets.QLabel("Normalization method(TODO)")
+        # self.aug_choice = QtWidgets.QComboBox()
+        # self.aug_choice.addItems(DVParams.IMAGE_AUGMENTERS)
+        # self.aug_choice.setCurrentText("imgaug")
+        # self.aug_choice.currentTextChanged.connect(self.log_augmentation_choice)
 
         # Neural Network
         nnet_label = QtWidgets.QLabel("Sampling rate (Hz)")
@@ -73,8 +73,8 @@ class CreateTrainingDataset(DefaultTab):
         self.samplerate_choice.setValidator(validator)
         layout.addWidget(nnet_label, 0, 2)
         layout.addWidget(self.samplerate_choice, 0, 3)
-        layout.addWidget(augmentation_label, 0, 4)
-        layout.addWidget(self.aug_choice, 0, 5)
+        # layout.addWidget(augmentation_label, 0, 4)
+        # layout.addWidget(self.aug_choice, 0, 5)
 
     # def log_net_choice(self, net):
     #     self.root.logger.info(f"Network architecture set to {net.upper()}")

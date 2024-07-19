@@ -5,6 +5,7 @@ Licensed under the CC BY-NC 4.0 license (https://creativecommons.org/licenses/by
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 
 
 class ContrastiveModel(nn.Module):
@@ -411,6 +412,166 @@ class CNN_AE(nn.Module):
         x_decoded = decod_out.permute(0, 2, 1)
         # x_decoded(batch, 180, 6), x_encoded(batch, 128, 15)
         return x_encoded, x_decoded
+
+
+class Autoencoder(nn.Module):
+    def __init__(self, data_length, input_dim, encoded_dim=16):
+        super(Autoencoder, self).__init__()
+
+        # Encoder
+        self.conv1 = nn.Conv1d(input_dim, 32, kernel_size=3, padding=1)  # (batch_size, 32, 180)
+        self.pool1 = nn.MaxPool1d(2, stride=2)  # (batch_size, 32, 90)
+        self.conv2 = nn.Conv1d(32, 64, kernel_size=3, padding=1)  # (batch_size, 64, 90)
+        self.pool2 = nn.MaxPool1d(2, stride=2)  # (batch_size, 64, 45)
+        self.conv3 = nn.Conv1d(64, 128, kernel_size=3, padding=1)  # (batch_size, 128, 45)
+        self.pool3 = nn.MaxPool1d(3, stride=3)  # (batch_size, 128, 15)
+        self.conv4 = nn.Conv1d(128, 256, kernel_size=3, padding=1)  # (batch_size, 256, 15)
+        self.pool4 = nn.MaxPool1d(3, stride=3)  # (batch_size, 256, 5)
+        self.fc1 = nn.Linear(256 * 5, 1024)  # (batch_size, 1024)
+        self.fc2 = nn.Linear(1024, encoded_dim)  # (batch_size, 16)
+
+        # Decoder
+        self.fc3 = nn.Linear(encoded_dim, 1024)  # (batch_size, 1024)
+        self.fc4 = nn.Linear(1024, 256 * 5)  # (batch_size, 256*5)
+        self.deconv1 = nn.Conv1d(256, 128, kernel_size=3, padding=1)  # (batch_size, 128, 5)
+        self.upsample1 = nn.Upsample(scale_factor=3)  # (batch_size, 128, 15)
+        self.deconv2 = nn.Conv1d(128, 64, kernel_size=3, padding=1)  # (batch_size, 64, 15)
+        self.upsample2 = nn.Upsample(scale_factor=3)  # (batch_size, 64, 45)
+        self.deconv3 = nn.Conv1d(64, 32, kernel_size=3, padding=1)  # (batch_size, 32, 45)
+        self.upsample3 = nn.Upsample(scale_factor=2)  # (batch_size, 32, 90)
+        self.deconv4 = nn.Conv1d(32, input_dim, kernel_size=3, padding=1)  # (batch_size, 3, 90)
+        self.upsample4 = nn.Upsample(scale_factor=2)  # (batch_size, 3, 180)
+
+    def forward(self, x):
+        # Encoder
+        x = self.conv1(x.permute(0, 2, 1))  # Change to (batch_size, 3, 180) -> (batch_size, 32, 180)
+        x = torch.relu(x)
+        x = self.pool1(x)  # (batch_size, 32, 180) -> (batch_size, 32, 90)
+        x = self.conv2(x)  # (batch_size, 32, 90) -> (batch_size, 64, 90)
+        x = torch.relu(x)
+        x = self.pool2(x)  # (batch_size, 64, 90) -> (batch_size, 64, 45)
+        x = self.conv3(x)  # (batch_size, 64, 45) -> (batch_size, 128, 45)
+        x = torch.relu(x)
+        x = self.pool3(x)  # (batch_size, 128, 45) -> (batch_size, 128, 15)
+        x = self.conv4(x)  # (batch_size, 128, 15) -> (batch_size, 256, 15)
+        x = torch.relu(x)
+        x = self.pool4(x)  # (batch_size, 256, 15) -> (batch_size, 256, 5)
+        x = x.view(x.size(0), -1)  # Flatten (batch_size, 256*5)
+        x = self.fc1(x)  # (batch_size, 256*5) -> (batch_size, 1024)
+        x = torch.relu(x)
+        x = self.fc2(x)  # (batch_size, 1024) -> (batch_size, 16)
+        encoded = x
+
+        # Decoder
+        x = self.fc3(encoded)  # (batch_size, 16) -> (batch_size, 1024)
+        x = torch.relu(x)
+        x = self.fc4(x)  # (batch_size, 1024) -> (batch_size, 256*5)
+        x = torch.relu(x)
+        x = x.view(x.size(0), 256, 5)  # Reshape (batch_size, 256, 5)
+        x = self.deconv1(x)  # (batch_size, 256, 5) -> (batch_size, 128, 5)
+        x = torch.relu(x)
+        x = self.upsample1(x)  # (batch_size, 128, 5) -> (batch_size, 128, 15)
+        x = self.deconv2(x)  # (batch_size, 128, 15) -> (batch_size, 64, 15)
+        x = torch.relu(x)
+        x = self.upsample2(x)  # (batch_size, 64, 15) -> (batch_size, 64, 45)
+        x = self.deconv3(x)  # (batch_size, 64, 45) -> (batch_size, 32, 45)
+        x = torch.relu(x)
+        x = self.upsample3(x)  # (batch_size, 32, 45) -> (batch_size, 32, 90)
+        x = self.deconv4(x)  # (batch_size, 32, 90) -> (batch_size, 3, 90)
+        x = torch.relu(x)
+        x = self.upsample4(x)  # (batch_size, 3, 90) -> (batch_size, 3, 180)
+        decoded = x.permute(0, 2, 1)  # Change back to (batch_size, 180, 3)
+
+        return encoded, decoded
+
+
+# class Autoencoder(nn.Module):
+#     def __init__(self, data_length, input_dim, encoded_dim=16):
+#         super(Autoencoder, self).__init__()
+#
+#         self.data_length = data_length
+#         self.input_dim = input_dim
+#         self.encoded_dim = encoded_dim
+#
+#         # Encoder
+#         self.conv1 = nn.Conv1d(input_dim, 32, kernel_size=3, stride=2, padding=1)  # (batch_size, 32, data_length/2)
+#         self.conv2 = nn.Conv1d(32, 64, kernel_size=3, stride=2, padding=1)  # (batch_size, 64, data_length/4)
+#         self.conv3 = nn.Conv1d(64, 128, kernel_size=3, stride=2, padding=1)  # (batch_size, 128, data_length/8)
+#         self.conv4 = nn.Conv1d(128, 256, kernel_size=3, stride=2, padding=1)  # (batch_size, 256, data_length/16)
+#
+#         # Calculate flattened size after convolutions
+#         self.flatten_param = math.ceil(data_length / 16)
+#         self.flattened_size = 256 * self.flatten_param
+#
+#         self.fc1 = nn.Linear(self.flattened_size, 1024)  # (batch_size, 1024)
+#         self.fc2 = nn.Linear(1024, encoded_dim)  # (batch_size, encoded_dim)
+#
+#         # Decoder
+#         self.fc3 = nn.Linear(encoded_dim, 1024)  # (batch_size, 1024)
+#         self.fc4 = nn.Linear(1024, self.flattened_size)  # (batch_size, flattened_size)
+#
+#         self.deconv1 = nn.ConvTranspose1d(256, 128, kernel_size=3, stride=2, padding=1,
+#                                           output_padding=1)  # (batch_size, 128, data_length/8)
+#         self.deconv2 = nn.ConvTranspose1d(128, 64, kernel_size=3, stride=2, padding=1,
+#                                           output_padding=1)  # (batch_size, 64, data_length/4)
+#         self.deconv3 = nn.ConvTranspose1d(64, 32, kernel_size=3, stride=2, padding=1,
+#                                           output_padding=1)  # (batch_size, 32, data_length/2)
+#         self.deconv4 = nn.ConvTranspose1d(32, input_dim, kernel_size=3, stride=2, padding=1,
+#                                           output_padding=1)  # (batch_size, input_dim, data_length)
+#         self.conv5 = nn.Conv1d(input_dim, input_dim, kernel_size=3,
+#                                padding=1)  # Final layer to adjust size if necessary
+#         self.conv6 = nn.Conv1d(3, 3, kernel_size=3, stride=1, padding=1)  # (batch_size, 3, 180)
+#
+#     def forward(self, x):
+#         # Encoder
+#         x = self.conv1(x.permute(0, 2, 1))  # Change to (batch_size, input_dim, data_length)
+#         x = torch.relu(x)
+#         x = self.conv2(x)
+#         x = torch.relu(x)
+#         x = self.conv3(x)
+#         x = torch.relu(x)
+#         x = self.conv4(x)
+#         x = torch.relu(x)
+#         x = x.view(x.size(0), -1)  # Flatten
+#         x = self.fc1(x)
+#         x = torch.relu(x)
+#         x = self.fc2(x)
+#         encoded = x
+#
+#         # Decoder
+#         x = self.fc3(encoded)
+#         x = torch.relu(x)
+#         x = self.fc4(x)
+#         x = torch.relu(x)
+#         x = x.view(x.size(0), 256, self.flatten_param)  # Reshape
+#         x = self.deconv1(x)
+#         x = torch.relu(x)
+#         x = self.deconv2(x)
+#         x = torch.relu(x)
+#         x = self.deconv3(x)
+#         x = torch.relu(x)
+#         x = self.deconv4(x)
+#         x = torch.relu(x)
+#         x = self.conv5(x)
+#         x = torch.relu(x)
+#         x = self.conv6(x)  # (batch_size, 3, 192) -> (batch_size, 3, 180)
+#         decoded = x.permute(0, 2, 1)  # Change back to (batch_size, 180, 3)
+#         return encoded, decoded
+
+
+# # Define data length and input dimension
+# data_length = 180
+# input_dim = 3
+#
+# # Create the model
+# model = Autoencoder(data_length=data_length, input_dim=input_dim)
+# print(model)
+#
+# # Example input
+# example_input = torch.randn(128, data_length, input_dim)
+# example_output = model(example_input)
+# print("Output shape:", example_output.shape)
+
 
 
 class AE_linear(nn.Module):
