@@ -13,8 +13,8 @@ import os
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QShowEvent
-from deeplabcut.gui.dlc_params import DLCParams
-from deeplabcut.gui.widgets import ConfigEditor
+# from deeplabcut.gui.dlc_params import DLCParams
+# from deeplabcut.gui.widgets import ConfigEditor
 
 
 class DefaultTab(QtWidgets.QWidget):

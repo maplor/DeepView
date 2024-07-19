@@ -20,10 +20,11 @@ from deepview.gui.components import (
 from deepview.gui.label_with_interactive_plot import LabelWithInteractivePlot
 
 class LabelWithInteractivePlotTab(DefaultTab):
-    def __init__(self, root, parent, h1_description):
+    def __init__(self, GPS_tab, root, parent, h1_description):
         super(LabelWithInteractivePlotTab, self).__init__(root, parent, h1_description)
         self.root = root
 
+        self.GPS_tab = GPS_tab  # send information to GPS_tab
 
     # 在第一次渲染 tab 时才构造内容
     def firstShowEvent(self, event: QShowEvent) -> None:
@@ -37,6 +38,17 @@ class LabelWithInteractivePlotTab(DefaultTab):
 
         # 在这里调用init文件
         self.main_layout.addWidget(LabelWithInteractivePlot(self.root, cfg))
+
+    def perform_calculation(self):
+        try:
+            # a = float(self.input_a.text())
+            # b = float(self.input_b.text())
+            # result = a + b  # Simple addition calculation
+            result = 0
+            self.GPS_tab.update_result(result)
+        except ValueError:
+            self.GPS_tab.update_result("Error: Invalid input")
+
 
 def get_plot_data(config):
     """

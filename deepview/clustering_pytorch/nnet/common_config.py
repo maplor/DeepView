@@ -48,7 +48,7 @@ def get_feature_dimensions_backbone(p):
         raise NotImplementedError
 
 
-def get_model(p_backbone, p_setup, num_channel=3, pretrain_path=None):
+def get_model(p_backbone, p_setup, num_channel=3, data_len=180, pretrain_path=None):
     # num_channel = 3
 
     # Get backbone
@@ -56,6 +56,10 @@ def get_model(p_backbone, p_setup, num_channel=3, pretrain_path=None):
     if 'AE_CNN'.upper() in p_backbone.upper():
         from deepview.clustering_pytorch.nnet.models import CNN_AE
         backbone = CNN_AE(n_channels=num_channel, out_channels=128)
+    elif 'shortAE'.upper() in p_backbone.upper():
+        from deepview.clustering_pytorch.nnet.models import Autoencoder
+        # todo modify the input
+        backbone = Autoencoder(data_length=data_len, input_dim=num_channel, encoded_dim=16)
     elif 'FCN'.upper() in p_backbone.upper():
         from deepview.clustering_pytorch.nnet.models import FCN
         backbone = FCN(n_channels=num_channel, out_channels=128)
@@ -68,10 +72,7 @@ def get_model(p_backbone, p_setup, num_channel=3, pretrain_path=None):
     else:
         raise ValueError('Invalid backbone {}'.format(p_backbone))
 
-    # Setup
-    # if p['setup'] in ['simclr', 'moco']:
-    #     from models import ContrastiveModel
-    #     model = ContrastiveModel(backbone, **p['model_kwargs'])
+
 
     if p_setup in ['autoencoder']:
         from deepview.clustering_pytorch.nnet.models import ReconstructionFramework

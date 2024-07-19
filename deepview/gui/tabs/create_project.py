@@ -102,7 +102,7 @@ class ProjectCreator(QtWidgets.QDialog):
         # ncam_label.setBuddy(self.file_combo)
 
         self.copy_box = QtWidgets.QCheckBox("Copy files to project folder")
-        self.copy_box.setChecked(False)
+        self.copy_box.setChecked(True)
 
         browse_button = QtWidgets.QPushButton("Browse raw data")
         browse_button.clicked.connect(self.browse_rawdata)

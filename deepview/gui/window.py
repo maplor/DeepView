@@ -418,16 +418,6 @@ class MainWindow(QMainWindow):
         )
         # print('Todo: open an existing project...')
 
-
-    # def _goto_superanimal(self):
-    #     self.tab_widget = QtWidgets.QTabWidget()
-    #     self.tab_widget.setContentsMargins(0, 20, 0, 0)
-    #     self.modelzoo = ModelZoo(
-    #         root=self, parent=None, h1_description="DeepLabCut - Model Zoo"
-    #     )
-    #     self.tab_widget.addTab(self.modelzoo, "Model Zoo")
-    #     self.setCentralWidget(self.tab_widget)
-
     def load_config(self, config):
         self.config = config
         self.config_loaded.emit()
@@ -495,30 +485,16 @@ class MainWindow(QMainWindow):
             root=self, parent=None,
             h1_description="Step 2. Train unsupervised learning network",
         )
-        self.show_gps = GPSDisplayer(
-            root=self, parent=None,
-            h1_description="Step 3. Display GPS on the map",
-        )
+        # self.show_gps = GPSDisplayer(
+        #     root=self, parent=None,
+        #     h1_description="Step 3. Display GPS on the map",
+        # )
         self.imu_gps_interact = GPSIMU_Interaction(
             root=self, parent=None,
             h1_description="Step 4. GPS and IMU Interaction",
         )
-        # self.evaluate_network = EvaluateNetwork(
-        #     root=self,
-        #     parent=None,
-        #     h1_description="Step 3. Evaluate unsupervised learning Network",
-        # )
-        # self.mad_gui = LabelData(
-        #     root=self,
-        #     parent=None,
-        #     h1_description="Step 4. Label Data",
-        # )
-        # self.interaction_plot = InteractionPlot(
-        #     root=self,
-        #     parent=None,
-        #     h1_description="Step 5. Interaction Plot",
-        # )
         self.label_with_interactive_plot = LabelWithInteractivePlotTab(
+            self.imu_gps_interact,
             root=self,
             parent=None,
             h1_description="Step 5. Label with Interaction Plot",
@@ -528,61 +504,18 @@ class MainWindow(QMainWindow):
             parent=None,
             h1_description="Step 6. Label with Interaction Plot",
         )
-        # self.analyze_videos = AnalyzeVideos(
-        #     root=self, parent=None, h1_description="DeepLabCut - Analyze Videos"
-        # )
-        # self.unsupervised_id_tracking = UnsupervizedIdTracking(
-        #     root=self,
-        #     parent=None,
-        #     h1_description="DeepLabCut - Optional Unsupervised ID Tracking with Transformer",
-        # )
-        # self.create_videos = CreateVideos(
-        #     root=self,
-        #     parent=None,
-        #     h1_description="DeepLabCut - Create Videos",
-        # )
-        # self.extract_outlier_frames = ExtractOutlierFrames(
-        #     root=self,
-        #     parent=None,
-        #     h1_description="DeepLabCut - Step 8. Extract outlier frames",
-        # )
-        # self.refine_tracklets = RefineTracklets(
-        #     root=self, parent=None, h1_description="DeepLabCut - Refine labels"
-        # )
-        # self.modelzoo = ModelZoo(
-        #     root=self, parent=None, h1_description="DeepLabCut - Model Zoo"
-        # )
-        # self.video_editor = VideoEditor(
-        #     root=self, parent=None, h1_description="DeepLabCut - Optional Video Editor"
-        # )
 
-        # self.tab_widget.addTab(self.manage_project, "Manage project")
-        # self.tab_widget.addTab(self.extract_frames, "Extract frames")
         # self.tab_widget.addTab(self.label_frames, "Label frames")
         self.tab_widget.addTab(self.create_training_dataset, "Create training dataset")
         self.tab_widget.addTab(self.train_network, "Train network")
         # self.tab_widget.addTab(self.evaluate_network, "Evaluate network")
         # self.tab_widget.addTab(self.mad_gui, "Label data")
         # self.tab_widget.addTab(self.interaction_plot, "Interaction plot")
-        self.tab_widget.addTab(self.show_gps, "Display GPS on the map")
+        # self.tab_widget.addTab(self.show_gps, "Display GPS on the map")
         self.tab_widget.addTab(self.imu_gps_interact, "IMU GPS interaction")
         self.tab_widget.addTab(self.label_with_interactive_plot, "Label with interactive plot")
         self.tab_widget.addTab(self.supervised_learning_gui, "Supervised learning with new labels")
-        # self.tab_widget.addTab(self.analyze_videos, "Analyze videos")
-        # self.tab_widget.addTab(
-        #     self.unsupervised_id_tracking, "Unsupervised ID Tracking (*)"
-        # )
-        # self.tab_widget.addTab(self.create_videos, "Create videos")
-        # self.tab_widget.addTab(
-        #     self.extract_outlier_frames, "Extract outlier frames (*)"
-        # )
-        # self.tab_widget.addTab(self.refine_tracklets, "Refine tracklets (*)")
-        # self.tab_widget.addTab(self.modelzoo, "Model Zoo")
-        # self.tab_widget.addTab(self.video_editor, "Video editor (*)")
 
-        # if not self.is_multianimal:
-        #     self.refine_tracklets.setEnabled(False)
-        # self.unsupervised_id_tracking.setEnabled(self.is_transreid_available())
 
         self.setCentralWidget(self.tab_widget)
         self.tab_widget.currentChanged.connect(self.refresh_active_tab)

@@ -173,8 +173,56 @@ def format_timestamp(df):
     df.insert(loc=1, column='unixtime', value=unixtime)
     return df
 
-#---------------------------read raw sensor data--------------------------------
+def process_gps(df):
+    # identify if gps exists
+    # if exists, calculate velocity and angle
+    df_columns = df.columns
+    if ('latitude' in df_columns) or\
+        ('longitude' in df_columns):
+        # Extract rows where both latitude and longitude are not NaN
+        df_non_nan = df.dropna(subset=['latitude', 'longitude'])
 
+        # Calculate differences, handling NaN by filling with zeros
+        df_non_nan['lat_diff'] = np.radians(df_non_nan['latitude'].diff())
+        df_non_nan['lon_diff'] = np.radians(df_non_nan['longitude'].diff())
+
+        # Convert latitude to radians, handling NaN by filling with zeros
+        df_non_nan['lat1'] = np.radians(df_non_nan['latitude'].shift())
+        df_non_nan['lat2'] = np.radians(df_non_nan['latitude'])
+
+        # Calculate time difference in seconds
+        df_non_nan['timestamp'] = pd.to_datetime(df_non_nan['timestamp'])
+        df_non_nan['time_diff'] = df_non_nan['timestamp'].diff().dt.total_seconds()
+
+        # Haversine formula
+        a = (np.sin(df_non_nan['lat_diff'] / 2) ** 2 +
+             np.cos(df_non_nan['lat1']) * np.cos(df_non_nan['lat2']) * np.sin(df_non_nan['lon_diff'] / 2) ** 2)
+        c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+        R = 6371000  # Earth radius in meters
+        df_non_nan['distance'] = R * c
+        # Calculate velocity (m/s)
+        df_non_nan['GPS_velocity'] = df_non_nan['distance'] / df_non_nan['time_diff']
+
+        # # Calculate time difference in seconds
+        # df['time_diff'] = df['timestamp'].diff().dt.total_seconds()
+
+        # # Calculate velocity (m/s)
+        # df['velocity'] = df['distance'] / df['time_diff']
+
+        # Calculate bearing
+        x = np.sin(df_non_nan['lon_diff']) * np.cos(df_non_nan['lat2'])
+        y = (np.cos(df_non_nan['lat1']) * np.sin(df_non_nan['lat2']) -
+             np.sin(df_non_nan['lat1']) * np.cos(df_non_nan['lat2']) * np.cos(df_non_nan['lon_diff']))
+        initial_bearing = np.arctan2(x, y)
+        initial_bearing = np.degrees(initial_bearing)
+        df_non_nan['GPS_bearing'] = (initial_bearing + 360) % 360
+
+        # Merge velocity and bearing back to the original dataframe
+        df = df.merge(df_non_nan[['GPS_velocity', 'GPS_bearing']], left_index=True, right_index=True, how='left')
+
+    return df
+
+#---------------------------read raw sensor data--------------------------------
 
 def read_process_csv(root, file, sample_rate=25):
     """
@@ -182,15 +230,19 @@ def read_process_csv(root, file, sample_rate=25):
     timestamp: transfer string to unixtime
     """
     df = pd.read_csv(file)
+    # add velocity and angles if GPS sensor exists
+    df = process_gps(df)
 
     # fulfill nan values
     df = df.bfill().ffill()
 
     df = format_timestamp(df)
     # calculate sampling rate, the input is timestamp
-    INTERMEDIATE_SAMPLING_RATE = int(np.mean(1/np.diff(df['unixtime'].values)))
+    INTERMEDIATE_SAMPLING_RATE = int(1/np.mean(np.diff(df['unixtime'].values)))
+    if INTERMEDIATE_SAMPLING_RATE == 0:  # if the sampling rate is the same, should be 1
+        INTERMEDIATE_SAMPLING_RATE = 1
 
-    # divide data if time_gap exists, todo, very long time
+    # divide data if time_gap exists
     df_list = divide_df_if_timestamp_gap_detected_2(df, int(sample_rate) * 5 * 60)
 
     # change sampling rate
@@ -222,7 +274,7 @@ def preprocess_datasets(root, progress_update, cfg, allsetfolder, sample_rate):
     # read data
     # AnnotationData = []
     for idx, file in enumerate(sorted_filenames):
-        progress_update.emit(int(idx/filenum * 100))
+        progress_update.emit(int((idx+1)/filenum * 100))
 
         parent, filename, _ = _robust_path_split(file)
         file_path = os.path.join(
