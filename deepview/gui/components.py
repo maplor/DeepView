@@ -13,8 +13,10 @@ import os
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QShowEvent
-# from deeplabcut.gui.dlc_params import DLCParams
-# from deeplabcut.gui.widgets import ConfigEditor
+from deeplabcut.gui.dlc_params import DLCParams
+from deeplabcut.gui.widgets import ConfigEditor
+
+from PySide6.QtWebEngineWidgets import QWebEngineView
 
 
 class DefaultTab(QtWidgets.QWidget):
@@ -66,6 +68,62 @@ class DefaultTab(QtWidgets.QWidget):
         policy.setHorizontalPolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         self.separator.setSizePolicy(policy)
         self.main_layout.addWidget(self.separator)
+
+# 添加QWebEngineView以便调用
+class DefaultWebTab(QtWidgets.QWidget):
+    def __init__(
+            self,
+            root: QtWidgets.QMainWindow,
+            parent: QtWidgets.QWidget = None,
+            h1_description: str = "",
+    ):
+        super(DefaultWebTab, self).__init__(parent)
+        os.environ["QTWEBENGINE_REMOTE_DEBUGGING"] = "9024"
+        self.web_view = QWebEngineView()
+        self.web_view_map = QWebEngineView()
+
+
+        self.parent = parent
+        self.root = root
+
+        self.h1_description = h1_description
+
+        self.main_layout = QtWidgets.QVBoxLayout()
+        self.main_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.setLayout(self.main_layout)
+
+        self._init_default_layout()
+
+        self.firstShow = False
+
+    def showEvent(self, event: QShowEvent) -> None:
+        if not self.firstShow:
+            self.firstShowEvent(event)
+            self.firstShow = True
+
+        return super().showEvent(event)
+
+    def firstShowEvent(self, event: QShowEvent) -> None:
+        return
+
+    def _init_default_layout(self):
+        # Add tab header
+        self.main_layout.addWidget(
+            _create_label_widget(self.h1_description, "font:bold;", (10, 10, 0, 10))
+        )
+
+        # Add separating line
+        self.separator = QtWidgets.QFrame()
+        self.separator.setFrameShape(QtWidgets.QFrame.HLine)
+        self.separator.setFrameShadow(QtWidgets.QFrame.Raised)
+        self.separator.setLineWidth(0)
+        self.separator.setMidLineWidth(1)
+        policy = QtWidgets.QSizePolicy()
+        policy.setVerticalPolicy(QtWidgets.QSizePolicy.Policy.Fixed)
+        policy.setHorizontalPolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        self.separator.setSizePolicy(policy)
+        self.main_layout.addWidget(self.separator)
+
 
 
 class TestfileSpinBox(QtWidgets.QSpinBox):
