@@ -464,9 +464,9 @@ class LabelWithInteractivePlot(QWidget):
         self.row3_layout = QHBoxLayout()
         self.right_layout.addLayout(self.row3_layout)
 
-        # 创建一个弹簧 (QSpacerItem)
-        self.spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        self.right_layout.addItem(self.spacer)
+        # # 创建一个弹簧 (QSpacerItem)
+        # self.spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        # self.right_layout.addItem(self.spacer)
 
         # 将左侧和右侧布局添加到主布局中，并设置相同的 stretch 因子，使它们宽度相同
         left_column = QWidget()
@@ -476,6 +476,10 @@ class LabelWithInteractivePlot(QWidget):
         right_column = QWidget()
         right_column.setLayout(self.right_layout)
         self.main_layout.addWidget(right_column, 1)
+
+        # 创建中心图表
+        self.createCenterPlot()
+
 
     def init_timer(self):
         self.timer = QTimer(self)
@@ -930,21 +934,15 @@ class LabelWithInteractivePlot(QWidget):
         metadatas = find_charts_data_columns(self.sensor_dict, self.column_names)
         self.backend.desplayData(self.data, metadatas)
         self.backend_map.desplayMapData(self.data)
-        self.right_layout.removeItem(self.spacer)
 
-        # 创建中心图表
-        self.createCenterPlot()
-        # 创建右侧设置面板
-        # self.createRightSettingPannel()
+        # 初始化图表之后不用添加spacer了
+        # self.right_layout.removeItem(self.spacer)
 
         # 渲染右侧图表（特征提取功能）
         self.renderRightPlot()  # feature extraction function here
 
         # 设置训练状态为False
         self.isTarining = False
-
-        # 更新按钮状态
-        # self.computeTimer.singleShot(100, self.createLeftLayout)
 
         self.updateBtn()
 
