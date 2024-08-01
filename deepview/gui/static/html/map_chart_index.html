@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Leaflet Map</title>
     <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css">
+    <!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css"> -->
+    <link rel="stylesheet" href="../css/leaflet.css">
+    <!-- <script src="../css/leaflet.css"></script> -->
     <style>
         html,
         body {
@@ -28,7 +29,8 @@
 
 <body>
     <div id="map"></div>
-    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script> -->
+    <script src="../js/leaflet.js"></script>
     <script>
         var map = L.map('map').setView([31.505, 139.09], 2);
         let map_data = [
@@ -60,6 +62,8 @@
         var highlightedMarker = null; // 用于存储当前高亮的标记
 
         function initialize() {
+            // 清空所有标记
+            markers.clearLayers(); 
             map_data.forEach(function (item) {
                 addMarker(item.index, item.latitude, item.longitude);
             });
@@ -134,8 +138,6 @@
 
         function LineChartHighlightDotByIndex(index) {
             console.log("index:", index);
-            // backend_map.handleHighlightLineDotByIndex(index)
-            // backendmap.LineChartHighlightDotByIndex(index)
             backendmap.handleHighlightLineDotByIndex(index)
         }
 
@@ -164,7 +166,6 @@
             // console.log(channel.objects)
             // console.log(channel.objects.backendmap)
             window.backendmap = channel.objects.backendmap;
-            // window.backendmap.displayMapData.connect(displayMapData);
         });
 
     </script>

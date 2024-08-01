@@ -3,8 +3,10 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Multiple Line Charts with ECharts</title>
-    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Line Charts</title>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script> -->
+    <script src="../js/echarts.min.js"></script>
     <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
     <style>
         /* .chart-box {
@@ -98,15 +100,282 @@
         onbrush = false;
         // 全局变量存储框选的范围
         let brushAreas = [];
-        let charts = [];
+        charts = [];
 
         // 定义dark主题
         var darkTheme = {
-            backgroundColor: '#19232d'
+            backgroundColor: '#19232d',
+            title: {
+                textStyle: {
+                    color: '#eeeeee'
+                },
+                subtextStyle: {
+                    color: '#aaaaaa'
+                }
+            },
+            categoryAxis: {
+                axisLine: {
+                    show: true,
+                    lineStyle: {
+                        color: "#eeeeee"
+                    }
+                },
+                axisTick: {
+                    show: true,
+                    lineStyle: {
+                        color: "#eeeeee"
+                    }
+                },
+                axisLabel: {
+                    show: true,
+                    color: "#eeeeee"
+                },
+                splitLine: {
+                    show: true,
+                    lineStyle: {
+                        color: ["#aaaaaa"]
+                    }
+                },
+                splitArea: {
+                    show: false,
+                    areaStyle: {
+                        color: ["#eeeeee"]
+                    }
+                }
+            },
+
+            valueAxis: {
+                axisLine: {
+                    show: true,
+                    lineStyle: {
+                        color: "#eeeeee"
+                    }
+                },
+                axisTick: {
+                    show: true,
+                    lineStyle: {
+                        color: "#eeeeee"
+                    }
+                },
+                axisLabel: {
+                    show: true,
+                    color: "#eeeeee"
+                },
+                splitLine: {
+                    show: true,
+                    lineStyle: {
+                        color: ["#aaaaaa"]
+                    }
+                },
+                splitArea: {
+                    show: false,
+                    areaStyle: {
+                        color: ["#eeeeee"]
+                    }
+                }
+            },
+            logAxis: {
+                axisLine: {
+                    show: true,
+                    lineStyle: {
+                        color: "#eeeeee"
+                    }
+                },
+                axisTick: {
+                    show: true,
+                    lineStyle: {
+                        color: "#eeeeee"
+                    }
+                },
+                axisLabel: {
+                    show: true,
+                    color: "#eeeeee"
+                },
+                splitLine: {
+                    show: true,
+                    lineStyle: {
+                        color: ["#aaaaaa"]
+                    }
+                },
+                splitArea: {
+                    show: false,
+                    areaStyle: {
+                        color: ["#eeeeee"]
+                    }
+                }
+            },
+            toolbox: {
+                iconStyle: {
+                    borderColor: "#999999"
+                },
+                emphasis: {
+                    iconStyle: {
+                        borderColor: "#666666"
+                    }
+                }
+            },
+            legend: {
+                textStyle: {
+                    color: "#eeeeee"
+                }
+            },
+            tooltip: {
+                axisPointer: {
+                    lineStyle: {
+                        color: "#eeeeee",
+                        width: "1"
+                    },
+                    crossStyle: {
+                        color: "#eeeeee",
+                        width: "1"
+                    }
+                }
+            }
         };
 
         var lightTheme = {
-            backgroundColor: '#FAFAFA'
+            backgroundColor: '#FAFAFA',
+            title: {
+                textStyle: {
+                    color: "#333333"
+                },
+                subtextStyle: {
+                    color: "#aaaaaa"
+                }
+            },
+            categoryAxis: {
+                axisLine: {
+                    show: true,
+                    lineStyle: {
+                        color: "#333"
+                    }
+                },
+                axisTick: {
+                    show: true,
+                    lineStyle: {
+                        color: "#333"
+                    }
+                },
+                axisLabel: {
+                    show: true,
+                    color: "#333"
+                },
+                splitLine: {
+                    show: false,
+                    lineStyle: {
+                        color: [
+                            "#ccc"
+                        ]
+                    }
+                },
+                splitArea: {
+                    show: false,
+                    areaStyle: {
+                        color: [
+                            "rgba(250,250,250,0.3)",
+                            "rgba(200,200,200,0.3)"
+                        ]
+                    }
+                }
+            },
+            valueAxis: {
+                axisLine: {
+                    show: true,
+                    lineStyle: {
+                        color: "#333"
+                    }
+                },
+                axisTick: {
+                    show: true,
+                    lineStyle: {
+                        color: "#333"
+                    }
+                },
+                axisLabel: {
+                    show: true,
+                    color: "#333"
+                },
+                splitLine: {
+                    show: true,
+                    lineStyle: {
+                        color: [
+                            "#ccc"
+                        ]
+                    }
+                },
+                splitArea: {
+                    show: false,
+                    areaStyle: {
+                        color: [
+                            "rgba(250,250,250,0.3)",
+                            "rgba(200,200,200,0.3)"
+                        ]
+                    }
+                }
+            },
+            logAxis: {
+                axisLine: {
+                    show: true,
+                    lineStyle: {
+                        color: "#333"
+                    }
+                },
+                axisTick: {
+                    show: true,
+                    lineStyle: {
+                        color: "#333"
+                    }
+                },
+                axisLabel: {
+                    show: true,
+                    color: "#333"
+                },
+                splitLine: {
+                    show: true,
+                    lineStyle: {
+                        color: [
+                            "#ccc"
+                        ]
+                    }
+                },
+                splitArea: {
+                    show: false,
+                    areaStyle: {
+                        color: [
+                            "rgba(250,250,250,0.3)",
+                            "rgba(200,200,200,0.3)"
+                        ]
+                    }
+                }
+            },
+            toolbox: {
+                iconStyle: {
+                    borderColor: "#06467c"
+                },
+                emphasis: {
+                    iconStyle: {
+                        borderColor: "#4187c2"
+                    }
+                }
+            },
+            legend: {
+                textStyle: {
+                    color: "#333333"
+                }
+            },
+            tooltip: {
+                axisPointer: {
+                    lineStyle: {
+                        color: "#cccccc",
+                        width: 1
+                    },
+                    crossStyle: {
+                        color: "#cccccc",
+                        width: 1
+                    }
+                }
+            },
+
         };
 
 
@@ -210,7 +479,13 @@
             dataFrame = convertData(org_data, firstChartsData, chartsData);
 
 
-
+            // 销毁每个 echarts 实例
+            if (charts && charts.length > 0) {
+                charts.forEach(chart => {
+                    chart.dispose();
+                });
+            }
+            charts = [];
             // chartsData.unshift(firstChartsData);
 
             if (!chartsData.includes(firstChartsData)) {
@@ -709,7 +984,7 @@
             });
         }
 
-        // TODO: 重置所有变量
+        // 重置所有变量
         function handleComboxChange(data) {
             firstChartsData =
             {
@@ -719,7 +994,6 @@
                 series: ['timestamp']
             }
             chartsData = [];
-            charts = [];
             markData = [];
             otherMarkData = [];
             selectedDataList = null;
@@ -775,14 +1049,13 @@
                 // 按数据
                 // var start = Math.max(0, (index - 10) / org_data.length * 100);
                 // var end = Math.min(100, (index + 10) / org_data.length * 100);
-                
+
                 // 按固定显示的点数
-                var totalPoints = 1000; 
+                var totalPoints = 1000;
                 var halfPoints = totalPoints / 2;
 
-                var start = Math.max(0, ((index - halfPoints) / org_data.length) * 100);
-                var end = Math.min(100, ((index + halfPoints) / org_data.length) * 100);
-
+                var start = Math.max(0, ((parseInt(index) - halfPoints) / org_data.length) * 100);
+                var end = Math.min(100, ((parseInt(index) + halfPoints) / org_data.length) * 100);
 
                 charts.forEach((chart, i) => {
                     chart.dispatchAction({
