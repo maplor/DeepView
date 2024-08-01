@@ -97,6 +97,14 @@ class LabelOption(QDialog):
         return selected_option
 
 
+# 创建一个函数来找到最近的有效索引
+def find_nearest_index(target_index, valid_indices):
+    if len(valid_indices) == 0:
+        return None
+    nearest_index = valid_indices[np.abs(valid_indices - target_index).argmin()]
+    return nearest_index
+
+
 class Backend(QObject):
     highlightDotByindex = Signal(int, float, float)
     getSelectedAreaByHtml = Signal(str)
@@ -106,6 +114,8 @@ class Backend(QObject):
     def __init__(self):
         super().__init__()
         self.data = None
+
+    # 创建一个函数来找到最近的有效索引
 
     @Slot(pd.DataFrame)
     def handle_data_changed(self, data):
@@ -128,21 +138,24 @@ class Backend(QObject):
     # 通过索引高亮散点，点击折线图散点高亮地图散点
     @Slot(int)
     def handleHighlightDotByIndex(self, index):
-        # lat, lon = self.data.loc[index, 'latitude'], self.data.loc[index, 'longitude']
-        # 尝试获取经纬度
-        try:
-            lat, lon = self.data.loc[index, 'latitude'], self.data.loc[index, 'longitude']
-        except KeyError:
-            # 如果指定索引的经纬度不存在，则查找最近的有效经纬度
-            valid_rows = self.data.dropna(subset=['latitude', 'longitude'])
-            if not valid_rows.empty:
-                # 找到距离最近的行
-                closest_index = ((valid_rows.index - index).abs().argsort()).iloc[0]
-                lat, lon = valid_rows.loc[closest_index, 'latitude'], valid_rows.loc[closest_index, 'longitude']
-            else:
-                # 如果没有有效的经纬度数据，处理方式取决于应用需求
-                print("No valid latitude and longitude available.")
-                return
+        lat, lon = self.data.loc[index, '_latitude'], self.data.loc[index, '_longitude']
+
+        # 获取所有非空纬度和经度的索引
+        valid_lat_indices = self.data.index[~self.data['latitude'].isna()].to_numpy()
+        valid_lon_indices = self.data.index[~self.data['longitude'].isna()].to_numpy()
+
+        # 如果纬度或经度为空，找到最近的有效值
+        if pd.isna(lat) or pd.isna(lon):
+
+            if pd.isna(lat):
+                nearest_lat_index = find_nearest_index(index, valid_lat_indices)
+                if nearest_lat_index is not None:
+                    lat = self.data.loc[nearest_lat_index, 'latitude']
+            if pd.isna(lon):
+                nearest_lon_index = find_nearest_index(index, valid_lon_indices)
+                if nearest_lon_index is not None:
+                    lon = self.data.loc[nearest_lon_index, 'longitude']
+
 
         print("handleing highlight dot...")
         self.highlightDotByindex.emit(index, lat, lon)
@@ -829,6 +842,10 @@ class LabelWithInteractivePlot(QWidget):
 
         # 添加时间戳列
         self.data['_timestamp'] = pd.to_datetime(self.data['datetime']).apply(lambda x: x.timestamp())
+
+        # 复制经纬度并进行线性插值
+        self.data['_latitude'] = self.data['latitude'].interpolate()
+        self.data['_longitude'] = self.data['longitude'].interpolate()
 
         # 保留经纬度非空值
         self.data = self.data.dropna(subset=['acc_x', 'acc_y', 'acc_z'])
