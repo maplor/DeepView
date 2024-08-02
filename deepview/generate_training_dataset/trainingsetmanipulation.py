@@ -1,5 +1,4 @@
 
-
 import math
 import logging
 import os
@@ -182,6 +181,9 @@ def process_gps(df):
         # Extract rows where both latitude and longitude are not NaN
         df_non_nan = df.dropna(subset=['latitude', 'longitude'])
 
+        # get sampling rate of GPS signal,newlen*oldHz/oldlen得到GPShz，所以这里传newlen
+        gps_len = len(df_non_nan)
+
         # Calculate differences, handling NaN by filling with zeros
         df_non_nan['lat_diff'] = np.radians(df_non_nan['latitude'].diff())
         df_non_nan['lon_diff'] = np.radians(df_non_nan['longitude'].diff())
@@ -203,12 +205,6 @@ def process_gps(df):
         # Calculate velocity (m/s)
         df_non_nan['GPS_velocity'] = df_non_nan['distance'] / df_non_nan['time_diff']
 
-        # # Calculate time difference in seconds
-        # df['time_diff'] = df['timestamp'].diff().dt.total_seconds()
-
-        # # Calculate velocity (m/s)
-        # df['velocity'] = df['distance'] / df['time_diff']
-
         # Calculate bearing
         x = np.sin(df_non_nan['lon_diff']) * np.cos(df_non_nan['lat2'])
         y = (np.cos(df_non_nan['lat1']) * np.sin(df_non_nan['lat2']) -
@@ -220,9 +216,10 @@ def process_gps(df):
         # Merge velocity and bearing back to the original dataframe
         df = df.merge(df_non_nan[['GPS_velocity', 'GPS_bearing']], left_index=True, right_index=True, how='left')
 
-    return df
+    return df, gps_len
 
-#---------------------------read raw sensor data--------------------------------
+
+# ---------------------------read raw sensor data--------------------------------
 
 def read_process_csv(root, file, sample_rate=25):
     """
@@ -231,7 +228,7 @@ def read_process_csv(root, file, sample_rate=25):
     """
     df = pd.read_csv(file)
     # add velocity and angles if GPS sensor exists
-    df = process_gps(df)
+    df, gps_len = process_gps(df)
 
     # fulfill nan values
     df = df.bfill().ffill()
@@ -257,7 +254,9 @@ def read_process_csv(root, file, sample_rate=25):
     # create label_id (int) for label (str)
     newdf['label_id'] = newdf['label'].map(label_dict)  # todo, very long time
     # df['label_id'] = df['label'].map(label_str2num)
-
+    # 因为角度是一段距离内的角度累计，需要除以时间
+    gps_sampling_rate = (gps_len * float(sample_rate)) / len(newdf)
+    newdf['GPS_bearing'] = newdf['GPS_bearing'] * (gps_sampling_rate)
     return newdf
 
 def preprocess_datasets(root, progress_update, cfg, allsetfolder, sample_rate):
@@ -274,17 +273,17 @@ def preprocess_datasets(root, progress_update, cfg, allsetfolder, sample_rate):
     # read data
     # AnnotationData = []
     for idx, file in enumerate(sorted_filenames):
-        progress_update.emit(int((idx+1)/filenum * 100))
+        progress_update.emit(int((idx +1 ) /filenum * 100))
 
         parent, filename, _ = _robust_path_split(file)
         file_path = os.path.join(
-            allsetfolder, filename+f'_%sHz.pkl'%sample_rate
+            allsetfolder, filename + f'_%sHz.pkl ' %sample_rate
             # allsetfolder, filename+f'_{cfg["scorer"]}.pkl'
         )
         # reading raw data here...
         try:
             if os.path.isfile(file_path):
-                print('Raw sensor data already exists at %s'%file_path)
+                print('Raw sensor data already exists at %s ' %file_path)
                 # with open(file_path, 'rb') as f:
                 #     data = pickle.load(f)
             else:

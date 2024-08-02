@@ -741,10 +741,11 @@ class LabelWithInteractivePlot(QWidget):
         # 创建组合框
         RawDatacomboBox = QComboBox()
         # 获取原始数据文件夹路径
-        raw_data_path = get_raw_data_folder()
+        # raw_data_path = get_raw_data_folder()
+        raw_data_path = get_unsupervised_set_folder()
         # 获取所有.csv文件路径
         rawdata_file_path_list = list(
-            Path(os.path.join(self.cfg["project_path"], raw_data_path)).glob('*.csv'),
+            Path(os.path.join(self.cfg["project_path"], raw_data_path)).glob('*.pkl'),
         )
         # 遍历路径列表
         for path in rawdata_file_path_list:
@@ -813,21 +814,23 @@ class LabelWithInteractivePlot(QWidget):
         return
 
     def get_data_from_csv(self, filename):
-        raw_data_path = get_raw_data_folder()
+        raw_data_path = get_unsupervised_set_folder()
         datapath = os.path.join(self.cfg["project_path"], raw_data_path, filename)
-        self.data = pd.read_csv(datapath, low_memory=False)
-
-        # 将 timestamp 列转换为 datetime 对象
-        self.data['datetime'] = pd.to_datetime(self.data['timestamp'])
-
-        # 生成 unixtime 列（秒级时间戳）
-        self.data['unixtime'] = self.data['datetime'].astype('int64') // 10 ** 9
+        with open(datapath, 'rb') as f:
+            self.data = pickle.load(f)
+        # self.data = pd.read_csv(datapath, low_memory=False)
+        #
+        # # 将 timestamp 列转换为 datetime 对象
+        # self.data['datetime'] = pd.to_datetime(self.data['timestamp'])
+        #
+        # # 生成 unixtime 列（秒级时间戳）
+        # self.data['unixtime'] = self.data['datetime'].astype('int64') // 10 ** 9
 
         # 添加时间戳列
         self.data['_timestamp'] = pd.to_datetime(self.data['datetime']).apply(lambda x: x.timestamp())
 
         # 保留经纬度非空值
-        self.data = self.data.dropna(subset=['acc_x', 'acc_y', 'acc_z'])
+        # self.data = self.data.dropna(subset=['acc_x', 'acc_y', 'acc_z'])
         self.data['index'] = self.data.index  # Add an index column
         self.dataChanged.emit(self.data)
         return
