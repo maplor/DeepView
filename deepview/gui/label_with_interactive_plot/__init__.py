@@ -138,25 +138,28 @@ class Backend(QObject):
     # 通过索引高亮散点，点击折线图散点高亮地图散点
     @Slot(int)
     def handleHighlightDotByIndex(self, index):
-        lat, lon = self.data.loc[index, '_latitude'], self.data.loc[index, '_longitude']
+        lat, lon = self.data.loc[index, 'latitude'], self.data.loc[index, 'longitude']
 
-        # 获取所有非空纬度和经度的索引
-        valid_lat_indices = self.data.index[~self.data['latitude'].isna()].to_numpy()
-        valid_lon_indices = self.data.index[~self.data['longitude'].isna()].to_numpy()
+        # # 获取所有非空纬度和经度的索引
+        # valid_lat_indices = self.data.index[~self.data['latitude'].isna()].to_numpy()
+        # valid_lon_indices = self.data.index[~self.data['longitude'].isna()].to_numpy()
 
-        # 如果纬度或经度为空，找到最近的有效值
+        # # 如果纬度或经度为空，找到最近的有效值
+        # if pd.isna(lat) or pd.isna(lon):
+
+        #     if pd.isna(lat):
+        #         nearest_lat_index = find_nearest_index(index, valid_lat_indices)
+        #         if nearest_lat_index is not None:
+        #             lat = self.data.loc[nearest_lat_index, 'latitude']
+        #     if pd.isna(lon):
+        #         nearest_lon_index = find_nearest_index(index, valid_lon_indices)
+        #         if nearest_lon_index is not None:
+        #             lon = self.data.loc[nearest_lon_index, 'longitude']
+
         if pd.isna(lat) or pd.isna(lon):
-
-            if pd.isna(lat):
-                nearest_lat_index = find_nearest_index(index, valid_lat_indices)
-                if nearest_lat_index is not None:
-                    lat = self.data.loc[nearest_lat_index, 'latitude']
-            if pd.isna(lon):
-                nearest_lon_index = find_nearest_index(index, valid_lon_indices)
-                if nearest_lon_index is not None:
-                    lon = self.data.loc[nearest_lon_index, 'longitude']
-
-
+            print("Latitude or longitude is missing.")
+            return
+        
         print("handleing highlight dot...")
         self.highlightDotByindex.emit(index, lat, lon)
 
@@ -328,7 +331,12 @@ class BackendMap(QObject):
             # 将列名转换为列表
             columns_list = data.columns.tolist()
             logging.debug(f"columns_list: {columns_list}")
+            # 选择需要的列 index、latitude 和 longitude，并去除 latitude 和 longitude 中的缺失值。
             data = data[['index', 'latitude', 'longitude']].dropna(subset=['latitude', 'longitude'])
+            # 使用 iloc 按索引进行降采样, 一万个条目取一个。
+            interval = 10000
+            data = data.iloc[::interval]
+
             data = data.to_dict(orient='records')
         data = json.dumps(data)
         self.view.page().runJavaScript(f"displayMapData('{data}')")
@@ -750,49 +758,18 @@ class LabelWithInteractivePlot(QWidget):
         # 添加一个伸缩项以填充其余空间并保持左对齐
         self.top_layout.addStretch()
 
-    # 从row_data的csv创建原始数据组合框的方法
-    def createRawDataComboBox(self):
-        # 创建标签
-        RawDataComboBoxLabel = QLabel('Select data:')
-
-        # 创建组合框
-        RawDatacomboBox = QComboBox()
-        # 获取原始数据文件夹路径
-        raw_data_path = get_raw_data_folder()
-        # 获取所有.csv文件路径
-        rawdata_file_path_list = list(
-            Path(os.path.join(self.cfg["project_path"], raw_data_path)).glob('*.csv'),
-        )
-        # 遍历路径列表
-        for path in rawdata_file_path_list:
-            # 将文件名添加到组合框
-            RawDatacomboBox.addItem(str(path.name))
-        # 保存组合框
-        self.RawDatacomboBox = RawDatacomboBox
-
-        # combbox change组合框改变时的处理
-        # 打开第一个.csv文件
-        self.get_data_from_csv(rawdata_file_path_list[0].name)
-        self.RawDatacomboBox.currentTextChanged.connect(
-            # 连接组合框文本改变事件到get_data_from_csv方法
-            self.get_data_from_csv
-        )
-        # 返回标签和组合框
-        return RawDataComboBoxLabel, RawDatacomboBox
-
-    # # 创建原始数据组合框的方法
+    # # 从row_data的csv创建原始数据组合框的方法
     # def createRawDataComboBox(self):
-    #     # find data at here:C:\Users\dell\Desktop\aa-bbb-2024-04-28\unsupervised-datasets\allDataSet
     #     # 创建标签
     #     RawDataComboBoxLabel = QLabel('Select data:')
 
     #     # 创建组合框
     #     RawDatacomboBox = QComboBox()
-    #     # 获取无监督数据集文件夹路径
-    #     unsup_data_path = get_unsupervised_set_folder()
-    #     # 获取所有.pkl文件路径
+    #     # 获取原始数据文件夹路径
+    #     raw_data_path = get_raw_data_folder()
+    #     # 获取所有.csv文件路径
     #     rawdata_file_path_list = list(
-    #         Path(os.path.join(self.cfg["project_path"], unsup_data_path)).glob('*.pkl'),
+    #         Path(os.path.join(self.cfg["project_path"], raw_data_path)).glob('*.csv'),
     #     )
     #     # 遍历路径列表
     #     for path in rawdata_file_path_list:
@@ -802,18 +779,50 @@ class LabelWithInteractivePlot(QWidget):
     #     self.RawDatacomboBox = RawDatacomboBox
 
     #     # combbox change组合框改变时的处理
-    #     # 打开第一个.pkl文件
-    #     with open(rawdata_file_path_list[0], 'rb') as f:
-    #         # 加载数据
-    #         self.data = pickle.load(f)
-    #         # 添加时间戳列
-    #         self.data['_timestamp'] = pd.to_datetime(self.data['datetime']).apply(lambda x: x.timestamp())
+    #     # 打开第一个.csv文件
+    #     self.get_data_from_csv(rawdata_file_path_list[0].name)
     #     self.RawDatacomboBox.currentTextChanged.connect(
-    #         # 连接组合框文本改变事件到get_data_from_pkl方法
-    #         self.get_data_from_pkl
+    #         # 连接组合框文本改变事件到get_data_from_csv方法
+    #         self.get_data_from_csv
     #     )
     #     # 返回标签和组合框
     #     return RawDataComboBoxLabel, RawDatacomboBox
+
+    # 创建原始数据组合框的方法
+    def createRawDataComboBox(self):
+        # find data at here:C:\Users\dell\Desktop\aa-bbb-2024-04-28\unsupervised-datasets\allDataSet
+        # 创建标签
+        RawDataComboBoxLabel = QLabel('Select data:')
+
+        # 创建组合框
+        RawDatacomboBox = QComboBox()
+        # 获取无监督数据集文件夹路径
+        unsup_data_path = get_unsupervised_set_folder()
+        # 获取所有.pkl文件路径
+        rawdata_file_path_list = list(
+            Path(os.path.join(self.cfg["project_path"], unsup_data_path)).glob('*.pkl'),
+        )
+        # 遍历路径列表
+        for path in rawdata_file_path_list:
+            # 将文件名添加到组合框
+            RawDatacomboBox.addItem(str(path.name))
+        # 保存组合框
+        self.RawDatacomboBox = RawDatacomboBox
+
+        # combbox change组合框改变时的处理
+        # 打开第一个.pkl文件
+        with open(rawdata_file_path_list[0], 'rb') as f:
+            # 加载数据
+            self.data = pickle.load(f)
+            # 添加时间戳列
+            # self.data['_timestamp'] = pd.to_datetime(self.data['datetime']).apply(lambda x: x.timestamp())
+        self.RawDatacomboBox.currentTextChanged.connect(
+            # 连接组合框文本改变事件到get_data_from_pkl方法
+            self.get_data_from_pkl
+        )
+        # 返回标签和组合框
+        return RawDataComboBoxLabel, RawDatacomboBox
+
 
     # 从.pkl文件获取数据的方法
     def get_data_from_pkl(self, filename):
@@ -826,7 +835,7 @@ class LabelWithInteractivePlot(QWidget):
             # 加载数据
             self.data = pickle.load(f)
             # 添加时间戳列
-            self.data['_timestamp'] = pd.to_datetime(self.data['datetime']).apply(lambda x: x.timestamp())
+            # self.data['_timestamp'] = pd.to_datetime(self.data['datetime']).apply(lambda x: x.timestamp())
         return
 
     def get_data_from_csv(self, filename):
@@ -876,24 +885,25 @@ class LabelWithInteractivePlot(QWidget):
             ext='*.pth')
         # 保存模型路径列表
         self.model_path_list = model_path_list
-        # 遍历路径列表
-        for path in model_path_list:
-            # 将文件名添加到组合框
-            modelComboBox.addItem(str(Path(path).name))
-        # modelComboBox.currentIndexChanged.connect(self.handleModelComboBoxChange)
+        if model_path_list:
+            # 遍历路径列表
+            for path in model_path_list:
+                # 将文件名添加到组合框
+                modelComboBox.addItem(str(Path(path).name))
+            # modelComboBox.currentIndexChanged.connect(self.handleModelComboBoxChange)
 
-        # if selection changed, run this code
-        # 如果选择改变，运行这段代码
-        model_name, data_length, column_names = \
-            get_param_from_path(modelComboBox.currentText())  # 从路径获取模型参数
-        # 保存模型路径
-        self.model_path = modelComboBox.currentText()
-        # 保存模型名称
-        self.model_name = model_name
-        # 保存数据长度
-        self.data_length = data_length
-        # 保存列名列表
-        self.column_names = column_names
+            # if selection changed, run this code
+            # 如果选择改变，运行这段代码
+            model_name, data_length, column_names = \
+                get_param_from_path(modelComboBox.currentText())  # 从路径获取模型参数
+            # 保存模型路径
+            self.model_path = modelComboBox.currentText()
+            # 保存模型名称
+            self.model_name = model_name
+            # 保存数据长度
+            self.data_length = data_length
+            # 保存列名列表
+            self.column_names = column_names
         modelComboBox.currentTextChanged.connect(
             # 连接组合框文本改变事件到get_model_param_from_path方法
             self.get_model_param_from_path
@@ -905,16 +915,17 @@ class LabelWithInteractivePlot(QWidget):
     def get_model_param_from_path(self, model_path):
         # set model information according to model name
         # 根据模型名称设置模型信息
-        model_name, data_length, column_names = \
-            get_param_from_path(model_path)
-        # 保存模型路径
-        self.model_path = model_path
-        # 保存模型名称
-        self.model_name = model_name
-        # 保存数据长度
-        self.data_length = data_length
-        # 保存列名列表
-        self.column_names = column_names
+        if model_path:
+            model_name, data_length, column_names = \
+                get_param_from_path(model_path)
+            # 保存模型路径
+            self.model_path = model_path
+            # 保存模型名称
+            self.model_name = model_name
+            # 保存数据长度
+            self.data_length = data_length
+            # 保存列名列表
+            self.column_names = column_names
         return
 
     # 创建特征提取按钮的方法
