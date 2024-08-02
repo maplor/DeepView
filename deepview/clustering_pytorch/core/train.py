@@ -157,7 +157,14 @@ def train(
 
     sensor_str = ''
     for i in data_column:
-        tmp = [k for k, v in sensor_dict.items() if i in v][0]  # get key according to value
+        for sensor, sensor_axis in sensor_dict.items():
+            if i in sensor_axis:
+                tmp = sensor
+            elif i in ['GPS_velocity', 'GPS_bearing']:
+                tmp = 'gps'
+            else:
+                continue
+        # tmp = [k for k, v in sensor_dict.items() if i in v][0]  # get key according to value
         if tmp not in sensor_str:
             sensor_str = tmp + '-' + sensor_str
 
