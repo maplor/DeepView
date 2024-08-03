@@ -241,7 +241,7 @@ class Backend(QObject):
 
             # TODO 根据传入信号选择需要的列
             # 指定要排除的列,Python 的 json 模块不能直接序列化某些自定义对象或非基本数据类型（如 datetime、Timestamp 等
-            columns_to_drop = ['logger_id', 'datetime', 'animal_tag', 'latitude', 'longitude', 'gps_status',
+            columns_to_drop = ['logger_id', 'animal_tag', 'gps_status',
                                'activity_class', 'label']
 
             # 删除指定列
@@ -811,11 +811,12 @@ class LabelWithInteractivePlot(QWidget):
 
         # combbox change组合框改变时的处理
         # 打开第一个.pkl文件
-        with open(rawdata_file_path_list[0], 'rb') as f:
-            # 加载数据
-            self.data = pickle.load(f)
-            # 添加时间戳列
-            # self.data['_timestamp'] = pd.to_datetime(self.data['datetime']).apply(lambda x: x.timestamp())
+        # with open(rawdata_file_path_list[0], 'rb') as f:
+        #     # 加载数据
+        #     self.data = pickle.load(f)
+        #     # 添加时间戳列
+        #     self.data['_timestamp'] = pd.to_datetime(self.data['datetime']).apply(lambda x: x.timestamp())
+        self.get_data_from_pkl(rawdata_file_path_list[0].name)
         self.RawDatacomboBox.currentTextChanged.connect(
             # 连接组合框文本改变事件到get_data_from_pkl方法
             self.get_data_from_pkl
@@ -836,6 +837,10 @@ class LabelWithInteractivePlot(QWidget):
             self.data = pickle.load(f)
             # 添加时间戳列
             # self.data['_timestamp'] = pd.to_datetime(self.data['datetime']).apply(lambda x: x.timestamp())
+            # 直接将 Unix 时间戳转换为 ISO 8601 格式
+            self.data['timestamp'] = pd.to_datetime(self.data['unixtime'], unit='s').dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+            self.data['index'] = self.data.index  # Add an index column
+            self.dataChanged.emit(self.data)
         return
 
     def get_data_from_csv(self, filename):
@@ -1088,17 +1093,32 @@ class LabelWithInteractivePlot(QWidget):
             # 显示每个绘图窗口
             self.plot_widgets[i].show()
 
+    # def _to_idx(self, start_ts, end_ts):
+    #     # 根据给定的时间戳范围筛选数据，并获取对应的索引
+    #     selected_indices = self.data[(self.data['_timestamp'] >= start_ts)
+    #                                  & (self.data['_timestamp'] <= end_ts)].index
+    #     # 返回起始和结束索引
+    #     return selected_indices.values[0], selected_indices.values[-1]
+
+    # def _to_time(self, start_idx, end_idx):
+    #     # 根据给定的索引范围获取起始和结束时间戳
+    #     start_ts = self.data.loc[start_idx, '_timestamp']
+    #     end_ts = self.data.loc[end_idx, '_timestamp']
+    #     # 返回起始和结束时间戳
+    #     return start_ts, end_ts
+
+    # _timestamp于unixtime相同，改用unixtime
     def _to_idx(self, start_ts, end_ts):
         # 根据给定的时间戳范围筛选数据，并获取对应的索引
-        selected_indices = self.data[(self.data['_timestamp'] >= start_ts)
-                                     & (self.data['_timestamp'] <= end_ts)].index
+        selected_indices = self.data[(self.data['unixtime'] >= start_ts)
+                                     & (self.data['unixtime'] <= end_ts)].index
         # 返回起始和结束索引
         return selected_indices.values[0], selected_indices.values[-1]
 
     def _to_time(self, start_idx, end_idx):
         # 根据给定的索引范围获取起始和结束时间戳
-        start_ts = self.data.loc[start_idx, '_timestamp']
-        end_ts = self.data.loc[end_idx, '_timestamp']
+        start_ts = self.data.loc[start_idx, 'unixtime']
+        end_ts = self.data.loc[end_idx, 'unixtime']
         # 返回起始和结束时间戳
         return start_ts, end_ts
 
@@ -1389,8 +1409,23 @@ class LabelWithInteractivePlot(QWidget):
         saveButton.clicked.connect(self.handleSaveButton)
         self.settingPannel.addWidget(saveButton)
 
-    def getSelectedAreaToSave(self, area_data):
+    # def getSelectedAreaToSave(self, area_data):
+    #     # print(areaData)
+    #     try:
+    #         area_data = json.loads(area_data)  # 解析 JSON 字符串
+    #         # print("Parsed data:", areaData)
+    #     except json.JSONDecodeError as e:
+    #         print("Failed to decode JSON:", e)
+    #         return
+    #     for reg in area_data:
+    #         name = reg[0].get("name")
+    #         first_timestamp = reg[0].get("timestamp", {}).get("start")
+    #         second_timestamp = reg[0].get("timestamp", {}).get("end")
+    #         self.data.loc[(self.data['_timestamp'] >= int(first_timestamp)) & (
+    #                 self.data['_timestamp'] <= int(second_timestamp)), 'label'] = name
+    #     self.handleSaveButton()
 
+    def getSelectedAreaToSave(self, area_data):
         # print(areaData)
         try:
             area_data = json.loads(area_data)  # 解析 JSON 字符串
@@ -1402,8 +1437,8 @@ class LabelWithInteractivePlot(QWidget):
             name = reg[0].get("name")
             first_timestamp = reg[0].get("timestamp", {}).get("start")
             second_timestamp = reg[0].get("timestamp", {}).get("end")
-            self.data.loc[(self.data['_timestamp'] >= int(first_timestamp)) & (
-                    self.data['_timestamp'] <= int(second_timestamp)), 'label'] = name
+            self.data.loc[(self.data['unixtime'] >= int(first_timestamp)) & (
+                    self.data['unixtime'] <= int(second_timestamp)), 'label'] = name
         self.handleSaveButton()
 
     # 处理保存按钮点击事件
