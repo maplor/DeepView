@@ -334,7 +334,7 @@ class BackendMap(QObject):
             # 选择需要的列 index、latitude 和 longitude，并去除 latitude 和 longitude 中的缺失值。
             data = data[['index', 'latitude', 'longitude']].dropna(subset=['latitude', 'longitude'])
             # 使用 iloc 按索引进行降采样, 一万个条目取一个。
-            interval = 10000
+            interval = 1500
             data = data.iloc[::interval]
 
             data = data.to_dict(orient='records')
