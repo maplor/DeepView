@@ -91,7 +91,6 @@
         oldFrame = null;
         delectState = false;
         lineOption = null;
-        timestamps = null;
         dataFrame = null;
         let isBoxDrawn = false;
         let currentBox = null; // 用于存储当前绘制的框
@@ -380,13 +379,13 @@
 
         };
 
-
         // let org_data = [
         //     { index: 0, timestamp: '2024-07-20T12:00:00Z', _timestamp: 1626787200, acc_x: 0.1, acc_y: 0.2, acc_z: 0.3, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
         //     { index: 1, timestamp: '2024-07-20T12:01:00Z', _timestamp: 1626787260, acc_x: 0.2, acc_y: 0.3, acc_z: 0.4, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
         //     { index: 2, timestamp: '2024-07-20T12:02:00Z', _timestamp: 1626787320, acc_x: 0.3, acc_y: 0.4, acc_z: 0.5, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
         // ];
 
+        // 新的pkl文件里datetime对应毫秒级别时间,转换一下就得到isotime。unixtime对应_timestamp
         let org_data = [];
         let chartsData = [
             {
@@ -562,14 +561,15 @@
                             data: chartData.series,
                             orient: 'vertical',
                             right: '5%',
-                            top: '5%'
+                            top: '5%',
+                            animation: false
                         },
                         xAxis: {
                             name: chartData.xAxisName,
                             type: 'category',
                             data: dataFrame[chartData.xAxisName],
                             animation: false,
-                            animationThreshold: 5000,
+                            animationThreshold: 1000,
                         },
                         yAxis: {
                             name: chartData.yAxisName,
@@ -814,8 +814,8 @@
                     // yAxis: '10',// 或者具体的值，比如 '10'
                     id: currentTimestamp,
                     timestamp: {
-                        start: brushAreas[0]._timestamp,
-                        end: brushAreas[brushAreas.length - 1]._timestamp
+                        start: brushAreas[0].unixtime,
+                        end: brushAreas[brushAreas.length - 1].unixtime
                     },
                     itemStyle: {
                         color: labelColors[selectedValue],  // 使用标签对应的颜色
