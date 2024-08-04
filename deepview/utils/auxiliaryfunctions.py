@@ -348,4 +348,5 @@ def get_param_from_path(model_path):
     column_names = filename.split("_")[-1].split(".")[0]
     column_names_list = column_names.split('-') if '-' in column_names else [column_names]
 
+
     return model_name, data_length, column_names_list
