@@ -72,7 +72,7 @@ class LabelWithInteractivePlotTab(DefaultWebTab):
         project_root = os.path.dirname(os.path.abspath(__file__))
 
         # 构建 HTML 文件的路径
-        html_file_path = os.path.join(project_root, '..', 'html', 'line_chart_index.html')
+        html_file_path = os.path.join(project_root, '..', 'static', 'html', 'line_chart_index.html')
 
         # 将路径转换为本地文件 URL
         local_file_url = QUrl.fromLocalFile(html_file_path)
@@ -92,7 +92,7 @@ class LabelWithInteractivePlotTab(DefaultWebTab):
         self.web_view_map.settings().setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
 
         # 构建 HTML 文件的路径
-        html_file_path_map = os.path.join(project_root, '..', 'html', 'map_chart_index.html')
+        html_file_path_map = os.path.join(project_root, '..', 'static', 'html', 'map_chart_index.html')
 
         # 将路径转换为本地文件 URL
         local_file_url_map = QUrl.fromLocalFile(html_file_path_map)

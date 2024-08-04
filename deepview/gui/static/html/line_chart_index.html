@@ -3,8 +3,10 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Multiple Line Charts with ECharts</title>
-    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Line Charts</title>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script> -->
+    <script src="../js/echarts.min.js"></script>
     <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
     <style>
         /* .chart-box {
@@ -89,7 +91,6 @@
         oldFrame = null;
         delectState = false;
         lineOption = null;
-        timestamps = null;
         dataFrame = null;
         let isBoxDrawn = false;
         let currentBox = null; // 用于存储当前绘制的框
@@ -98,44 +99,293 @@
         onbrush = false;
         // 全局变量存储框选的范围
         let brushAreas = [];
-        let charts = [];
+        charts = [];
+        // 同步操作标志
+        isSyncing = false;
 
         // 定义dark主题
         var darkTheme = {
-            backgroundColor: '#19232d'
+            backgroundColor: '#19232d',
+            title: {
+                textStyle: {
+                    color: '#eeeeee'
+                },
+                subtextStyle: {
+                    color: '#aaaaaa'
+                }
+            },
+            categoryAxis: {
+                axisLine: {
+                    show: true,
+                    lineStyle: {
+                        color: "#eeeeee"
+                    }
+                },
+                axisTick: {
+                    show: true,
+                    lineStyle: {
+                        color: "#eeeeee"
+                    }
+                },
+                axisLabel: {
+                    show: true,
+                    color: "#eeeeee"
+                },
+                splitLine: {
+                    show: true,
+                    lineStyle: {
+                        color: ["#aaaaaa"]
+                    }
+                },
+                splitArea: {
+                    show: false,
+                    areaStyle: {
+                        color: ["#eeeeee"]
+                    }
+                }
+            },
+
+            valueAxis: {
+                axisLine: {
+                    show: true,
+                    lineStyle: {
+                        color: "#eeeeee"
+                    }
+                },
+                axisTick: {
+                    show: true,
+                    lineStyle: {
+                        color: "#eeeeee"
+                    }
+                },
+                axisLabel: {
+                    show: true,
+                    color: "#eeeeee"
+                },
+                splitLine: {
+                    show: true,
+                    lineStyle: {
+                        color: ["#aaaaaa"]
+                    }
+                },
+                splitArea: {
+                    show: false,
+                    areaStyle: {
+                        color: ["#eeeeee"]
+                    }
+                }
+            },
+            logAxis: {
+                axisLine: {
+                    show: true,
+                    lineStyle: {
+                        color: "#eeeeee"
+                    }
+                },
+                axisTick: {
+                    show: true,
+                    lineStyle: {
+                        color: "#eeeeee"
+                    }
+                },
+                axisLabel: {
+                    show: true,
+                    color: "#eeeeee"
+                },
+                splitLine: {
+                    show: true,
+                    lineStyle: {
+                        color: ["#aaaaaa"]
+                    }
+                },
+                splitArea: {
+                    show: false,
+                    areaStyle: {
+                        color: ["#eeeeee"]
+                    }
+                }
+            },
+            toolbox: {
+                iconStyle: {
+                    borderColor: "#999999"
+                },
+                emphasis: {
+                    iconStyle: {
+                        borderColor: "#666666"
+                    }
+                }
+            },
+            legend: {
+                textStyle: {
+                    color: "#eeeeee"
+                }
+            },
+            tooltip: {
+                axisPointer: {
+                    lineStyle: {
+                        color: "#eeeeee",
+                        width: "1"
+                    },
+                    crossStyle: {
+                        color: "#eeeeee",
+                        width: "1"
+                    }
+                }
+            }
         };
 
         var lightTheme = {
-            backgroundColor: '#FAFAFA'
-        };
+            backgroundColor: '#FAFAFA',
+            title: {
+                textStyle: {
+                    color: "#333333"
+                },
+                subtextStyle: {
+                    color: "#aaaaaa"
+                }
+            },
+            categoryAxis: {
+                axisLine: {
+                    show: true,
+                    lineStyle: {
+                        color: "#333"
+                    }
+                },
+                axisTick: {
+                    show: true,
+                    lineStyle: {
+                        color: "#333"
+                    }
+                },
+                axisLabel: {
+                    show: true,
+                    color: "#333"
+                },
+                splitLine: {
+                    show: false,
+                    lineStyle: {
+                        color: [
+                            "#ccc"
+                        ]
+                    }
+                },
+                splitArea: {
+                    show: false,
+                    areaStyle: {
+                        color: [
+                            "rgba(250,250,250,0.3)",
+                            "rgba(200,200,200,0.3)"
+                        ]
+                    }
+                }
+            },
+            valueAxis: {
+                axisLine: {
+                    show: true,
+                    lineStyle: {
+                        color: "#333"
+                    }
+                },
+                axisTick: {
+                    show: true,
+                    lineStyle: {
+                        color: "#333"
+                    }
+                },
+                axisLabel: {
+                    show: true,
+                    color: "#333"
+                },
+                splitLine: {
+                    show: true,
+                    lineStyle: {
+                        color: [
+                            "#ccc"
+                        ]
+                    }
+                },
+                splitArea: {
+                    show: false,
+                    areaStyle: {
+                        color: [
+                            "rgba(250,250,250,0.3)",
+                            "rgba(200,200,200,0.3)"
+                        ]
+                    }
+                }
+            },
+            logAxis: {
+                axisLine: {
+                    show: true,
+                    lineStyle: {
+                        color: "#333"
+                    }
+                },
+                axisTick: {
+                    show: true,
+                    lineStyle: {
+                        color: "#333"
+                    }
+                },
+                axisLabel: {
+                    show: true,
+                    color: "#333"
+                },
+                splitLine: {
+                    show: true,
+                    lineStyle: {
+                        color: [
+                            "#ccc"
+                        ]
+                    }
+                },
+                splitArea: {
+                    show: false,
+                    areaStyle: {
+                        color: [
+                            "rgba(250,250,250,0.3)",
+                            "rgba(200,200,200,0.3)"
+                        ]
+                    }
+                }
+            },
+            toolbox: {
+                iconStyle: {
+                    borderColor: "#06467c"
+                },
+                emphasis: {
+                    iconStyle: {
+                        borderColor: "#4187c2"
+                    }
+                }
+            },
+            legend: {
+                textStyle: {
+                    color: "#333333"
+                }
+            },
+            tooltip: {
+                axisPointer: {
+                    lineStyle: {
+                        color: "#cccccc",
+                        width: 1
+                    },
+                    crossStyle: {
+                        color: "#cccccc",
+                        width: 1
+                    }
+                }
+            },
 
+        };
 
         // let org_data = [
         //     { index: 0, timestamp: '2024-07-20T12:00:00Z', _timestamp: 1626787200, acc_x: 0.1, acc_y: 0.2, acc_z: 0.3, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
         //     { index: 1, timestamp: '2024-07-20T12:01:00Z', _timestamp: 1626787260, acc_x: 0.2, acc_y: 0.3, acc_z: 0.4, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
         //     { index: 2, timestamp: '2024-07-20T12:02:00Z', _timestamp: 1626787320, acc_x: 0.3, acc_y: 0.4, acc_z: 0.5, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 3, timestamp: '2024-07-20T12:03:00Z', _timestamp: 1626787380, acc_x: 0.4, acc_y: 0.5, acc_z: 0.6, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 4, timestamp: '2024-07-20T12:04:00Z', _timestamp: 1626787440, acc_x: 0.5, acc_y: 0.6, acc_z: 0.7, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 5, timestamp: '2024-07-20T12:05:00Z', _timestamp: 1626787500, acc_x: 0.6, acc_y: 0.7, acc_z: 0.8, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 6, timestamp: '2024-07-20T12:06:00Z', _timestamp: 1626787560, acc_x: 0.7, acc_y: 0.8, acc_z: 0.9, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 7, timestamp: '2024-07-20T12:07:00Z', _timestamp: 1626787620, acc_x: 0.8, acc_y: 0.9, acc_z: 1.0, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 8, timestamp: '2024-07-20T12:08:00Z', _timestamp: 1626787680, acc_x: 0.9, acc_y: 1.0, acc_z: 1.1, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 9, timestamp: '2024-07-20T12:09:00Z', _timestamp: 1626787740, acc_x: 1.0, acc_y: 1.1, acc_z: 1.2, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 10, timestamp: '2024-07-20T12:10:00Z', _timestamp: 1626787800, acc_x: 1.1, acc_y: 1.2, acc_z: 1.3, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 11, timestamp: '2024-07-20T12:11:00Z', _timestamp: 1626787860, acc_x: 1.2, acc_y: 1.3, acc_z: 1.4, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 12, timestamp: '2024-07-20T12:12:00Z', _timestamp: 1626787920, acc_x: 1.3, acc_y: 1.4, acc_z: 1.5, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 13, timestamp: '2024-07-20T12:13:00Z', _timestamp: 1626787980, acc_x: 1.4, acc_y: 1.5, acc_z: 1.6, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 14, timestamp: '2024-07-20T12:14:00Z', _timestamp: 1626788040, acc_x: 1.5, acc_y: 1.6, acc_z: 1.7, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 15, timestamp: '2024-07-20T12:15:00Z', _timestamp: 1626788100, acc_x: 1.6, acc_y: 1.7, acc_z: 1.8, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 16, timestamp: '2024-07-20T12:16:00Z', _timestamp: 1626788160, acc_x: 1.7, acc_y: 1.8, acc_z: 1.9, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 17, timestamp: '2024-07-20T12:17:00Z', _timestamp: 1626788220, acc_x: 1.8, acc_y: 1.9, acc_z: 2.0, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 18, timestamp: '2024-07-20T12:18:00Z', _timestamp: 1626788280, acc_x: 1.9, acc_y: 2.0, acc_z: 2.1, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 25, timestamp: '2024-07-20T12:19:00Z', _timestamp: 1626788340, acc_x: 2.0, acc_y: 2.1, acc_z: 2.2, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 26, timestamp: '2024-07-20T12:20:00Z', _timestamp: 1626788400, acc_x: 2.1, acc_y: 2.2, acc_z: 2.3, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 27, timestamp: '2024-07-20T12:21:00Z', _timestamp: 1626788460, acc_x: 2.2, acc_y: 2.3, acc_z: 2.4, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
-        //     { index: 28, timestamp: '2024-07-20T12:22:00Z', _timestamp: 1626788520, acc_x: 2.3, acc_y: 2.4, acc_z: 2.5, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
         // ];
 
+        // 新的pkl文件里datetime对应毫秒级别时间,转换一下就得到isotime。unixtime对应_timestamp
         let org_data = [];
         let chartsData = [
             {
@@ -210,7 +460,13 @@
             dataFrame = convertData(org_data, firstChartsData, chartsData);
 
 
-
+            // 销毁每个 echarts 实例
+            if (charts && charts.length > 0) {
+                charts.forEach(chart => {
+                    chart.dispose();
+                });
+            }
+            charts = [];
             // chartsData.unshift(firstChartsData);
 
             if (!chartsData.includes(firstChartsData)) {
@@ -305,14 +561,15 @@
                             data: chartData.series,
                             orient: 'vertical',
                             right: '5%',
-                            top: '5%'
+                            top: '5%',
+                            animation: false
                         },
                         xAxis: {
                             name: chartData.xAxisName,
                             type: 'category',
                             data: dataFrame[chartData.xAxisName],
                             animation: false,
-                            animationThreshold: 5000,
+                            animationThreshold: 1000,
                         },
                         yAxis: {
                             name: chartData.yAxisName,
@@ -412,36 +669,39 @@
                     chart.getZr().on('click', function (event) {
                         // 没有 target 意味着鼠标/指针不在任何一个图形元素上，它是从“空白处”触发的。
                         if (!event.target) {
-                            // 点击在了空白处，做些什么。
-                            lineChart.dispatchAction({
+                            // 点击在了空白处，取消高亮。
+                            chart.dispatchAction({
                                 type: 'downplay',
                                 seriesIndex: [0, 1, 2],
                                 // dataIndex: selectedIndex
                             });
                         }
                     });
-                    // TUDO 同步缩放图表
-                    // 监听缩放事件
-                    // chart.on('dataZoom', function(params) {
-                    //     charts.forEach(function(otherChart) {
-                    //         if (otherChart !== chart) {
-                    //         if (params.batch) {
-                    //             otherChart.dispatchAction({
-                    //                 type: 'dataZoom',
-                    //                 start: params.batch[0].start,
-                    //                 end: params.batch[0].end
-                    //             });
 
-                    //         } else {
-                    //             otherChart.dispatchAction({
-                    //                 type: 'dataZoom',
-                    //                 start: params.start,
-                    //                 end: params.end
-                    //             });
-                    //         }
-                    //         }
-                    //     });
-                    // });
+                    // 监听缩放事件以同步所有图表
+                    chart.on('dataZoom', function (params) {
+                        if (!isSyncing) {
+                            isSyncing = true;
+                            charts.forEach(function (otherChart) {
+                                if (otherChart !== chart) {
+                                    if (params.batch) {
+                                        otherChart.dispatchAction({
+                                            type: 'dataZoom',
+                                            start: params.batch[0].start,
+                                            end: params.batch[0].end
+                                        });
+                                    } else {
+                                        otherChart.dispatchAction({
+                                            type: 'dataZoom',
+                                            start: params.start,
+                                            end: params.end
+                                        });
+                                    }
+                                }
+                            });
+                            isSyncing = false;
+                        }
+                    });
                 }
             });
             brushEnd(charts);
@@ -450,7 +710,7 @@
         function brushEnd(charts) {
             charts.forEach((chart, index) => {
                 chart.on('brushEnd', function (params) {
-                    console.log('BrushEnd Params:', params);
+                    // console.log('BrushEnd Params:', params);
 
                     if (!params.areas) {
                         console.error('No areas data found in brushEnd params');
@@ -458,7 +718,7 @@
                     }
 
                     var selectedData = getSelectedData(org_data, params.areas);
-                    console.log('Selected Data:', selectedData);
+                    // console.log('Selected Data:', selectedData);
                     setStartTimeEndtime(selectedData[0].timestamp, selectedData[selectedData.length - 1].timestamp);
 
                     // 取消其他图表的框选
@@ -531,7 +791,6 @@
                                     selectedOption.series[0].markArea.data = markData;
                                     charts[0].setOption(selectedOption);
                                     delectState = false;
-                                    // document.getElementById('delectLabelButton').style.backgroundColor = '#1ea123';
                                 }
                             });
                         }
@@ -555,8 +814,8 @@
                     // yAxis: '10',// 或者具体的值，比如 '10'
                     id: currentTimestamp,
                     timestamp: {
-                        start: brushAreas[0]._timestamp,
-                        end: brushAreas[brushAreas.length - 1]._timestamp
+                        start: brushAreas[0].unixtime,
+                        end: brushAreas[brushAreas.length - 1].unixtime
                     },
                     itemStyle: {
                         color: labelColors[selectedValue],  // 使用标签对应的颜色
@@ -611,27 +870,13 @@
                 selectedOption.series[0].markArea.data = markData;
                 charts[0].setOption(selectedOption);
 
+                // 清除框选
                 charts.forEach((chart, i) => {
                     chart.dispatchAction({
                         type: 'brush',
-                        areas: [{
-                            brushType: 'clear',
-                            coordRange: []
-                        }
-                        ]
+                        areas: []
                     });
                 });
-
-                // charts.forEach((chart, i) => {
-                //     chart.dispatchAction({
-                //         type: 'brush',
-                //         areas: [{
-                //             brushType: 'clear',
-                //             coordRange: []
-                //         }
-                //         ]
-                //     });
-                // });
 
             } else {
                 console.error('No brush areas available to apply as markArea.');
@@ -656,23 +901,12 @@
             initialize();
         }
 
-        // TUDO 点击图表高亮地图对应的标记
+        // 点击图表高亮地图对应的标记
         // handleHighlightDotByIndex
         function HighlightDotByIndex(index) {
             backend.handleHighlightDotByIndex(index);
         }
 
-        // function setMarkData(otherMarkData) {
-        //     otherMarkData = JSON.parse(otherMarkData);
-        //     console.log(otherMarkData)
-        //     charts[0].setOption({
-        //         series: [{
-        //             markArea: {
-        //                 data: otherMarkData
-        //             }
-        //         }]
-        //     });
-        // }
         function setMarkData(otherMarkData) {
             otherMarkData = JSON.parse(otherMarkData);
 
@@ -687,7 +921,7 @@
                 }
             });
 
-            console.log(otherMarkData);
+            // console.log(otherMarkData);
 
             charts[0].setOption({
                 series: [{
@@ -709,7 +943,7 @@
             });
         }
 
-        // TODO: 重置所有变量
+        // 重置所有变量
         function handleComboxChange(data) {
             firstChartsData =
             {
@@ -719,7 +953,6 @@
                 series: ['timestamp']
             }
             chartsData = [];
-            charts = [];
             markData = [];
             otherMarkData = [];
             selectedDataList = null;
@@ -775,14 +1008,13 @@
                 // 按数据
                 // var start = Math.max(0, (index - 10) / org_data.length * 100);
                 // var end = Math.min(100, (index + 10) / org_data.length * 100);
-                
+
                 // 按固定显示的点数
-                var totalPoints = 1000; 
+                var totalPoints = 1000;
                 var halfPoints = totalPoints / 2;
 
-                var start = Math.max(0, ((index - halfPoints) / org_data.length) * 100);
-                var end = Math.min(100, ((index + halfPoints) / org_data.length) * 100);
-
+                var start = Math.max(0, ((parseInt(index) - halfPoints) / org_data.length) * 100);
+                var end = Math.min(100, ((parseInt(index) + halfPoints) / org_data.length) * 100);
 
                 charts.forEach((chart, i) => {
                     chart.dispatchAction({
@@ -857,15 +1089,6 @@
 
 
         window.addEventListener('resize', resizeCharts);
-
-        // function displayData(data) {
-        //     console.log("Received data type:", typeof data);
-        //     filteredData = JSON.parse(data);
-        //     initialize()
-        // }
-
-
-
 
 
         // resizeCharts(); // 初始化时调用一次
