@@ -83,7 +83,7 @@
     <div id="container"></div>
 
     <script type="text/javascript">
-        let selectedOption = {};
+        // selectedOption = {};
         markData = [];
         otherMarkData = [];
         selectedDataList = null;
@@ -102,6 +102,49 @@
         charts = [];
         // 同步操作标志
         isSyncing = false;
+        // 第一个图表的特殊配置
+        selectedOption = {
+            grid: {
+                top: 10,
+                bottom: 20
+            },
+            xAxis: {
+                type: 'category',
+                data: [] // 保持与原始图表一致的X轴数据
+            },
+            yAxis: {
+                type: 'value',
+                min: 1 // 设置y轴最小值为1
+            },
+            series: [{
+                type: 'line',
+                markArea: {
+                    data: [],
+                    label: {
+                        show: true, // 显示标签
+                        position: 'inside', // 标签位置为区域内部
+                        color: '#000', // 标签颜色
+                        fontSize: 14, // 标签字体大小
+                        formatter: function (params) {
+                            return params.name; // 使用区域的名称作为标签内容
+                        }
+                    }
+                },
+                data: [], // 空数据
+                showSymbol: false, // 不显示数据点
+                lineStyle: {
+                    opacity: 0 // 使线条透明
+                }
+            }],
+            dataZoom: [
+                {
+                    type: 'inside',
+                    xAxisIndex: [0],
+                    start: 0,
+                    end: 100
+                }
+            ]
+        };
 
         // 定义dark主题
         var darkTheme = {
@@ -589,49 +632,7 @@
 
                     // 如果是第一个图表，添加特殊的配置
                     if (index === 0) {
-                        // 可以在这里添加第一个图表的特殊配置
-                        selectedOption = {
-                            grid: {
-                                top: 10,
-                                bottom: 20
-                            },
-                            xAxis: {
-                                type: 'category',
-                                data: dataFrame[chartData.xAxisName] // 保持与原始图表一致的X轴数据
-                            },
-                            yAxis: {
-                                type: 'value',
-                                min: 1 // 设置y轴最小值为1
-                            },
-                            series: [{
-                                type: 'line',
-                                markArea: {
-                                    data: [],
-                                    label: {
-                                        show: true, // 显示标签
-                                        position: 'inside', // 标签位置为区域内部
-                                        color: '#000', // 标签颜色
-                                        fontSize: 14, // 标签字体大小
-                                        formatter: function (params) {
-                                            return params.name; // 使用区域的名称作为标签内容
-                                        }
-                                    }
-                                },
-                                data: [], // 空数据
-                                showSymbol: false, // 不显示数据点
-                                lineStyle: {
-                                    opacity: 0 // 使线条透明
-                                }
-                            }],
-                            dataZoom: [
-                                {
-                                    type: 'inside',
-                                    xAxisIndex: [0],
-                                    start: 0,
-                                    end: 100
-                                }
-                            ]
-                        };
+                        selectedOption.xAxis.data = dataFrame[chartData.xAxisName]
                         chart.setOption(selectedOption);
                         return;
                     }
@@ -907,6 +908,7 @@
             backend.handleHighlightDotByIndex(index);
         }
 
+
         function setMarkData(otherMarkData) {
             otherMarkData = JSON.parse(otherMarkData);
 
@@ -922,22 +924,19 @@
             });
 
             // console.log(otherMarkData);
+            selectedOption.series[0].markArea.data = otherMarkData;
+            charts[0].setOption(selectedOption);
 
-            charts[0].setOption({
-                series: [{
-                    markArea: {
-                        data: otherMarkData
-                    }
-                }]
-            });
         }
 
+
+        // 清除所有标记的时候将标记改为原来的标签内容
         function clearMarkData() {
             otherMarkData = [];
             charts[0].setOption({
                 series: [{
                     markArea: {
-                        data: otherMarkData
+                        data: markData
                     }
                 }]
             });
