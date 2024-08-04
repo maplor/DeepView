@@ -334,7 +334,7 @@ class BackendMap(QObject):
             # 选择需要的列 index、latitude 和 longitude，并去除 latitude 和 longitude 中的缺失值。
             data = data[['index', 'latitude', 'longitude']].dropna(subset=['latitude', 'longitude'])
             # 使用 iloc 按索引进行降采样, 一万个条目取一个。
-            interval = 1500
+            interval = 10*60*25  # 25 is sampling rate, 10 is minutes
             data = data.iloc[::interval]
 
             data = data.to_dict(orient='records')
@@ -414,7 +414,7 @@ class LabelWithInteractivePlot(QWidget):
         # 初始化模型名称
         self.model_name = ''
         # 初始化数据长度
-        self.data_length = 90
+        self.data_length = 180
         # 初始化列名列表
         self.column_names = []
 
@@ -1573,7 +1573,10 @@ class LabelWithInteractivePlot(QWidget):
             startT, endT = self._to_time(start, end)
             rectangles.append((startT, endT))
         # combine rectangles 合并矩形，数据为开始结束时间
-        combined_rectangles = combine_rectangles(rectangles, float(self.input_box.text()))
+        if self.input_box.text() == "":
+            combined_rectangles = combine_rectangles(rectangles, float(30))  # set default value
+        else:
+            combined_rectangles = combine_rectangles(rectangles, float(self.input_box.text()))
 
         # 传递combined_rectangles到backend
         markData = []
@@ -1673,8 +1676,12 @@ def find_charts_data_columns(sensor_dict, column_names):
     # new_column_names = []
     metadatas = []
     for column_name in column_names:
-        real_names = sensor_dict[column_name]  # 获取每个列名对应的实际列名
+        # real_names = sensor_dict[column_name]  # 获取每个列名对应的实际列名
         # new_column_names.extend(real_names) # 将实际列名添加到新的列名列表中
+        if column_name.upper() == "GPS":
+            real_names = ['GPS_velocity', 'GPS_bearing']
+        else:
+            real_names = sensor_dict[column_name]  # 获取每个列名对应的实际列名
         # 创建元数据信息
         metadata = {
             "name": column_name,
