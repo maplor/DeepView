@@ -835,10 +835,8 @@ class LabelWithInteractivePlot(QWidget):
         with open(datapath, 'rb') as f:
             # 加载数据
             self.data = pickle.load(f)
-            # 添加时间戳列
-            # self.data['_timestamp'] = pd.to_datetime(self.data['datetime']).apply(lambda x: x.timestamp())
-            # 直接将 Unix 时间戳转换为 ISO 8601 格式
-            self.data['timestamp'] = pd.to_datetime(self.data['unixtime'], unit='s').dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+            # 将UNIX时间戳转换为ISO 8601格式
+            self.data['timestamp'] = pd.to_datetime(self.data['unixtime'], unit='s').dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ').str[:-4] + 'Z'
             self.data['index'] = self.data.index  # Add an index column
             self.dataChanged.emit(self.data)
         return
