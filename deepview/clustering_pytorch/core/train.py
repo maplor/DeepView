@@ -7,20 +7,6 @@ import threading
 import warnings
 from pathlib import Path
 
-# import tensorflow as tf
-#
-# tf.compat.v1.disable_eager_execution()
-# import tf_slim as slim
-
-# from deeplabcut.pose_estimation_tensorflow.config import load_config
-# from deeplabcut.pose_estimation_tensorflow.datasets import (
-#     Batch,
-#     PoseDatasetFactory,
-# )
-# from deeplabcut.pose_estimation_tensorflow.nnets import PoseNetFactory
-# from deeplabcut.pose_estimation_tensorflow.util.logging import setup_logging
-# from deeplabcut.utils import auxfun_models
-
 import torch
 from deepview.clustering_pytorch.util.logging import setup_logging
 from deepview.clustering_pytorch.config import load_config
@@ -117,6 +103,7 @@ def train(
     # -------------------------核心的模型训练部分，计算loss----------------------------
 
     # get model, todo, combine to above
+    # 相同代码在supervised contrastive learning的runscl出现
     if net_type.upper() in ['AE_CNN'.upper(), 'shortAE'.upper()]:
         p_setup = 'autoencoder'
     elif net_type.upper() in ['simclr'.upper()]:

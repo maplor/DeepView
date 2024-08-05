@@ -81,7 +81,7 @@ def get_model(p_backbone, p_setup, num_channel=3, data_len=180, pretrain_path=No
         from deepview.clustering_pytorch.nnet.models import ContrastiveModel
         backbone = {
             'backbone': backbone,
-            'dim': 128
+            'dim': 2816  #128
         }
         model = ContrastiveModel(backbone, 'mlp', 128).double()
     else:
