@@ -29,11 +29,10 @@ class ContrastiveModel(nn.Module):
             raise ValueError('Invalid head {}'.format(head))
 
     def forward(self, x):  # x.shape=b*2,c,h,w
-        # backboneout = self.encoder(x)  # out.shape=b*2,512
         backboneout = self.backbone(x)  # out.shape=b*2,512
         features = self.contrastive_head(backboneout[0].reshape(x.shape[0], -1))  # features.shape=b*2,b*2
         features = F.normalize(features, dim=1)
-        return features
+        return features, backboneout
 
 
 class ReconstructionFramework(nn.Module):

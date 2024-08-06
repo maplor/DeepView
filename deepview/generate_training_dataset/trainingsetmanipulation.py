@@ -230,6 +230,9 @@ def read_process_csv(root, file, sample_rate=25):
     # add velocity and angles if GPS sensor exists
     df, gps_len = process_gps(df)
 
+    # Create a new column 'label_flag' where NaN rows in 'label' are 0 and others are 1
+    df['label_flag'] = df['label'].notna().astype(int)
+
     # fulfill nan values
     df = df.bfill().ffill()
 

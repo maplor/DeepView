@@ -86,17 +86,10 @@ def simclr_eval_time_series(train_loader, model, device):
     representation_list = []
     sample_list = []
     for i, (sample, timestamp, label) in enumerate(train_loader):
-        # reshape data by adding channel to 1, and transpose height and width
-        # aug_sample1 = (sample.unsqueeze(1)).permute(0, 1, 3, 2)
-        # aug_sample2 = (sample.unsqueeze(1)).permute(0, 1, 3, 2)
         sample = sample.to(device=device, non_blocking=True, dtype=torch.double)
-
         b, l, d = sample.size()  # batch64, channel3, height32, width32
         input_ = torch.cat([sample.unsqueeze(1), sample.unsqueeze(1)], dim=1)  # input_.shape=b,2,c,h,w
         input_ = input_.view(-1, l, d)  # out.shape=b*2,c,h,w
-        # input_ = input_.cuda(non_blocking=True)
-        # input_ = input_.to(device='cuda', non_blocking=True, dtype=torch.float)
-        # targets = batch['target'].cuda(non_blocking=True)
 
         output = model(input_).view(b, 2, -1)  # output.shape=b,2,128, split the first dim into 2 parts
         tmp_representation = output[:, 0, :].detach().cpu().numpy()

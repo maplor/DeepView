@@ -56,13 +56,6 @@ class CreateTrainingDataset(DefaultTab):
     def _generate_layout_attributes(self, layout):
         layout.setColumnMinimumWidth(3, 300)
 
-        # # Augmentation method
-        # augmentation_label = QtWidgets.QLabel("Normalization method(TODO)")
-        # self.aug_choice = QtWidgets.QComboBox()
-        # self.aug_choice.addItems(DVParams.IMAGE_AUGMENTERS)
-        # self.aug_choice.setCurrentText("imgaug")
-        # self.aug_choice.currentTextChanged.connect(self.log_augmentation_choice)
-
         # Neural Network
         nnet_label = QtWidgets.QLabel("Sampling rate (Hz)")
         self.samplerate_choice = QtWidgets.QLineEdit()

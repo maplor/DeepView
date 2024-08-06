@@ -53,22 +53,22 @@ def get_model(p_backbone, p_setup, num_channel=3, data_len=180, pretrain_path=No
 
     # Get backbone
     # if True:
+    out_channels = 128
     if 'AE_CNN'.upper() in p_backbone.upper():
         from deepview.clustering_pytorch.nnet.models import CNN_AE
-        backbone = CNN_AE(n_channels=num_channel, out_channels=128)
-    elif 'shortAE'.upper() in p_backbone.upper():
-        from deepview.clustering_pytorch.nnet.models import Autoencoder
-        # todo modify the input
-        backbone = Autoencoder(data_length=data_len, input_dim=num_channel, encoded_dim=16)
-    elif 'FCN'.upper() in p_backbone.upper():
-        from deepview.clustering_pytorch.nnet.models import FCN
-        backbone = FCN(n_channels=num_channel, out_channels=128)
-    elif 'LSTM'.upper() in p_backbone.upper():
-        from deepview.clustering_pytorch.nnet.models import LSTM
-        backbone = LSTM(n_channels=num_channel, LSTM_units=128)
-    elif 'DeepConvLSTM'.upper() in p_backbone.upper():
-        from deepview.clustering_pytorch.nnet.models import DeepConvLSTM
-        backbone = DeepConvLSTM(n_channels=num_channel, LSTM_units=128)
+        backbone = CNN_AE(n_channels=num_channel, out_channels=out_channels)
+    # elif 'shortAE'.upper() in p_backbone.upper():
+    #     from deepview.clustering_pytorch.nnet.models import Autoencoder
+    #     backbone = Autoencoder(data_length=data_len, input_dim=num_channel, encoded_dim=16)
+    # elif 'FCN'.upper() in p_backbone.upper():
+    #     from deepview.clustering_pytorch.nnet.models import FCN
+    #     backbone = FCN(n_channels=num_channel, out_channels=128)
+    # elif 'LSTM'.upper() in p_backbone.upper():
+    #     from deepview.clustering_pytorch.nnet.models import LSTM
+    #     backbone = LSTM(n_channels=num_channel, LSTM_units=128)
+    # elif 'DeepConvLSTM'.upper() in p_backbone.upper():
+    #     from deepview.clustering_pytorch.nnet.models import DeepConvLSTM
+    #     backbone = DeepConvLSTM(n_channels=num_channel, LSTM_units=128)
     else:
         raise ValueError('Invalid backbone {}'.format(p_backbone))
 
@@ -81,7 +81,7 @@ def get_model(p_backbone, p_setup, num_channel=3, data_len=180, pretrain_path=No
         from deepview.clustering_pytorch.nnet.models import ContrastiveModel
         backbone = {
             'backbone': backbone,
-            'dim': 2816  #128
+            'dim': 2816  #out_channels*22
         }
         model = ContrastiveModel(backbone, 'mlp', 128).double()
     else:

@@ -497,6 +497,7 @@ class MainWindow(QMainWindow):
             root=self, parent=None,
             h1_description="Step 2. Train unsupervised learning network",
         )
+
         self.label_with_interactive_plot = LabelWithInteractivePlotTab(
             root=self,
             parent=None,
@@ -512,33 +513,6 @@ class MainWindow(QMainWindow):
             parent=None,
             h1_description="Step 6. Label with Interaction Plot",
         )
-        # self.analyze_videos = AnalyzeVideos(
-        #     root=self, parent=None, h1_description="DeepLabCut - Analyze Videos"
-        # )
-        # self.unsupervised_id_tracking = UnsupervizedIdTracking(
-        #     root=self,
-        #     parent=None,
-        #     h1_description="DeepLabCut - Optional Unsupervised ID Tracking with Transformer",
-        # )
-        # self.create_videos = CreateVideos(
-        #     root=self,
-        #     parent=None,
-        #     h1_description="DeepLabCut - Create Videos",
-        # )
-        # self.extract_outlier_frames = ExtractOutlierFrames(
-        #     root=self,
-        #     parent=None,
-        #     h1_description="DeepLabCut - Step 8. Extract outlier frames",
-        # )
-        # self.refine_tracklets = RefineTracklets(
-        #     root=self, parent=None, h1_description="DeepLabCut - Refine labels"
-        # )
-        # self.modelzoo = ModelZoo(
-        #     root=self, parent=None, h1_description="DeepLabCut - Model Zoo"
-        # )
-        # self.video_editor = VideoEditor(
-        #     root=self, parent=None, h1_description="DeepLabCut - Optional Video Editor"
-        # )
 
         # self.tab_widget.addTab(self.manage_project, "Manage project")
         # self.tab_widget.addTab(self.extract_frames, "Extract frames")
@@ -551,7 +525,6 @@ class MainWindow(QMainWindow):
         # self.tab_widget.addTab(self.show_gps, "Display GPS on the map")
         # self.tab_widget.addTab(self.imu_gps_interact, "IMU GPS interaction")
         self.tab_widget.addTab(self.label_with_interactive_plot, "Label with interactive plot")
-        self.tab_widget.addTab(self.supervised_contrastive_learning, "Supervised contrastive learning")
         self.tab_widget.addTab(self.supervised_learning_gui, "Supervised learning with new labels")
         # self.tab_widget.addTab(self.analyze_videos, "Analyze videos")
         # self.tab_widget.addTab(
