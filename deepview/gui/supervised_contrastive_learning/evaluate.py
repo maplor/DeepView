@@ -17,9 +17,7 @@ from networks.resnet_big import SupConResNet
 from losses import SupConLoss
 
 import os
-from sklearn.manifold import TSNE
-import numpy as np
-import matplotlib.pyplot as plt
+
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 from deepview.clustering_pytorch.datasets import (
     Batch,
@@ -92,8 +90,8 @@ def parse_option():
     # other setting
     parser.add_argument('--cosine', action='store_true',
                         help='using cosine annealing')
-    # parser.add_argument('--syncBN', action='store_true',
-    #                     help='using synchronized batch normalization')
+    parser.add_argument('--syncBN', action='store_true',
+                        help='using synchronized batch normalization')
     parser.add_argument('--warm', action='store_true',
                         help='warm-up for large batch training')
     parser.add_argument('--trial', type=str, default='0',
@@ -123,7 +121,7 @@ def parse_option():
     return opt
 
 
-def set_loader(opt, labeled_flag=False):
+def set_loader(opt):
     # 相同代码在clustering pytorch/core的train.py出现
     data_path = r'C:\Users\dell\Desktop\ss-cc-2024-08-05\unsupervised-datasets\allDataSet'
     select_filenames = ['Omizunagidori2018_raw_data_9B36578_lb0009_25Hz.pkl']
@@ -156,34 +154,6 @@ def set_model(opt):
                       data_len=data_len)
     model = model.to(device)
 
-    # load existing model
-    ## 相似代码在__init__.py 文件 1360行左右，def featureExtraction
-    # full_model_path = os.path.join(self.cfg["project_path"], unsup_model_path, self.model_path)
-    full_model_path = r'C:\Users\dell\Desktop\ss-cc-2024-08-05\unsup-models\iteration-0\ssAug5\AE_CNN_epoch29_datalen180_gps-acceleration.pth'
-
-    # if torch.cuda.is_available():
-    if 'cuda' in device.type:
-        state_dict = torch.load(full_model_path)
-        filtered_state_dict = {k: v for k, v in state_dict.items() if 'backbone' in k}
-
-        # Extract and load only the feature extractor part
-        new_state_dict = model.state_dict()
-        for name, param in filtered_state_dict.items():
-            if 'backbone' in name:
-                new_state_dict[name] = param
-        model.load_state_dict(new_state_dict)
-
-    else:
-        state_dict = torch.load(full_model_path, map_location=torch.device('cpu'))
-        filtered_state_dict = {k: v for k, v in state_dict.items() if 'backbone' in k}
-
-        # Extract and load only the feature extractor part
-        new_state_dict = model.state_dict()
-        for name, param in filtered_state_dict.items():
-            if 'backbone' in name:
-                new_state_dict[name] = param
-        model.load_state_dict(new_state_dict)
-
     criterion = SupConLoss(temperature=opt.temp)
 
     # enable synchronized Batch Normalization
@@ -205,14 +175,13 @@ def set_model(opt):
 
 def train(train_loader, model, criterion, optimizer, epoch, opt):
     """one epoch training"""
-    model.train()
+    model.eval()
 
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
 
     end = time.time()
-    representation_list = []
     # for idx, (images, labels) in enumerate(train_loader):
     for idx, (aug_sample1, aug_sample2, timestamp, labels) in enumerate(tqdm(train_loader)):
         aug_sample1 = aug_sample1.to(dtype=torch.double)
@@ -231,9 +200,7 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
         warmup_learning_rate(opt, epoch, idx, len(train_loader), optimizer)
 
         # compute loss
-        features, backboneout = model(images)
-        representation_list.append(backboneout[0].reshape(aug_sample1.shape[0], -1))
-
+        features = model(images)
         f1, f2 = torch.split(features, [bsz, bsz], dim=0)
         features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)  # batch, 2, 128
         if opt.method == 'SupCon':
@@ -256,51 +223,16 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        # # print info
-        # if (idx + 1) % opt.print_freq == 0:
-        #     print('Train: [{0}][{1}/{2}]\t'
-        #           'BT {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-        #           'DT {data_time.val:.3f} ({data_time.avg:.3f})\t'
-        #           'loss {loss.val:.3f} ({loss.avg:.3f})'.format(
-        #         epoch, idx + 1, len(train_loader), batch_time=batch_time,
-        #         data_time=data_time, loss=losses))
-        #     sys.stdout.flush()
 
-    if epoch == opt.epochs:
-        # PCA latent representation to shape=(2, len) PCA降维到形状为 (2, len)
-        repre_concat = torch.concatenate(representation_list)
-        repre_reshape = repre_concat.reshape(repre_concat.shape[0], -1)
-        repre_tsne = reduce_dimension_with_tsne(repre_reshape.detach().cpu().numpy())
-        x = repre_tsne[:,0]
-        y = repre_tsne[:,1]
-        # Create a scatter plot
-        plt.figure(figsize=(8, 6))
-        plt.scatter(x, y, color='blue', alpha=0.5, label='Data points')
-
-        # Add labels and title
-        plt.xlabel('X-axis Label')
-        plt.ylabel('Y-axis Label')
-        plt.title('Scatter Plot Example')
-        plt.legend()
-
-        # Show the plot
-        plt.show()
     return losses.avg
 
-
-#  __init__.py 相同代码
-def reduce_dimension_with_tsne(array, method='tsne'):
-    # tsne or pca
-    tsne = TSNE(n_components=2)  # 创建TSNE对象，降维到2维
-    reduced_array = tsne.fit_transform(array)  # 对数组进行降维
-    return reduced_array
 
 def main():
     # todo 参数希望放到\unsup-models\iteration-0\dAug4 文件夹下，生成。yaml文件
     opt = parse_option()
 
     # build data loader
-    train_loader, _ = set_loader(opt, labeled_flag=True)
+    train_loader, _ = set_loader(opt)
 
     # build model and criterion
     model, criterion = set_model(opt)
@@ -308,27 +240,18 @@ def main():
     # build optimizer
     optimizer = set_optimizer(opt, model)
 
-    # training routine
-    for epoch in range(1, opt.epochs + 1):
-        adjust_learning_rate(opt, optimizer, epoch)
+    # Load the saved state
+    full_model_path_new = r'C:\Users\dell\Desktop\ss-cc-2024-08-05\unsup-models\iteration-0\ssAug5\AE_CNN_epoch29_datalen180_gps-acceleration_%s.pth' % opt.method
 
-        # train for one epoch
-        # time1 = time.time()
-        loss = train(train_loader, model, criterion, optimizer, epoch, opt)
-        # time2 = time.time()
-        # print('epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
+    checkpoint = torch.load(full_model_path_new)
 
-    # save the last model
-    ## 将新模型保存在旧的模型所在目录，后面加上opt.method标志
-    full_model_path_new = r'C:\Users\dell\Desktop\ss-cc-2024-08-05\unsup-models\iteration-0\ssAug5\AE_CNN_epoch29_datalen180_gps-acceleration_%s.pth'%opt.method
-    state = {
-        'opt': opt,
-        'model': model.state_dict(),
-        'optimizer': optimizer.state_dict(),
-        'epoch': epoch,
-    }
-    torch.save(state, full_model_path_new)
+    # Restore model state
+    model.load_state_dict(checkpoint['model'])
 
+    # Restore optimizer state
+    optimizer.load_state_dict(checkpoint['optimizer'])
+
+    loss = train(train_loader, model, criterion, optimizer, 0, opt)
 
 if __name__ == '__main__':
     main()

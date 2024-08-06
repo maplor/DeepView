@@ -26,6 +26,7 @@ from deepview.clustering_pytorch.nnet.util import (
     gen_aug,
 )
 
+
 class DatasetFactory:
     _datasets = dict()
 
@@ -79,15 +80,18 @@ def sliding_window(data, len_sw):
     # print(" ..after sliding window: train inputs {0}".format(xlist.shape))
     return xlist
 
+
 def process_pressure_sensor(df, columns):
     if 'pressure' in columns:
         df['pressure'] = df['pressure'] - 1013.25
     return df
+
+
 def prep_dataset_umineko(data_path,
                          filenames,
                          len_sw,
-                         data_column):
-    
+                         data_column,
+                         labeled_flag=False):
     extend_column = data_column.copy()
     extend_column.extend(['unixtime'])
     extend_column.extend(['label_id'])
@@ -99,6 +103,10 @@ def prep_dataset_umineko(data_path,
             print('path to load pkl data: ' + data_path)
             with open(Path(full_file_path), 'rb') as f:
                 data = pickle.load(f)  # 2634 labeled segments (dataframe)
+
+            if labeled_flag:  # only use labeled data
+                data = data[data['label_flag'] == 1]
+
             # process the pressure column by reducing 1013.25hPa
             data = process_pressure_sensor(data, extend_column)
             tmp = sliding_window(data[extend_column],
@@ -147,7 +155,7 @@ class base_loader(Dataset):
 
     def __getitem__(self, index):
         sample, label, domain, timestamp = self.samples[index], self.labels[index], self.domains[index], \
-        self.timestamps[index]
+            self.timestamps[index]
         timestr = self.timestr[index]
         return sample, timestamp, label, domain, timestr
 
@@ -199,7 +207,14 @@ def generate_dataloader(data, target, timestamps, batch_size=512, augment=False,
     return train_loader_r
 
 
-def prepare_all_data(data_path, select_filenames, data_len, data_column, batch_size, augment=False, device='cpu'):  # todo, 传args，以后改成从model_cfg.yaml中读取
+def prepare_all_data(data_path,
+                     select_filenames,
+                     data_len,
+                     data_column,
+                     batch_size,
+                     augment=False,
+                     device='cpu',
+                     labeled_flag=True):
     '''
     主要是训练集，需要全部数据做训练。读取数据
     :param data_path:
@@ -210,7 +225,8 @@ def prepare_all_data(data_path, select_filenames, data_len, data_column, batch_s
     data, timestamps, labels = prep_dataset_umineko(data_path,
                                                     select_filenames,
                                                     data_len,
-                                                    data_column)  # return dict: key=filename, value=[data, timestamps, labels]
+                                                    data_column,
+                                                    labeled_flag=True)  # return dict: key=filename, value=[data, timestamps, labels]
 
     # concatenate list
     data_b = np.concatenate(data, axis=0)  # [B, Len, dim]
