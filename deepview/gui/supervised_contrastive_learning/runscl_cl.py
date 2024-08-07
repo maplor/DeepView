@@ -60,7 +60,7 @@ def parse_option():
     parser.add_argument('--num_workers', type=int, default=16,
                         help='num of workers to use')
     # todo 这个变量需要制作文本输入框
-    parser.add_argument('--epochs', type=int, default=100,
+    parser.add_argument('--epochs', type=int, default=101,
                         help='number of training epochs')
 
     # optimization
@@ -120,14 +120,21 @@ def parse_option():
 
 
 def set_loader(augment=False, labeled_flag=False):
+    '''
+    从select data中读取pkl文件路径（我加了一列label_flag，可以用在勾选框上）
+    '''
+    select_filenames = ['Omizunagidori2018_raw_data_9B36578_lb0009_25Hz.pkl']
     # 相同代码在clustering pytorch/core的train.py出现
     data_path = r'C:\Users\dell\Desktop\ss-cc-2024-08-05\unsupervised-datasets\allDataSet'
-    select_filenames = ['Omizunagidori2018_raw_data_9B36578_lb0009_25Hz.pkl']
     data_len = 180
     data_column = ['acc_x', 'acc_y', 'acc_z', 'GPS_velocity', 'GPS_bearing']
     batch_size = 1028
-    # augment = True
 
+    '''
+    deepview/clustering_pytorch/datasets/factory.py
+    class data_loader_umineko(Dataset), if self.augment 处，
+    选择两个def gen_aug(sample, ssh_type)里有的augment方法，可以重复
+    '''
     train_dataloader, num_channel = prepare_all_data(data_path,
                                                      select_filenames,
                                                      data_len,
@@ -204,16 +211,11 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
     model.train()
 
     batch_time = AverageMeter()
-    data_time = AverageMeter()
     losses = AverageMeter()
 
-    end = time.time()
-    # representation_list = []
-    # for idx, (images, labels) in enumerate(train_loader):
     for idx, (aug_sample1, aug_sample2, timestamp, labels, label_flags) in enumerate(tqdm(train_loader)):
         aug_sample1 = aug_sample1.to(dtype=torch.double)
         aug_sample2 = aug_sample2.to(dtype=torch.double)
-        data_time.update(time.time() - end)
 
         images = torch.cat([aug_sample1, aug_sample2], dim=0)
         images = images.to(device, non_blocking=True)
@@ -225,7 +227,6 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
 
         # compute loss
         features, backboneout = model(images)
-        # representation_list.append(backboneout[0].reshape(aug_sample1.shape[0], -1))
 
         f1, f2 = torch.split(features, [bsz, bsz], dim=0)
         features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)  # batch, 2, 128
@@ -246,22 +247,19 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
         optimizer.step()
 
         # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
+        # batch_time.update(time.time() - end)
+        # end = time.time()
 
-    # if epoch == opt.epochs:
-    #     # evaluate
-    #     evaluate(model)
 
     return losses.avg
 
 
-def evaluate(model, epoch):
+def evaluate(model, epoch, train_loader, fig_name):
     model.eval()
 
     # get all data:
     representation_list, flag_list, label_list = [], [], []
-    train_loader, _ = set_loader(augment=AUGMENT, labeled_flag=False)
+
     for idx, (aug_sample1, aug_sample2, timestamp, labels, label_flags) in enumerate(tqdm(train_loader)):
         aug_sample1 = aug_sample1.to(dtype=torch.double)
         aug_sample2 = aug_sample2.to(dtype=torch.double)
@@ -303,7 +301,7 @@ def evaluate(model, epoch):
     plt.ylabel('Y-axis Label')
     plt.title('supervised contrastive latent, %s' % str(epoch))
     plt.legend()
-    plt.savefig('supContrast%s.png' % str(epoch))
+    plt.savefig('%s_%s.png' % (fig_name, str(epoch)))
 
 
 #  __init__.py 相同代码
@@ -323,21 +321,34 @@ def main():
 
     # build model and criterion
     model, criterion = set_model(opt)
-
     # build optimizer
     optimizer = set_optimizer(opt, model)
 
     # training routine
+    '''
+    opt.epochs参数从Parameter选框中读取
+    当点击 Apply SCL按钮后运行下面程序
+    '''
+    epoch = 0
     for epoch in range(1, opt.epochs + 1):
         adjust_learning_rate(opt, optimizer, epoch)
-
-        # train for one epoch
-        # time1 = time.time()
         loss = train(train_loader, model, criterion, optimizer, epoch, opt)
-        # time2 = time.time()
-        # print('epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
     # evaluate and plot
-    evaluate(model, epoch)
+    train_loader, _ = set_loader(augment=AUGMENT, labeled_flag=False)
+    '''
+    第一张New scatter map生成方式
+    '''
+    evaluate(model, epoch, train_loader, fig_name='supContrast')
+
+    # standard contrastive learning
+    opt.method = 'SimCLR'
+    for epoch in range(1, opt.epochs + 1):
+        loss = train(train_loader, model, criterion, optimizer, epoch, opt)
+    # evaluate and plot
+    '''
+    第2张New scatter map生成方式
+    '''
+    evaluate(model, epoch, train_loader, fig_name='Contrast')
 
     # save the last model
     ## 将新模型保存在旧的模型所在目录，后面加上opt.method标志

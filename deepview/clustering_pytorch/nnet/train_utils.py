@@ -131,8 +131,8 @@ def AE_eval_time_series(train_loader, model, device):
     model.eval()
 
     representation_list = []
-    sample_list, timestamp_list, label_list, domain_list, timestr_list = [], [], [], [], []
-    for i, (sample, timestamp, label) in enumerate(train_loader):
+    sample_list, timestamp_list, label_list, domain_list, timestr_list, flag_list = [], [], [], [], []
+    for i, (sample, timestamp, label, label_flag) in enumerate(train_loader):
         sample = sample.to(device=device, non_blocking=True, dtype=torch.float)
         # input_ = (sample).permute(0, 2, 1)  # input.shape=b512,3channel,90width
         # input_ = sample
@@ -147,10 +147,35 @@ def AE_eval_time_series(train_loader, model, device):
         timestamp_list.append(timestamp)
         # timestr_list.append(timestr)
         label_list.append(label)
+        flag_list.append(label_flag)
         # domain_list.append(domain)
 
-    return representation_list, sample_list, timestamp_list, label_list
+    return representation_list, sample_list, timestamp_list, label_list, flag_list
 
+def AE_eval_time_series_labelflag(train_loader, model, device):
+    model.eval()
+
+    representation_list = []
+    sample_list, timestamp_list, label_list, domain_list, timestr_list, flag_list = [], [], [], [], [], []
+    for i, (sample, timestamp, label, label_flag) in enumerate(train_loader):
+        sample = sample.to(device=device, non_blocking=True, dtype=torch.float)
+        # input_ = (sample).permute(0, 2, 1)  # input.shape=b512,3channel,90width
+        # input_ = sample
+
+        # input of autoencoder will be 3D, the backbone is 1d-cnn
+        x_encoded, output = model(sample)  # x_encoded.shape=batch512,outchannel128,len13
+
+        # x_encoded, output = model(input_).view(b, 2, -1)  # output.shape=b,2,128, split the first dim into 2 parts
+        tmp_representation = x_encoded.detach().cpu().numpy()
+        representation_list.append(tmp_representation)
+        sample_list.append(sample.cpu().numpy())
+        timestamp_list.append(timestamp)
+        # timestr_list.append(timestr)
+        label_list.append(label)
+        flag_list.append(label_flag.detach().cpu().numpy())
+        # domain_list.append(domain)
+
+    return representation_list, sample_list, timestamp_list, label_list, flag_list
 
 # ----------------------------------------step 2: clustering--------------------------------------
 
