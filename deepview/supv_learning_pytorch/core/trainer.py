@@ -16,11 +16,11 @@ import pandas as pd
 import torch
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from timm.scheduler import CosineLRScheduler
-from sklearn.metrics import f1_score
-from sklearn.metrics import jaccard_score, precision_score, recall_score
-import matplotlib.pyplot as plt
-from scipy.spatial.distance import euclidean
-from fastdtw import fastdtw
+# from sklearn.metrics import f1_score
+# from sklearn.metrics import jaccard_score, precision_score, recall_score
+# import matplotlib.pyplot as plt
+# from scipy.spatial.distance import euclidean
+# from fastdtw import fastdtw
 # from . import models, utils
 from deepview.supv_learning_pytorch import models
 from deepview.supv_learning_pytorch.utils import utils

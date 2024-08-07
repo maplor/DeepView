@@ -7,7 +7,7 @@ import math
 import numpy as np
 import torch
 # import torchvision.transforms as transforms
-from deepview.clustering_pytorch.nnet.augment import Augment, Cutout
+from deepview.clustering_pytorch.nnet.augment import Cutout
 from deepview.clustering_pytorch.nnet.collate import collate_custom
 
 
@@ -105,79 +105,79 @@ def get_model(p_backbone, p_setup, num_channel=3, data_len=180, pretrain_path=No
     return model
 
 
-def get_train_dataset(p, transform, to_augmented_dataset=False,
-                      to_neighbors_dataset=False, split=None):
-    # Base dataset
-    if p['train_db_name'] == 'cifar-10':
-        from data.cifar import CIFAR10
-        dataset = CIFAR10(train=True, transform=transform, download=True)
+# def get_train_dataset(p, transform, to_augmented_dataset=False,
+#                       to_neighbors_dataset=False, split=None):
+#     # Base dataset
+#     if p['train_db_name'] == 'cifar-10':
+#         from data.cifar import CIFAR10
+#         dataset = CIFAR10(train=True, transform=transform, download=True)
+#
+#     elif p['train_db_name'] == 'cifar-20':
+#         from data.cifar import CIFAR20
+#         dataset = CIFAR20(train=True, transform=transform, download=True)
+#
+#     elif p['train_db_name'] == 'stl-10':
+#         from data.stl import STL10
+#         dataset = STL10(split=split, transform=transform, download=True)
+#
+#     elif p['train_db_name'] == 'imagenet':
+#         from data.imagenet import ImageNet
+#         dataset = ImageNet(split='train', transform=transform)
+#
+#     elif p['train_db_name'] in ['imagenet_50', 'imagenet_100', 'imagenet_200']:
+#         from data.imagenet import ImageNetSubset
+#         subset_file = './data/imagenet_subsets/%s.txt' % (p['train_db_name'])
+#         dataset = ImageNetSubset(subset_file=subset_file, split='train', transform=transform)
+#
+#     else:
+#         raise ValueError('Invalid train dataset {}'.format(p['train_db_name']))
+#
+#     # Wrap into other dataset (__getitem__ changes)
+#     if to_augmented_dataset:  # Dataset returns an image and an augmentation of that image.
+#         from data.custom_dataset import AugmentedDataset
+#         dataset = AugmentedDataset(dataset)
+#
+#     if to_neighbors_dataset:  # Dataset returns an image and one of its nearest neighbors.
+#         from data.custom_dataset import NeighborsDataset
+#         indices = np.load(p['topk_neighbors_train_path'])
+#         dataset = NeighborsDataset(dataset, indices, p['num_neighbors'])
+#
+#     return dataset
 
-    elif p['train_db_name'] == 'cifar-20':
-        from data.cifar import CIFAR20
-        dataset = CIFAR20(train=True, transform=transform, download=True)
 
-    elif p['train_db_name'] == 'stl-10':
-        from data.stl import STL10
-        dataset = STL10(split=split, transform=transform, download=True)
-
-    elif p['train_db_name'] == 'imagenet':
-        from data.imagenet import ImageNet
-        dataset = ImageNet(split='train', transform=transform)
-
-    elif p['train_db_name'] in ['imagenet_50', 'imagenet_100', 'imagenet_200']:
-        from data.imagenet import ImageNetSubset
-        subset_file = './data/imagenet_subsets/%s.txt' % (p['train_db_name'])
-        dataset = ImageNetSubset(subset_file=subset_file, split='train', transform=transform)
-
-    else:
-        raise ValueError('Invalid train dataset {}'.format(p['train_db_name']))
-
-    # Wrap into other dataset (__getitem__ changes)
-    if to_augmented_dataset:  # Dataset returns an image and an augmentation of that image.
-        from data.custom_dataset import AugmentedDataset
-        dataset = AugmentedDataset(dataset)
-
-    if to_neighbors_dataset:  # Dataset returns an image and one of its nearest neighbors.
-        from data.custom_dataset import NeighborsDataset
-        indices = np.load(p['topk_neighbors_train_path'])
-        dataset = NeighborsDataset(dataset, indices, p['num_neighbors'])
-
-    return dataset
-
-
-def get_val_dataset(p, transform=None, to_neighbors_dataset=False):
-    # Base dataset
-    if p['val_db_name'] == 'cifar-10':
-        from data.cifar import CIFAR10
-        dataset = CIFAR10(train=False, transform=transform, download=True)
-
-    elif p['val_db_name'] == 'cifar-20':
-        from data.cifar import CIFAR20
-        dataset = CIFAR20(train=False, transform=transform, download=True)
-
-    elif p['val_db_name'] == 'stl-10':
-        from data.stl import STL10
-        dataset = STL10(split='test', transform=transform, download=True)
-
-    elif p['val_db_name'] == 'imagenet':
-        from data.imagenet import ImageNet
-        dataset = ImageNet(split='val', transform=transform)
-
-    elif p['val_db_name'] in ['imagenet_50', 'imagenet_100', 'imagenet_200']:
-        from data.imagenet import ImageNetSubset
-        subset_file = './data/imagenet_subsets/%s.txt' % (p['val_db_name'])
-        dataset = ImageNetSubset(subset_file=subset_file, split='val', transform=transform)
-
-    else:
-        raise ValueError('Invalid validation dataset {}'.format(p['val_db_name']))
-
-    # Wrap into other dataset (__getitem__ changes)
-    if to_neighbors_dataset:  # Dataset returns an image and one of its nearest neighbors.
-        from data.custom_dataset import NeighborsDataset
-        indices = np.load(p['topk_neighbors_val_path'])
-        dataset = NeighborsDataset(dataset, indices, 5)  # Only use 5
-
-    return dataset
+# def get_val_dataset(p, transform=None, to_neighbors_dataset=False):
+#     # Base dataset
+#     if p['val_db_name'] == 'cifar-10':
+#         from data.cifar import CIFAR10
+#         dataset = CIFAR10(train=False, transform=transform, download=True)
+#
+#     elif p['val_db_name'] == 'cifar-20':
+#         from data.cifar import CIFAR20
+#         dataset = CIFAR20(train=False, transform=transform, download=True)
+#
+#     elif p['val_db_name'] == 'stl-10':
+#         from data.stl import STL10
+#         dataset = STL10(split='test', transform=transform, download=True)
+#
+#     elif p['val_db_name'] == 'imagenet':
+#         from data.imagenet import ImageNet
+#         dataset = ImageNet(split='val', transform=transform)
+#
+#     elif p['val_db_name'] in ['imagenet_50', 'imagenet_100', 'imagenet_200']:
+#         from data.imagenet import ImageNetSubset
+#         subset_file = './data/imagenet_subsets/%s.txt' % (p['val_db_name'])
+#         dataset = ImageNetSubset(subset_file=subset_file, split='val', transform=transform)
+#
+#     else:
+#         raise ValueError('Invalid validation dataset {}'.format(p['val_db_name']))
+#
+#     # Wrap into other dataset (__getitem__ changes)
+#     if to_neighbors_dataset:  # Dataset returns an image and one of its nearest neighbors.
+#         from data.custom_dataset import NeighborsDataset
+#         indices = np.load(p['topk_neighbors_val_path'])
+#         dataset = NeighborsDataset(dataset, indices, 5)  # Only use 5
+#
+#     return dataset
 
 
 def get_train_dataloader(p, dataset):
@@ -192,51 +192,51 @@ def get_val_dataloader(p, dataset):
                                        drop_last=False, shuffle=False)
 
 
-def get_train_transformations(p):
-    if p['augmentation_strategy'] == 'standard':
-        # Standard augmentation strategy
-        return transforms.Compose([
-            transforms.RandomResizedCrop(**p['augmentation_kwargs']['random_resized_crop']),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(**p['augmentation_kwargs']['normalize'])
-        ])
-
-    elif p['augmentation_strategy'] == 'simclr':
-        # Augmentation strategy from the SimCLR paper
-        return transforms.Compose([
-            transforms.RandomResizedCrop(**p['augmentation_kwargs']['random_resized_crop']),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomApply([
-                transforms.ColorJitter(**p['augmentation_kwargs']['color_jitter'])
-            ], p=p['augmentation_kwargs']['color_jitter_random_apply']['p']),
-            transforms.RandomGrayscale(**p['augmentation_kwargs']['random_grayscale']),
-            transforms.ToTensor(),
-            transforms.Normalize(**p['augmentation_kwargs']['normalize'])
-        ])
-
-    elif p['augmentation_strategy'] == 'ours':
-        # Augmentation strategy from our paper
-        return transforms.Compose([
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomCrop(p['augmentation_kwargs']['crop_size']),
-            Augment(p['augmentation_kwargs']['num_strong_augs']),
-            transforms.ToTensor(),
-            transforms.Normalize(**p['augmentation_kwargs']['normalize']),
-            Cutout(
-                n_holes=p['augmentation_kwargs']['cutout_kwargs']['n_holes'],
-                length=p['augmentation_kwargs']['cutout_kwargs']['length'],
-                random=p['augmentation_kwargs']['cutout_kwargs']['random'])])
-
-    else:
-        raise ValueError('Invalid augmentation strategy {}'.format(p['augmentation_strategy']))
-
-
-def get_val_transformations(p):
-    return transforms.Compose([
-        transforms.CenterCrop(p['transformation_kwargs']['crop_size']),
-        transforms.ToTensor(),
-        transforms.Normalize(**p['transformation_kwargs']['normalize'])])
+# def get_train_transformations(p):
+#     if p['augmentation_strategy'] == 'standard':
+#         # Standard augmentation strategy
+#         return transforms.Compose([
+#             transforms.RandomResizedCrop(**p['augmentation_kwargs']['random_resized_crop']),
+#             transforms.RandomHorizontalFlip(),
+#             transforms.ToTensor(),
+#             transforms.Normalize(**p['augmentation_kwargs']['normalize'])
+#         ])
+#
+#     elif p['augmentation_strategy'] == 'simclr':
+#         # Augmentation strategy from the SimCLR paper
+#         return transforms.Compose([
+#             transforms.RandomResizedCrop(**p['augmentation_kwargs']['random_resized_crop']),
+#             transforms.RandomHorizontalFlip(),
+#             transforms.RandomApply([
+#                 transforms.ColorJitter(**p['augmentation_kwargs']['color_jitter'])
+#             ], p=p['augmentation_kwargs']['color_jitter_random_apply']['p']),
+#             transforms.RandomGrayscale(**p['augmentation_kwargs']['random_grayscale']),
+#             transforms.ToTensor(),
+#             transforms.Normalize(**p['augmentation_kwargs']['normalize'])
+#         ])
+#
+#     elif p['augmentation_strategy'] == 'ours':
+#         # Augmentation strategy from our paper
+#         return transforms.Compose([
+#             transforms.RandomHorizontalFlip(),
+#             transforms.RandomCrop(p['augmentation_kwargs']['crop_size']),
+#             Augment(p['augmentation_kwargs']['num_strong_augs']),
+#             transforms.ToTensor(),
+#             transforms.Normalize(**p['augmentation_kwargs']['normalize']),
+#             Cutout(
+#                 n_holes=p['augmentation_kwargs']['cutout_kwargs']['n_holes'],
+#                 length=p['augmentation_kwargs']['cutout_kwargs']['length'],
+#                 random=p['augmentation_kwargs']['cutout_kwargs']['random'])])
+#
+#     else:
+#         raise ValueError('Invalid augmentation strategy {}'.format(p['augmentation_strategy']))
+#
+#
+# def get_val_transformations(p):
+#     return transforms.Compose([
+#         transforms.CenterCrop(p['transformation_kwargs']['crop_size']),
+#         transforms.ToTensor(),
+#         transforms.Normalize(**p['transformation_kwargs']['normalize'])])
 
 
 def get_optimizer(p_opti, model, cluster_head_only=False):

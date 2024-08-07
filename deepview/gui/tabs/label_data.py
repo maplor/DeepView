@@ -12,7 +12,7 @@ from deepview.gui.components import (
     _create_vertical_layout,
 )
 
-from mad_gui_main.mad_gui import start_gui
+# from mad_gui_main.mad_gui import start_gui
 # from mad_gui import start_gui
 # from mad_gui.plugins import ExampleImporter
 # from myalgorithm import MyAlgorithm # you need to create this file and class, see below
@@ -38,7 +38,7 @@ class LabelData(DefaultTab):
         self.main_layout.addWidget(self.ev_nw_button, alignment=Qt.AlignRight)
 
 
-    def evaluate_network(self):
-        start_gui(plugins=[CustomImporter, CustomExporter])
-        return
+    # def evaluate_network(self):
+    #     start_gui(plugins=[CustomImporter, CustomExporter])
+    #     return
 

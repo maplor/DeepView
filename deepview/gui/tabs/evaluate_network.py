@@ -10,12 +10,12 @@
 #
 # Licensed under GNU Lesser General Public License v3.0
 #
-import os
-import matplotlib.image as mpimg
-from matplotlib.backends.backend_qt5agg import (
-    FigureCanvasQTAgg as FigureCanvas,
-)
-from matplotlib.figure import Figure
+# import os
+# import matplotlib.image as mpimg
+# from matplotlib.backends.backend_qt5agg import (
+#     FigureCanvasQTAgg as FigureCanvas,
+# )
+# from matplotlib.figure import Figure
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QPushButton, QFileDialog, QLineEdit
@@ -150,42 +150,42 @@ class EvaluateNetwork(DefaultTab):
             "Click the button 'plot' to visualize data."
         )
 
-    def plot_maps(self):
-        # shuffle = self.root.shuffle_value  #=1
-        config = self.root.config  # project/config.yaml
-        # test set生成图像并保存
-        deepview.extract_save_all_maps(config, Indices=[0, 1, 2])
+    # def plot_maps(self):
+    #     # shuffle = self.root.shuffle_value  #=1
+    #     config = self.root.config  # project/config.yaml
+    #     # test set生成图像并保存
+    #     deepview.extract_save_all_maps(config, Indices=[0, 1, 2])
+    #
+    #     # Display all images
+    #     dest_folder = os.path.join(
+    #         self.root.project_folder,
+    #         str(
+    #             get_evaluation_folder( self.root.cfg)
+    #         ),
+    #         "maps",
+    #     )
+    #     fig_paths = [
+    #         os.path.join(dest_folder, file)
+    #         for file in os.listdir(dest_folder)
+    #         if file.endswith(".png")
+    #     ]
+    #     # # 在这里plot figure并且展示在对话框内。
+    #     # canvas = GridCanvas(fig_paths, parent=self)
+    #     # canvas.show()
 
-        # Display all images
-        dest_folder = os.path.join(
-            self.root.project_folder,
-            str(
-                get_evaluation_folder( self.root.cfg)
-            ),
-            "maps",
-        )
-        fig_paths = [
-            os.path.join(dest_folder, file)
-            for file in os.listdir(dest_folder)
-            if file.endswith(".png")
-        ]
-        # 在这里plot figure并且展示在对话框内。
-        canvas = GridCanvas(fig_paths, parent=self)
-        canvas.show()
-
-class GridCanvas(QtWidgets.QDialog):
-    def __init__(self, image_paths, parent=None):
-        super().__init__(parent)
-        self.image_paths = image_paths
-        layout = QtWidgets.QVBoxLayout(self)
-        self.figure = Figure()
-        self.figure.patch.set_facecolor("None")
-        self.grid = self.figure.add_gridspec(3, 3)
-        self.canvas = FigureCanvas(self.figure)
-        layout.addWidget(self.canvas)
-
-        for image_path, gridspec in zip(image_paths[:9], self.grid):
-            ax = self.figure.add_subplot(gridspec)
-            ax.set_axis_off()
-            img = mpimg.imread(image_path)
-            ax.imshow(img)
+# class GridCanvas(QtWidgets.QDialog):
+#     def __init__(self, image_paths, parent=None):
+#         super().__init__(parent)
+#         self.image_paths = image_paths
+#         layout = QtWidgets.QVBoxLayout(self)
+#         self.figure = Figure()
+#         self.figure.patch.set_facecolor("None")
+#         self.grid = self.figure.add_gridspec(3, 3)
+#         self.canvas = FigureCanvas(self.figure)
+#         layout.addWidget(self.canvas)
+#
+#         for image_path, gridspec in zip(image_paths[:9], self.grid):
+#             ax = self.figure.add_subplot(gridspec)
+#             ax.set_axis_off()
+#             img = mpimg.imread(image_path)
+#             ax.imshow(img)

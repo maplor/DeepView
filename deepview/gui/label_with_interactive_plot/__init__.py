@@ -1370,7 +1370,7 @@ class LabelWithInteractivePlot(QWidget):
         model = model.to(device)
 
         if p_setup == 'autoencoder':
-            representation_list, _, _, _ = \
+            representation_list, _, _, _, _ = \
                 AE_eval_time_series(train_loader, model, device)
         elif p_setup == 'simclr':
             representation_list, _ = simclr_eval_time_series(train_loader, model, device)
