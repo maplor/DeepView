@@ -93,10 +93,12 @@ def prep_dataset_umineko(data_path,
                          data_column,
                          labeled_flag=False):
     extend_column = data_column.copy()
+
+    extend_column.extend(['label_flag'])
     extend_column.extend(['unixtime'])
     extend_column.extend(['label_id'])
 
-    datalist, timestamps, labels, timestr = [], [], [], []
+    datalist, timestamps, labels, timestr, label_flags = [], [], [], [], []
     for filename in filenames:
         full_file_path = os.path.join(data_path, filename)
         if os.path.exists(full_file_path):
@@ -113,11 +115,15 @@ def prep_dataset_umineko(data_path,
                                  len_sw)  # temp:['acc_x', 'acc_y', 'acc_z', 'timestamp', 'labelid', 'domain']
             if tmp.shape[1] != len_sw:
                 continue
-            datalist.append(tmp[:, :, :-2])
+            datalist.append(tmp[:, :, :-3])
+            label_flags.append(tmp[:, :, -3:-2])
             timestamps.append(tmp[:, :, -2:-1])
             labels.append(tmp[:, :, -1:])
 
-    return datalist, timestamps, labels
+    # if not labeled_flag:
+    #     return datalist, timestamps, labels
+    # else:
+    return datalist, timestamps, labels, label_flags
 
 
 def prep_dataset_umineko_single(data_path):
@@ -164,13 +170,8 @@ class base_loader(Dataset):
 
 
 class data_loader_umineko(Dataset):
-    def __init__(self, samples, labels, timestamps, augment=False, device='cpu'):
+    def __init__(self, samples, labels, timestamps, augment=False, device='cpu', label_flags=[]):
         self.augment = augment
-        # self.samples = torch.tensor(samples)
-        # self.labels = torch.tensor(labels)
-        # self.domains = torch.tensor(domains)
-        # self.timestamps = torch.tensor(timestamps)
-        # self.samples = torch.tensor(torch.from_numpy(samples.astype(float)))
         if self.augment:
             self.aug_sample1 = gen_aug(samples, 't_warp')
             self.aug_sample1 = torch.tensor(self.aug_sample1).to(device)  # t_warp, out.shape=batch64,width3,height900
@@ -179,29 +180,36 @@ class data_loader_umineko(Dataset):
         else:
             self.samples = torch.tensor(samples).to(device)  # check data type
         self.labels = torch.tensor(labels)  # check data type
-        # self.labels = torch.tensor(labels.astype(int))
-        # self.domains = torch.tensor(domains.astype(int))
         self.timestamps = torch.tensor(timestamps.astype(float)).to(device)
+        self.label_flags = torch.tensor(label_flags.astype(float)).to(device)
+
 
     def __getitem__(self, index):
         target = self.labels[index]
         timestamp = self.timestamps[index]
+        label_flag = self.label_flags[index]
         if self.augment == False:
             sample = self.samples[index]
-            return sample, timestamp, target
+            # if len(self.label_flags) == 0:
+            #     return sample, timestamp, target
+            # else:
+            return sample, timestamp, target, label_flag
         else:
             sample1 = self.aug_sample1[index]
             sample2 = self.aug_sample2[index]
-            return sample1, sample2, timestamp, target
+            # if len(self.label_flags) == 0:
+            #     return sample1, sample2, timestamp, target
+            # else:
+            return sample1, sample2, timestamp, target, label_flag
 
     def __len__(self):
         return len(self.labels)
 
 
-def generate_dataloader(data, target, timestamps, batch_size=512, augment=False, device='cpu'):
+def generate_dataloader(data, target, timestamps, batch_size=512, augment=False, device='cpu', label_flags=[]):
     # batch_size = 512
     # dataloader
-    train_set_r = data_loader_umineko(data, target, timestamps, augment, device=device)
+    train_set_r = data_loader_umineko(data, target, timestamps, augment, device=device, label_flags=label_flags)
     train_loader_r = DataLoader(train_set_r, batch_size=batch_size,
                                 shuffle=False, drop_last=False)
     return train_loader_r
@@ -214,11 +222,44 @@ def prepare_all_data(data_path,
                      batch_size,
                      augment=False,
                      device='cpu',
-                     labeled_flag=True):
+                     labeled_flag=False):
     '''
     主要是训练集，需要全部数据做训练。读取数据
     :param data_path:
     :param data_path_new:
+    :return:
+    '''
+
+    data, timestamps, labels, label_flags = prep_dataset_umineko(data_path,
+                                                                 select_filenames,
+                                                                 data_len,
+                                                                 data_column,
+                                                                 labeled_flag=labeled_flag)  # return dict: key=filename, value=[data, timestamps, labels]
+
+    # concatenate list
+    data_b = np.concatenate(data, axis=0)  # [B, Len, dim]
+    timestamp_b = np.concatenate(timestamps, axis=0)  # [B, Len, dim]
+    label_b = np.concatenate(labels, axis=0)  # [B, Len, dim]
+
+    label_flags_b = np.concatenate(label_flags, axis=0)  # [B, Len, dim]
+    train_loader = generate_dataloader(data_b, label_b, timestamp_b, batch_size, augment, device, label_flags_b)
+
+    # get model input channel
+    num_channel = data_b.shape[-1]
+    return train_loader, num_channel  # return train_loader
+
+
+def prepare_all_data_with_flag(data_path,
+                               select_filenames,
+                               data_len,
+                               data_column,
+                               batch_size,
+                               augment=False,
+                               device='cpu',
+                               labeled_flag=False):
+    '''
+    主要是训练集，需要全部数据做训练。读取数据
+    相比较上一个函数多输出了label_flag,表示label是否原来被填充
     :return:
     '''
     # if args.seabird_name == 'umineko':
@@ -226,7 +267,7 @@ def prepare_all_data(data_path,
                                                     select_filenames,
                                                     data_len,
                                                     data_column,
-                                                    labeled_flag=True)  # return dict: key=filename, value=[data, timestamps, labels]
+                                                    labeled_flag=labeled_flag)  # return dict: key=filename, value=[data, timestamps, labels]
 
     # concatenate list
     data_b = np.concatenate(data, axis=0)  # [B, Len, dim]
