@@ -90,6 +90,7 @@
         chartsTheme = 'dark';
         oldFrame = null;
         delectState = false;
+        currentIndex = -1;
         lineOption = null;
         dataFrame = null;
         let isBoxDrawn = false;
@@ -587,6 +588,15 @@
                             // text: 'Line Chart ' + (index + 1)
                             text: chartData.name
                         },
+                        // tooltip: {
+                        //     trigger: 'axis',
+                        // },
+                        // axisPointer: {
+                        //     link: { xAxisIndex: 'all' },
+                        //     label: {
+                        //         backgroundColor: '#777'
+                        //     }
+                        // },
                         brush: {
                             brushType: ['lineX', 'clear'],
                             toolBox: ['lineX', 'clear'],
@@ -620,6 +630,7 @@
                             animation: false
                         },
                         series: series,
+                        graphic: [],
                         dataZoom: [
                             {
                                 type: 'inside',
@@ -667,15 +678,26 @@
                     });
 
 
+                    // chart.getZr().on('click', function (event) {
+                    //     // 没有 target 意味着鼠标/指针不在任何一个图形元素上，它是从“空白处”触发的。
+                    //     if (!event.target) {
+                    //         // 点击在了空白处，取消高亮。
+                    //         chart.dispatchAction({
+                    //             type: 'downplay',
+                    //             seriesIndex: [0, 1, 2],
+                    //             // dataIndex: selectedIndex
+                    //         });
+                    //     }
+                    // });
+
+                    // Add global click event listener
                     chart.getZr().on('click', function (event) {
-                        // 没有 target 意味着鼠标/指针不在任何一个图形元素上，它是从“空白处”触发的。
-                        if (!event.target) {
-                            // 点击在了空白处，取消高亮。
-                            chart.dispatchAction({
-                                type: 'downplay',
-                                seriesIndex: [0, 1, 2],
-                                // dataIndex: selectedIndex
-                            });
+                        var pointInGrid = chart.convertFromPixel({ seriesIndex: 0 }, [event.offsetX, event.offsetY]);
+                        var xAxisValueIndex = Math.round(pointInGrid[0]);
+                        if (xAxisValueIndex >= 0 && xAxisValueIndex < option.xAxis.data.length) {
+                            HighlightDotByIndex(xAxisValueIndex);
+                            var xAxisValue = option.xAxis.data[xAxisValueIndex];
+                            console.log('Clicked nearest x-axis point:', xAxisValue);
                         }
                     });
 
@@ -700,6 +722,7 @@
                                     }
                                 }
                             });
+                            // updatePointPosition();
                             isSyncing = false;
                         }
                     });
@@ -800,6 +823,14 @@
             });
         }
 
+        function updatePointPosition(){
+            // 取消高亮点
+            charts.forEach((chart, i) => {
+                option = chart.getOption();
+                option.graphic = [];
+                chart.setOption(option);
+            });
+        }
         // 函数：将框选的x轴数据作为markArea添加到第一个图表
         function addLabel(selectedValue) {
             const currentTimestamp = Date.now();
@@ -1002,35 +1033,97 @@
             backend.setStartEndTimeToLabel(startTime, endTime);
         }
 
+        // function highlightLineChartDotByIndex(index) {
+        //     if (index !== -1) {
+        //         // 按数据
+        //         // var start = Math.max(0, (index - 10) / org_data.length * 100);
+        //         // var end = Math.min(100, (index + 10) / org_data.length * 100);
+
+        //         // 按固定显示的点数
+        //         var totalPoints = 1000;
+        //         var halfPoints = totalPoints / 2;
+
+        //         var start = Math.max(0, ((parseInt(index) - halfPoints) / org_data.length) * 100);
+        //         var end = Math.min(100, ((parseInt(index) + halfPoints) / org_data.length) * 100);
+
+        //         // TODO: 高亮不再进行缩放，直接平移
+        //         charts.forEach((chart, i) => {
+        //             chart.dispatchAction({
+        //                 type: 'dataZoom',
+        //                 start: start,
+        //                 end: end
+        //             });
+        //             chart.dispatchAction({
+        //                 type: 'downplay',
+        //                 seriesIndex: [0, 1, 2],
+        //                 // dataIndex: selectedIndex
+        //             });
+        //             chart.dispatchAction({
+        //                 type: 'highlight',
+        //                 seriesIndex: [0, 1, 2],
+        //                 dataIndex: index
+        //             });
+        //         });
+        //     }
+        // }
+
         function highlightLineChartDotByIndex(index) {
             if (index !== -1) {
-                // 按数据
-                // var start = Math.max(0, (index - 10) / org_data.length * 100);
-                // var end = Math.min(100, (index + 10) / org_data.length * 100);
-
-                // 按固定显示的点数
-                var totalPoints = 1000;
-                var halfPoints = totalPoints / 2;
-
-                var start = Math.max(0, ((parseInt(index) - halfPoints) / org_data.length) * 100);
-                var end = Math.min(100, ((parseInt(index) + halfPoints) / org_data.length) * 100);
-
                 charts.forEach((chart, i) => {
+                    var currentZoom = chart.getOption().dataZoom[0];
+                    var start = currentZoom.start;
+                    var end = currentZoom.end;
+
+                    var visibleRange = (end - start) / 100 * org_data.length;
+                    var visibleStartIndex = Math.floor(start / 100 * org_data.length);
+
+                    var offset = index - visibleStartIndex;
+                    var centerOffset = Math.floor(visibleRange / 2);
+
+                    var newStartIndex = Math.max(0, index - centerOffset);
+                    var newStart = (newStartIndex / org_data.length) * 100;
+                    var newEnd = newStart + (end - start);
+
                     chart.dispatchAction({
                         type: 'dataZoom',
-                        start: start,
-                        end: end
+                        start: newStart,
+                        end: newEnd
                     });
                     chart.dispatchAction({
                         type: 'downplay',
-                        seriesIndex: [0, 1, 2],
-                        // dataIndex: selectedIndex
+                        seriesIndex: [0, 1, 2]
                     });
                     chart.dispatchAction({
                         type: 'highlight',
                         seriesIndex: [0, 1, 2],
                         dataIndex: index
                     });
+
+                    var indexInt = parseInt(index, 10); // 转为整数
+                    // 使用graphic来确保在降采样下也能高亮标点
+                    var xPos = chart.convertToPixel({ xAxisIndex: 0 }, indexInt);
+                    var yPos = chart.convertToPixel({ yAxisIndex: 0 }, 0); // Position on x-axis
+
+                    // Make sure to clear any existing graphics
+                    var option = chart.getOption();
+                    // option.graphic = option.graphic || [];
+                    option.graphic = [];
+
+                    option.graphic.push({
+                        type: 'circle',
+                        shape: {
+                            cx: 0,
+                            cy: 0,
+                            r: 5
+                        },
+                        style: {
+                            fill: 'red'
+                        },
+                        position: [xPos, yPos],
+                        z: 100
+                    });
+
+                    chart.setOption(option);
                 });
             }
         }
