@@ -12,10 +12,10 @@ from deepview.utils import auxiliaryfunctions
 from deepview.clustering_pytorch.util.logging import setup_logging
 from deepview.clustering_pytorch.config import load_config
 from deepview.clustering_pytorch.nnet.common_config import (
-    get_criterion,
-    get_optimizer,
+    # get_criterion,
+    # get_optimizer,
     get_model,
-    adjust_learning_rate,
+    # adjust_learning_rate,
 )
 from deepview.clustering_pytorch.datasets import (
     Batch,

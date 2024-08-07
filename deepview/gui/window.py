@@ -30,11 +30,11 @@ from deepview.gui.widgets import StreamReceiver, StreamWriter
 from deepview.gui.tabs.create_training_dataset import CreateTrainingDataset
 from deepview.gui.tabs.open_project import OpenProject
 from deepview.gui.tabs.train_network import TrainNetwork
-from deepview.gui.tabs.visualize_gps import GPSDisplayer
-from deepview.gui.tabs.IMU_GPS_interact import GPSIMU_Interaction
-from deepview.gui.tabs.evaluate_network import EvaluateNetwork
-from deepview.gui.tabs.label_data import LabelData
-from deepview.gui.tabs.interaction_plot import InteractionPlot
+# from deepview.gui.tabs.visualize_gps import GPSDisplayer
+# from deepview.gui.tabs.IMU_GPS_interact import GPSIMU_Interaction
+# from deepview.gui.tabs.evaluate_network import EvaluateNetwork
+# from deepview.gui.tabs.label_data import LabelData
+# from deepview.gui.tabs.interaction_plot import InteractionPlot
 from deepview.gui.tabs.label_with_interactive_plot import LabelWithInteractivePlotTab
 from deepview.gui.tabs.supervised_learning_new_labels import SupervisedLearningNewLabels
 

@@ -3,7 +3,7 @@
 from typing import Dict
 import warnings
 import pandas as pd
-from mad_gui_main.mad_gui import BaseImporter
+# from mad_gui_main.mad_gui import BaseImporter
 
 class CustomImporter(BaseImporter):
     loadable_file_type = "*.*"

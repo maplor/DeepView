@@ -206,10 +206,12 @@ class data_loader_umineko(Dataset):
         return len(self.labels)
 
 
-def generate_dataloader(data, target, timestamps, batch_size=512, augment=False, device='cpu', label_flags=[]):
+def generate_dataloader(data, target, timestamps, batch_size=512, augment=False,
+                        device='cpu', label_flags=[]):
     # batch_size = 512
     # dataloader
-    train_set_r = data_loader_umineko(data, target, timestamps, augment, device=device, label_flags=label_flags)
+    train_set_r = data_loader_umineko(data, target, timestamps, augment,
+                                      device=device, label_flags=label_flags)
     train_loader_r = DataLoader(train_set_r, batch_size=batch_size,
                                 shuffle=False, drop_last=False)
     return train_loader_r
@@ -312,5 +314,7 @@ def prepare_unsup_dataset(segments, data_column):
     # sudo label
     array_shape = (data_b.shape[0], data_b.shape[1], 1)
     label_b = np.ones(array_shape)
-    train_loader = generate_dataloader(data_b, label_b, timestamp_b)
+    train_loader = generate_dataloader(data_b, label_b, timestamp_b,
+                                       batch_size=512, augment=False,
+                                        device='cpu', label_flags=label_b[:,0,0])
     return train_loader
