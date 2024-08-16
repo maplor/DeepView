@@ -420,7 +420,7 @@ class LabelWithInteractivePlot(QWidget):
 
         # 状态
         # 初始化训练状态为False
-        self.isTarining = False
+        self.isTraining = False
         # 初始化模式为空字符串
         self.mode = ''
 
@@ -665,7 +665,10 @@ class LabelWithInteractivePlot(QWidget):
         # 第三行布局 Display data 按钮
         self.third_row1_layout = QHBoxLayout()
         featureExtractBtn = self.createFeatureExtractButton()
+        labelColorBtn = self.createToggleLabelColor()  # 单击可以让右下散点图显示已有标签
+
         self.third_row1_layout.addWidget(featureExtractBtn, alignment=Qt.AlignRight)
+        self.third_row1_layout.addWidget(labelColorBtn, alignment=Qt.AlignRight)
 
         self.nestend_layout.addLayout(self.first_row1_layout)
         self.nestend_layout.addLayout(self.second_row1_layout)
@@ -755,6 +758,12 @@ class LabelWithInteractivePlot(QWidget):
         # 将按钮添加到顶部布局
         self.top_layout.addWidget(featureExtractBtn, alignment=Qt.AlignLeft)
 
+        featureColor = self.createToggleLabelColor()
+        # 将按钮添加到顶部布局
+        self.top_layout.addWidget(featureColor, alignment=Qt.AlignLeft)
+
+        # createToggleLabelColor
+
         # 添加一个伸缩项以填充其余空间并保持左对齐
         self.top_layout.addStretch()
 
@@ -832,7 +841,8 @@ class LabelWithInteractivePlot(QWidget):
             # 加载数据
             self.data = pickle.load(f)
             # 将UNIX时间戳转换为ISO 8601格式
-            self.data['timestamp'] = pd.to_datetime(self.data['unixtime'], unit='s').dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ').str[:-4] + 'Z'
+            self.data['timestamp'] = pd.to_datetime(self.data['unixtime'],
+                                                    unit='s').dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ').str[:-4] + 'Z'
             self.data['index'] = self.data.index  # Add an index column
             self.dataChanged.emit(self.data)
         return
@@ -929,6 +939,7 @@ class LabelWithInteractivePlot(QWidget):
             self.column_names = column_names
         return
 
+
     # 创建特征提取按钮的方法
     def createFeatureExtractButton(self):
         # 创建按钮
@@ -946,12 +957,26 @@ class LabelWithInteractivePlot(QWidget):
         # 返回按钮
         return featureExtractBtn
 
+    def createToggleLabelColor(self):
+        # 创建按钮
+        featureExtractBtn = QPushButton('Data Coloring')
+        # 设置按钮样式
+        featureExtractBtn.setStyleSheet(self.button_style)
+        self.is_toggled = True
+        # 设置按钮宽度
+        featureExtractBtn.setFixedWidth(160)
+        # 设置按钮不可用
+        # featureExtractBtn.setEnabled(False)
+        # 连接按钮点击事件到handleCompute方法
+        featureExtractBtn.clicked.connect(self.toggleLabelColor)
+        return featureExtractBtn
+
     # 处理计算的方法
     def handleCompute(self):
         # 打印开始训练
         print('start training...')
         # 设置训练状态为True
-        self.isTarining = True
+        self.isTraining = True
         # 更新按钮状态
         self.updateBtn()
         # 获取combobox的内容
@@ -973,14 +998,14 @@ class LabelWithInteractivePlot(QWidget):
         self.renderRightPlot()  # feature extraction function here
 
         # 设置训练状态为False
-        self.isTarining = False
+        self.isTraining = False
 
         self.updateBtn()
 
     # 更新按钮状态的方法
     def updateBtn(self):
         # enabled 启用按钮
-        if self.isTarining:
+        if self.isTraining:
             # 如果在训练，设置按钮不可用
             self.featureExtractBtn.setEnabled(False)
         else:
@@ -1017,6 +1042,7 @@ class LabelWithInteractivePlot(QWidget):
 
         # 添加一个伸缩项以填充剩余区域并保持复选框左对齐
         self.checkbox_layout.addStretch()
+
 
     # 处理复选框状态改变的方法
     def handleCheckBoxStateChange(self):
@@ -1307,6 +1333,41 @@ class LabelWithInteractivePlot(QWidget):
         self.scatterItem = scatterItem
 
         self.viewC.addItem(scatterItem)
+        return
+
+        # 显示原始标签在右下散点图上
+
+    def toggleLabelColor(self):
+
+        spots = []
+        for spot in self.scatterItem.points():
+            pos = spot.pos()
+            i, start, end = spot.data()
+            if self.data.loc[start, 'label_flag'] == 0:
+                color = self.checkColor(self.data.loc[start, 'label'], first=True)  # 相同背景色
+            else:
+                if self.is_toggled:
+                    color = self.checkColor(self.data.loc[start, 'label'], first=False)
+                else:
+                    color = self.checkColor(self.data.loc[start, 'label'], first=True)  # 相同背景色
+            spot = {'pos': (pos.x(), pos.y()), 'data': (i, start, end),
+                    'brush': pg.mkBrush(color)}
+            spots.append(spot)
+        # Toggle the flag
+        self.is_toggled = not self.is_toggled
+
+        # # 更新散点数据
+        # for reg in self.regions[0]:
+        #     # 获取区域的起始和结束索引
+        #     idx_begin, idx_end = self._to_idx(int(reg.getRegion()[0]),
+        #                                       int(reg.getRegion()[1]))
+        #     for spot in spots:
+        #         if idx_begin < spot['data'][1] and idx_end > spot['data'][2]:
+        #             spot['brush'] = reg.brush
+
+        self.scatterItem.setData(spots=spots)
+
+        return
 
     def select_random_continuous_seconds(self, num_samples=100, points_per_second=90):
         # 随机选择连续的秒数数据段

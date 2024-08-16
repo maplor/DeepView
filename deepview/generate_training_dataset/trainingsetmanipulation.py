@@ -175,6 +175,7 @@ def format_timestamp(df):
 def process_gps(df):
     # identify if gps exists
     # if exists, calculate velocity and angle
+    gps_len = len(df)
     df_columns = df.columns
     if ('latitude' in df_columns) or\
         ('longitude' in df_columns):
