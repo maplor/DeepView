@@ -233,6 +233,9 @@ def read_process_csv(root, file, sample_rate=25):
 
     # Create a new column 'label_flag' where NaN rows in 'label' are 0 and others are 1
     df['label_flag'] = df['label'].notna().astype(int)
+    # 如果整个文件都没有标签，那直接给label赋值为unknown
+    if 1 not in df['label_flag'].unique():
+        df['label'] = 'unknown'
 
     # fulfill nan values
     df = df.bfill().ffill()
