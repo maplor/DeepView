@@ -46,7 +46,7 @@ class TrainNetwork(DefaultTab):
         self.models = ['AE_CNN', 'SimCLR_LSTM', 'shortAE']
         self.select_column = []
         self.max_iter = 30
-        self.learning_rate = 0.0005
+        self.learning_rate = 0.0001
         self.batch_size = 512
         self.net_type = self.models[0]
         self.data_length = 180
@@ -115,7 +115,7 @@ class TrainNetwork(DefaultTab):
         self.save_iters_spin.setFixedWidth(2)
         # self.save_iters_spin.setMinimum(1)
         # self.save_iters_spin.setMaximum(1)
-        self.save_iters_spin.setText("0.0005")
+        self.save_iters_spin.setText("0.0001")
         self.save_iters_spin.setFixedWidth(available_width/10)
         self.save_iters_spin.textChanged.connect(self.log_init_lr)
 
@@ -125,7 +125,7 @@ class TrainNetwork(DefaultTab):
         self.batchsize_spin = QtWidgets.QSpinBox()
         self.batchsize_spin.setMinimum(1)
         self.batchsize_spin.setMaximum(10000)
-        self.batchsize_spin.setValue(32)
+        self.batchsize_spin.setValue(1028)
         self.batchsize_spin.setFixedWidth(available_width/10)
         self.batchsize_spin.valueChanged.connect(self.log_batch_size)
 
