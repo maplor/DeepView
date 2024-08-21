@@ -874,59 +874,96 @@
                         var clickedData = params.data;
                         if (clickedData.name === 'data') {
 
-                        backend.get_label_option().then(selectOption => {
-                            if (selectOption) {
-                                console.log('Received:', selectOption);
-                                if (!labelColors[selectOption]) {
-                                    // 生成随机颜色并存储
-                                    labelColors[selectOption] = '#' + Math.floor(Math.random() * 16777215).toString(16);
-                                }
+                            backend.get_label_option().then(selectOption => {
+                                if (selectOption) {
+                                    console.log('Received:', selectOption);
 
-                                const itemStyle = {
-                                    color: labelColors[selectOption]
-                                };
-
-                                // Update the color of the selected markArea using dataIndex
-                                const index = params.dataIndex;
-                                if (index !== undefined && selectedOption.series[0].markArea.data[index]) {
-                                    selectedOption.series[0].markArea.data[index][0].itemStyle = itemStyle;
-                                }
-
-                                charts[0].setOption(selectedOption);
-
-                                // Reformat clickedData for markArea
-                                let markAreaData = [
-                                    {
-                                        name: selectOption,
-                                        itemStyle: itemStyle,
-                                        xAxis: clickedData.coord[0][0]  // 使用第一个坐标的 x 值
-                                    },
-                                    {
-                                        xAxis: clickedData.coord[1][0]  // 使用第二个坐标的 x 值
+                                    if (!labelColors[selectOption]) {
+                                        // 找到第一个未使用的颜色
+                                        let nextColor = colorPalette.find(color => !usedColors.has(color));
+                                        if (nextColor) {
+                                            labelColors[selectOption] = nextColor;
+                                            usedColors.add(nextColor); // 标记为已使用
+                                        } else {
+                                            console.error('No available colors left in the palette.');
+                                            return;
+                                        }
                                     }
-                                ];
 
-                                // Check if the data is already in markData
-                                const exists = markData.some(area =>
-                                    area[0].xAxis === markAreaData[0].xAxis &&
-                                    area[1].xAxis === markAreaData[1].xAxis
-                                );
+                                    const itemStyle = {
+                                        color: labelColors[selectOption]
+                                    };
 
-                                if (!exists) {
-                                    markData.push(markAreaData);
-                                    // selectedOption.series[0].markArea.data = markData;
-                                    // charts[0].setOption(selectedOption);
+                                    // Update the color of the selected markArea using dataIndex
+                                    const index = params.dataIndex;
+                                    if (index !== undefined && selectedOption.series[0].markArea.data[index]) {
+                                        selectedOption.series[0].markArea.data[index][0].itemStyle = itemStyle;
+                                    }
+
+                                    var currentZoom = charts[0].getOption().dataZoom[0];
+                                    charts[0].setOption(selectedOption);
+                                    charts[0].dispatchAction({
+                                        type: 'dataZoom',
+                                        start: currentZoom.start,
+                                        end: currentZoom.end
+                                    });
+
+                                    // Reformat clickedData for markArea
+                                    let markAreaData = [
+                                        {
+                                            name: selectOption,
+                                            itemStyle: itemStyle,
+                                            xAxis: clickedData.coord[0][0]  // 使用第一个坐标的 x 值
+                                        },
+                                        {
+                                            xAxis: clickedData.coord[1][0]  // 使用第二个坐标的 x 值
+                                        }
+                                    ];
+
+                                    // 检查是否与现有的数据重叠
+                                    let hasOverlap = false;
+                                    let overlappingIndexes = [];
+
+                                    markData.forEach((existingArray, index) => {
+                                        const existingStart = existingArray[0].xAxis;
+                                        const existingEnd = existingArray[1].xAxis;
+                                        const newStart = markAreaData[0].xAxis;
+                                        const newEnd = markAreaData[1].xAxis;
+
+                                        // 判断是否有重叠
+                                        const isOverlapping = !(existingEnd <= newStart || existingStart >= newEnd);
+
+                                        if (isOverlapping) {
+                                            hasOverlap = true;
+                                            overlappingIndexes.push(index);
+                                        }
+                                    });
+
+                                    if (hasOverlap) {
+                                        // 调用 PySide6 的 confirmOverlap 方法
+                                        backend.confirmOverlap().then(userConfirmed => {
+                                            if (userConfirmed) {
+                                                // 去掉旧的重叠区域
+                                                overlappingIndexes.reverse().forEach(index => {
+                                                    markData.splice(index, 1);
+                                                });
+                                                // 添加新的数据
+                                                markData.push(markAreaData);
+                                            }
+                                        });
+                                    } else {
+                                        // 如果没有重叠，直接添加新的数据
+                                        markData.push(markAreaData);
+                                    }
+
+                                } else {
+                                    console.error('No option received');
                                 }
+                            }).catch(error => {
+                                console.error('Error fetching label option:', error);
+                            });
+                        }
 
-
-                            } else {
-                                console.error('No option received');
-                            }
-                        }).catch(error => {
-                            console.error('Error fetching label option:', error);
-                        });
-                    }
-                        
                     }
                 }
             });
@@ -1030,6 +1067,8 @@
                     // otherMarkData.push(newArray);
                 }
 
+                const currentZoom = charts[0].getOption().dataZoom;
+
                 if (findDatastatus) {
                     selectedOption.series[0].markArea.data = otherMarkData;
                 } else {
@@ -1037,6 +1076,11 @@
                 }
 
                 charts[0].setOption(selectedOption);
+                if (currentZoom) {
+                    charts[0].setOption({
+                        dataZoom: currentZoom
+                    });
+                }
 
                 // 清除框选
                 charts.forEach((chart, i) => {
