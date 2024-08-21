@@ -1,15 +1,16 @@
+# This Python file uses the following encoding: utf-8
 import os
 import pandas as pd
 from pathlib import Path
 
-from PySide6 import QtWidgets
+# from PySide6 import QtWidgets
 from PySide6.QtCore import Qt, QUrl, Signal, Slot
 from PySide6.QtGui import QShowEvent
-from PySide6.QtWidgets import QPushButton, QFileDialog, QLineEdit
-from PySide6.QtWidgets import QLabel
+# from PySide6.QtWidgets import QPushButton, QFileDialog, QLineEdit
+# from PySide6.QtWidgets import QLabel
 from deepview.utils import auxiliaryfunctions
 from deepview.gui.components import (
-    DefaultTab,
+    # DefaultTab,
     DefaultWebTab,
     # TestfileSpinBox,
     # _create_horizontal_layout,
@@ -18,12 +19,12 @@ from deepview.gui.components import (
 )
 
 from deepview.gui.label_with_interactive_plot import LabelWithInteractivePlot, Backend
-import pyqtgraph as pg
+# import pyqtgraph as pg
 
-from PySide6.QtWebEngineWidgets import QWebEngineView
+# from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineSettings
-from PySide6.QtWidgets import QSizePolicy
+# from PySide6.QtWidgets import QSizePolicy
 
 
 class LabelWithInteractivePlotTab(DefaultWebTab):

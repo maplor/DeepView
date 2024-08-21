@@ -1,11 +1,11 @@
-
+# This Python file uses the following encoding: utf-8
 import os
 import logging
-import subprocess
+# import subprocess
 import sys
 from functools import cached_property
 from pathlib import Path
-from typing import List
+# from typing import List
 import qdarkstyle
 
 from PySide6.QtWidgets import QMessageBox, QMenu, QWidget, QMainWindow

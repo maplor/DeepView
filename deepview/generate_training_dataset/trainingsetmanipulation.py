@@ -1,4 +1,4 @@
-
+# This Python file uses the following encoding: utf-8
 import math
 import logging
 import os
@@ -16,7 +16,7 @@ import glob
 import pickle
 from datetime import datetime
 
-from deepview.clustering_pytorch import training
+# from deepview.clustering_pytorch import training
 # from deeplabcut.utils import (
 #     auxiliaryfunctions,
 #     conversioncode,

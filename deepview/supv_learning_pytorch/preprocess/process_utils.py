@@ -1,4 +1,4 @@
-
+# This Python file uses the following encoding: utf-8
 # code from Otsuka's project: data_preprocess_logbot.py
 
 

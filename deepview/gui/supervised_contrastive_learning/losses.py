@@ -1,3 +1,4 @@
+# This Python file uses the following encoding: utf-8
 """
 Author: Yonglong Tian (yonglong@mit.edu)
 Date: May 07, 2020

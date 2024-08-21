@@ -1,3 +1,5 @@
+# This Python file uses the following encoding: utf-8
+
 # 导入数学模块
 # 从typing模块导入List类型
 # 导入torch模块
@@ -265,12 +267,6 @@ class Backend(QObject):
                         "yAxisName": "Y Axis 1",
                         "series": ["acc_x", "acc_y", "acc_z"]
                     }
-                    # {
-                    #     "name": "gyroscope",
-                    #     "xAxisName": "timestamp",
-                    #     "yAxisName": "Y Axis 2",
-                    #     "series": ["gyro_x", "gyro_y", "gyro_z"]
-                    # }
                 ]
 
             # 将元数据和数据打包到一个字典中

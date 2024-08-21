@@ -1,4 +1,4 @@
-
+# This Python file uses the following encoding: utf-8
 
 #
 # DeepLabCut Toolbox (deeplabcut.org)
@@ -23,7 +23,7 @@ from PySide6.QtWidgets import QPushButton, QFileDialog, QLineEdit
 
 from deepview.gui.components import (
     DefaultTab,
-    TestfileSpinBox,
+    # TestfileSpinBox,
     _create_horizontal_layout,
     _create_label_widget,
     _create_vertical_layout,
@@ -31,7 +31,7 @@ from deepview.gui.components import (
 # from deepview.gui.widgets import ConfigEditor
 import deepview
 # from deepview.utils import auxiliaryfunctions
-from deepview.utils.auxiliaryfunctions import get_evaluation_folder
+# from deepview.utils.auxiliaryfunctions import get_evaluation_folder
 
 '''
 button1:evaluate 单天或者某些天（todo）的数据，生成数据的representation，完成后保存representation
