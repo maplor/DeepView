@@ -1,4 +1,4 @@
-
+# This Python file uses the following encoding: utf-8
 import os
 from glob import glob
 import typing
@@ -94,7 +94,8 @@ def read_config(configname):
     path = Path(configname)
     if os.path.exists(path):
         try:
-            with open(path, "r") as f:
+            # with open(path, "r", encoding='utf-8') as f:
+            with open(path, "rb") as f:
                 cfg = ruamelFile.load(f)
                 curr_dir = os.path.dirname(configname)
                 if cfg["project_path"] != curr_dir:
@@ -106,7 +107,7 @@ def read_config(configname):
                     err.args[2]
                     == "could not determine a constructor for the tag '!!python/tuple'"
                 ):
-                    with open(path, "r") as ymlfile:
+                    with open(path, "rb") as ymlfile:
                         cfg = yaml.load(ymlfile, Loader=yaml.SafeLoader)
                         write_config(configname, cfg)
                 else:

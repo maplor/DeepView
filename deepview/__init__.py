@@ -1,4 +1,4 @@
-
+# This Python file uses the following encoding: utf-8
 
 import os
 DEBUG = True and "DEBUG" in os.environ and os.environ["DEBUG"]

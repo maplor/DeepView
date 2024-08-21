@@ -1,3 +1,4 @@
+# This Python file uses the following encoding: utf-8
 #
 # DeepLabCut Toolbox (deeplabcut.org)
 # © A. & M.W. Mathis Labs
@@ -9,7 +10,7 @@
 # Licensed under GNU Lesser General Public License v3.0
 #
 import os
-from pathlib import Path
+# from pathlib import Path
 
 from PySide6 import QtWidgets, QtCore
 from PySide6.QtCore import Qt
