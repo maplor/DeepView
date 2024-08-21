@@ -107,8 +107,8 @@
             '#ea7ccc', '#fff018', '#6800ff', '#4bb0ff',
             '#1bff00', '#09ffdb'];
         let usedColors = new Set(); // 用于跟踪已使用的颜色  
-        let labelColors = {};
 
+        labelColors = {};
         onbrush = false;
         // 全局变量存储框选的范围
         let brushAreas = [];
@@ -836,8 +836,8 @@
 
             charts[0].on('click', function (params) {
                 // console.log('click', params);
-                if (delectState) {
-                    if (params.componentType === 'markArea') {
+                if (params.componentType === 'markArea') {
+                    if (delectState) {
                         var markAreaId = params.data.id;
                         if (markAreaId) {
 
@@ -867,6 +867,66 @@
                                 }
                             });
                         }
+                    }
+                    else {
+                        // TODO 加入start和end时间
+                        // Extract the clicked box's data
+                        var clickedData = params.data;
+                        if (clickedData.name === 'data') {
+
+                        backend.get_label_option().then(selectOption => {
+                            if (selectOption) {
+                                console.log('Received:', selectOption);
+                                if (!labelColors[selectOption]) {
+                                    // 生成随机颜色并存储
+                                    labelColors[selectOption] = '#' + Math.floor(Math.random() * 16777215).toString(16);
+                                }
+
+                                const itemStyle = {
+                                    color: labelColors[selectOption]
+                                };
+
+                                // Update the color of the selected markArea using dataIndex
+                                const index = params.dataIndex;
+                                if (index !== undefined && selectedOption.series[0].markArea.data[index]) {
+                                    selectedOption.series[0].markArea.data[index][0].itemStyle = itemStyle;
+                                }
+
+                                charts[0].setOption(selectedOption);
+
+                                // Reformat clickedData for markArea
+                                let markAreaData = [
+                                    {
+                                        name: selectOption,
+                                        itemStyle: itemStyle,
+                                        xAxis: clickedData.coord[0][0]  // 使用第一个坐标的 x 值
+                                    },
+                                    {
+                                        xAxis: clickedData.coord[1][0]  // 使用第二个坐标的 x 值
+                                    }
+                                ];
+
+                                // Check if the data is already in markData
+                                const exists = markData.some(area =>
+                                    area[0].xAxis === markAreaData[0].xAxis &&
+                                    area[1].xAxis === markAreaData[1].xAxis
+                                );
+
+                                if (!exists) {
+                                    markData.push(markAreaData);
+                                    // selectedOption.series[0].markArea.data = markData;
+                                    // charts[0].setOption(selectedOption);
+                                }
+
+
+                            } else {
+                                console.error('No option received');
+                            }
+                        }).catch(error => {
+                            console.error('Error fetching label option:', error);
+                        });
+                    }
+                        
                     }
                 }
             });
