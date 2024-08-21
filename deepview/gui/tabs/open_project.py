@@ -1,3 +1,4 @@
+# This Python file uses the following encoding: utf-8
 #
 # DeepLabCut Toolbox (deeplabcut.org)
 # © A. & M.W. Mathis Labs
@@ -12,7 +13,7 @@ import os
 
 from PySide6 import QtWidgets, QtCore
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QCheckBox
+# from PySide6.QtWidgets import QCheckBox
 
 
 class OpenProject(QtWidgets.QDialog):

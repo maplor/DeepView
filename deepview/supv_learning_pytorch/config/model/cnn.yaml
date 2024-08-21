@@ -1,0 +1,6 @@
+model_name: "cnn"
+kernel_size: 5
+num_conv_layers: 4 # not for RN model
+num_conv_filters: 128
+out_layer_type: "flatten-linear-2" # "1-by-1-conv" or "flatten-linear" or "flatten-linear-2"
+out_dropout_rate: 0.0

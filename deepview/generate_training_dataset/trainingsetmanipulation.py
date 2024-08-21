@@ -1,5 +1,4 @@
-
-
+# This Python file uses the following encoding: utf-8
 import math
 import logging
 import os
@@ -13,10 +12,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import yaml
+import glob
 import pickle
 from datetime import datetime
 
-from deepview.clustering_pytorch import training
+# from deepview.clustering_pytorch import training
 # from deeplabcut.utils import (
 #     auxiliaryfunctions,
 #     conversioncode,
@@ -34,6 +34,7 @@ from deepview.utils import (
     get_deepview_path,
     read_plainconfig,
     get_training_set_folder,
+    get_unsupervised_set_folder,
     attempt_to_make_folder,
 )
 
@@ -41,8 +42,14 @@ from deepview.generate_training_dataset.utils import (
     label_str_list,
     label_str2num,
     GRAVITATIONAL_ACCELERATION,
+    divide_df_if_timestamp_gap_detected_2,
+    run_resampling_and_concat_df,
     date_format,
     GYROSCOPE_SCALE,
+)
+
+from deepview.utils.auxiliaryfunctions import (
+    read_config,
 )
 
 
@@ -152,119 +159,160 @@ def z_score_normalization(df):
 
     return normalized_df
 
+def format_timestamp(df):
+    # if 'datetime' not in df.columns:
+    s = df['timestamp'].str.replace('T', ' ').str.replace('Z', '')
+    df = df.drop('timestamp', axis=1)
+    s_datetime = pd.to_datetime(s)  # to datetime64[ns]
+    df.insert(loc=0, column='datetime', value=s_datetime)
+    # round at 1 millisecond
+    df['datetime'] = df['datetime'].dt.round('1L')
+    # unixtime
+    unixtime = df['datetime'].apply(lambda t: t.timestamp())
+    df.insert(loc=1, column='unixtime', value=unixtime)
+    return df
 
-def read_process_csv(file, filename, string_to_value):
-    # load data
+def process_gps(df):
+    # identify if gps exists
+    # if exists, calculate velocity and angle
+    gps_len = len(df)
+    df_columns = df.columns
+    if ('latitude' in df_columns) or\
+        ('longitude' in df_columns):
+        # Extract rows where both latitude and longitude are not NaN
+        df_non_nan = df.dropna(subset=['latitude', 'longitude'])
+
+        # get sampling rate of GPS signal,newlen*oldHz/oldlen得到GPShz，所以这里传newlen
+        gps_len = len(df_non_nan)
+
+        # Calculate differences, handling NaN by filling with zeros
+        df_non_nan['lat_diff'] = np.radians(df_non_nan['latitude'].diff())
+        df_non_nan['lon_diff'] = np.radians(df_non_nan['longitude'].diff())
+
+        # Convert latitude to radians, handling NaN by filling with zeros
+        df_non_nan['lat1'] = np.radians(df_non_nan['latitude'].shift())
+        df_non_nan['lat2'] = np.radians(df_non_nan['latitude'])
+
+        # Calculate time difference in seconds
+        df_non_nan['timestamp'] = pd.to_datetime(df_non_nan['timestamp'])
+        df_non_nan['time_diff'] = df_non_nan['timestamp'].diff().dt.total_seconds()
+
+        # Haversine formula
+        a = (np.sin(df_non_nan['lat_diff'] / 2) ** 2 +
+             np.cos(df_non_nan['lat1']) * np.cos(df_non_nan['lat2']) * np.sin(df_non_nan['lon_diff'] / 2) ** 2)
+        c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+        R = 6371000  # Earth radius in meters
+        df_non_nan['distance'] = R * c
+        # Calculate velocity (m/s)
+        df_non_nan['GPS_velocity'] = df_non_nan['distance'] / df_non_nan['time_diff']
+
+        # Calculate bearing
+        x = np.sin(df_non_nan['lon_diff']) * np.cos(df_non_nan['lat2'])
+        y = (np.cos(df_non_nan['lat1']) * np.sin(df_non_nan['lat2']) -
+             np.sin(df_non_nan['lat1']) * np.cos(df_non_nan['lat2']) * np.cos(df_non_nan['lon_diff']))
+        initial_bearing = np.arctan2(x, y)
+        initial_bearing = np.degrees(initial_bearing)
+        df_non_nan['GPS_bearing'] = (initial_bearing + 360) % 360
+
+        # Merge velocity and bearing back to the original dataframe
+        df = df.merge(df_non_nan[['GPS_velocity', 'GPS_bearing']], left_index=True, right_index=True, how='left')
+
+    return df, gps_len
+
+
+# ---------------------------read raw sensor data--------------------------------
+
+def read_process_csv(root, file, sample_rate=25):
+    """
+    data most contains rows: timestamp and label
+    timestamp: transfer string to unixtime
+    """
     df = pd.read_csv(file)
-    needed_column = ['logger_id', 'animal_tag', 'timestamp', 'acc_x', 'acc_y', 'acc_z',
-                     'latitude', 'longitude', 'gyro_x', 'gyro_y', 'gyro_z',
-                     'mag_x', 'mag_y', 'mag_z', 'illumination', 'pressure', 'temperature',
-                     'activity_class', 'label']
+    # add velocity and angles if GPS sensor exists
+    df, gps_len = process_gps(df)
 
-    # normalize data
-    cols = ["acc_x", "acc_y", "acc_z"]
-    df[cols] = z_score_normalization(df[cols])
-    # df[cols] = df[cols] / GRAVITATIONAL_ACCELERATION
-    cols_1 = ["gyro_x", "gyro_y", "gyro_z"]
-    df[cols_1] = z_score_normalization(df[cols_1])
+    # Create a new column 'label_flag' where NaN rows in 'label' are 0 and others are 1
+    df['label_flag'] = df['label'].notna().astype(int)
+    # 如果整个文件都没有标签，那直接给label赋值为unknown
+    if 1 not in df['label_flag'].unique():
+        df['label'] = 'unknown'
 
-    # calculate
-    tmpdata = df[needed_column]
-    # nan = 0
-    tmpdata['labelid'] = tmpdata['label'].apply(lambda x: label_str2num[x] if x in label_str_list else 0)
-    tmpdata['velocity'] = tmpdata.apply(calculate_velocity, axis=1)
-    tmpdata['timestamp'] = tmpdata['timestamp'].map(
-        lambda x: pd.to_datetime(datetime.strptime(x, date_format)) + np.timedelta64(9,
-                                                                                     'h'))  # adjust time zone to Japan
-    tmpdata['filename'] = filename
+    # fulfill nan values
+    df = df.bfill().ffill()
 
-    # Convert numpy.datetime64 to Unix timestamp (seconds since 1970-01-01 00:00:00 UTC)
-    tmpdata['time'] = tmpdata.timestamp.map(lambda x: (x - np.datetime64('1970-01-01T00:00:00')) / np.timedelta64(1, 'us'))
-    tmpdata['domainid'] = tmpdata['filename'].map(string_to_value)
-    return tmpdata
+    df = format_timestamp(df)
+    # calculate sampling rate, the input is timestamp
+    INTERMEDIATE_SAMPLING_RATE = int(1/np.mean(np.diff(df['unixtime'].values)))
+    if INTERMEDIATE_SAMPLING_RATE == 0:  # if the sampling rate is the same, should be 1
+        INTERMEDIATE_SAMPLING_RATE = 1
 
-def preprocess_datasets(cfg, trainingsetfolder_full):
+    # divide data if time_gap exists
+    df_list = divide_df_if_timestamp_gap_detected_2(df, int(sample_rate) * 5 * 60)
+
+    # change sampling rate
+    newdf = run_resampling_and_concat_df(df_list,
+                                      int(sample_rate),
+                                      INTERMEDIATE_SAMPLING_RATE,
+                                      remove_sec=3,
+                                      check_df=False)
+
+    root_cfg = read_config(root.config)
+    label_dict = root_cfg['label_dict']
+    # create label_id (int) for label (str)
+    newdf['label_id'] = newdf['label'].map(label_dict)  # todo, very long time
+    # df['label_id'] = df['label'].map(label_str2num)
+    # 因为角度是一段距离内的角度累计，需要除以时间
+    gps_sampling_rate = (gps_len * float(sample_rate)) / len(newdf)
+    newdf['GPS_bearing'] = newdf['GPS_bearing'] * (gps_sampling_rate)
+    return newdf
+
+def preprocess_datasets(root, progress_update, cfg, allsetfolder, sample_rate):
     """
-    This file preprocess raw sensor data and store new files into 'labeled_data' folder
-    #------by xia---------
-    the csv file contains every sample filename and the label positions (by human)
+    for each sensor data file, preprocess it and save as pkl file into
+    rootpath/unsupervised-datasets/allDataSet folder
+    raw sensor data path saved at: rootpath/config.yaml, file_sets parameter
     """
 
-    AnnotationData = []
-    data_path = Path(os.path.join(cfg["project_path"], "labeled-data"))
-    files = cfg["file_sets"].keys()
+    # get raw sensor data full paths
+    filenames = cfg["file_sets"]
+    sorted_filenames = sorted(filenames)
+    filenum = len(filenames)
+    # read data
+    # AnnotationData = []
+    for idx, file in enumerate(sorted_filenames):
+        progress_update.emit(int((idx +1 ) /filenum * 100))
 
-    # get filenames
-    filenames = []
-    for file in files:
-        _, filename, _ = _robust_path_split(file)
-        filenames.append(filename)
-    string_to_value = {string: index + 1 for index, string in enumerate(filenames)}
-
-    for file in files:
-        _, filename, _ = _robust_path_split(file)
+        parent, filename, _ = _robust_path_split(file)
         file_path = os.path.join(
-            data_path / filename, f'CollectedData_{cfg["scorer"]}.pkl'
+            allsetfolder, filename + f'_%sHz.pkl ' %sample_rate
+            # allsetfolder, filename+f'_{cfg["scorer"]}.pkl'
         )
         # reading raw data here...
         try:
             if os.path.isfile(file_path):
-                with open(file_path, 'rb') as f:
-                    data = pickle.load(f)
+                print('Raw sensor data already exists at %s ' %file_path)
+                # with open(file_path, 'rb') as f:
+                #     data = pickle.load(f)
             else:
-                data = read_process_csv(file, filename, string_to_value)  # return dataframe
+                data = read_process_csv(root, file, sample_rate)  # return dataframe
                 with open(file_path, 'wb') as f:
-                     pickle.dump(data, f)
-            conversioncode.guarantee_multiindex_rows(data)
-            AnnotationData.append(data)
+                    pickle.dump(data, f)
+            # conversioncode.guarantee_multiindex_rows(data)
+            # AnnotationData.append(data)
         except FileNotFoundError:
-            print(file_path, " not found (perhaps not annotated).")
+            print(file_path, " not found raw sensor data, please create data first.")
 
-    if not len(AnnotationData):
-        print(
-            "Annotation data was not found by splitting video paths (from config['video_sets']). An alternative route is taken..."
-        )
-        AnnotationData = conversioncode.merge_windowsannotationdataONlinuxsystem(cfg)
-        if not len(AnnotationData):
-            print("No data was found!")
-            return
-
-    AnnotationData = pd.concat(AnnotationData).sort_index()
-
-    # When concatenating DataFrames with misaligned column labels,
-    # all sorts of reordering may happen (mainly depending on 'sort' and 'join')
-    # Ensure the 'bodyparts' level agrees with the order in the config file.
-    # bodyparts = cfg["bodyparts"]
-    # AnnotationData = AnnotationData.reindex(
-    #     bodyparts, axis=1, level=AnnotationData.columns.names.index("bodyparts")
-    # )
-
-    # save data, data is dataframe, include raw data and annotations (by human)
-    # (deeplabcut) row: sample name, column: label types
-    # (deepview) todo: change the dataframe, I want to label the start and end time of activities for each channel
-    filename = os.path.join(trainingsetfolder_full, f'CollectedData_{cfg["scorer"]}')
-    # AnnotationData.to_hdf(filename + ".h5", key="df_with_missing", mode="w")
-    with open(filename + ".pkl", 'wb') as f:
-        pickle.dump(AnnotationData, f)
-    # human readable. human labels of every samples
-    AnnotationData.to_csv(filename + ".csv")
-
-    return AnnotationData
-    # return splits
+    # if not len(AnnotationData):
+    #     print("No data was found!")
+    #     return
+    return
 
 
 def create_training_dataset(
+        root,
+    progress_update,
     config,
-    # num_shuffles=1,
-    # Shuffles=None,
-    windows2linux=False,
-    userfeedback=False,
-    trainIndices=None,
-    testIndices=None,
-    net_type=None,
-    augmenter_type=None,
-    posecfg_template=None,
-    superanimal_name="",
+    sample_rate=None,
 ):
     """Creates a training dataset.
     Returns
@@ -298,147 +346,127 @@ def create_training_dataset(
         )
     """
 
-
     # Loading metadata from config.yaml file:
-    cfg = auxiliaryfunctions.read_config(config)
-    # dlc_root_path = auxiliaryfunctions.get_deepview_path()
-
+    cfg = auxiliaryfunctions.read_config(config)  # project_path/config.yaml
 
    # remove if multianimal
    #  scorer = cfg["scorer"]  # part of project name, string
     project_path = cfg["project_path"]
     # Create path for training sets & store data there. Path: training_datasets/iteration_0/..
-    trainingsetfolder = auxiliaryfunctions.get_training_set_folder(
-        cfg
-    )  # Create folder for above path. Path concatenation OS platform independent
+    trainingsetfolder = auxiliaryfunctions.get_unsupervised_set_folder()
+    # Create folder for above path. Path concatenation OS platform independent
     auxiliaryfunctions.attempt_to_make_folder(
         Path(os.path.join(project_path, str(trainingsetfolder))), recursive=True
-    )
+    )  # WindowsPath('C:/Users/dell/Desktop/xia-logbot-2024-04-19/unsupervised-datasets/allDataSet')
 
     # preprocess data
     # print('preprocessing data using min-max norm...')
 
-    Data = preprocess_datasets(
+    preprocess_datasets(
+        root,
+        progress_update,
         cfg,
         Path(os.path.join(project_path, trainingsetfolder)),
+        sample_rate,
     )
-    if Data is None:
-        print('No data preprocessed.')
-        return
-    # Data = Data[scorer]  # extract labeled data, dataframe
 
 
-    # 2. load模型训练参数，目前可以不写
+    ################################################################################
+    # Creating file structure for unsupervised/supervised training &
+    # Test files as well as pose_yaml files (containing training and testing information)
+    #################################################################################
+    unsup_modelfoldername = auxiliaryfunctions.get_unsup_model_folder(cfg)
 
-    # loading & linking pretrained models
-    if net_type is None:  # loading & linking pretrained models
-        net_type = cfg.get("default_net_type", "resnet_50")
-    else:
-        if (
-            "resnet" in net_type
-            or "CNN_AE" in net_type
-            # or "efficientnet" in net_type
-            # or "dlcrnet" in net_type
-        ):
-            pass
-        else:
-            raise ValueError("Invalid network type:", net_type)
+    auxiliaryfunctions.attempt_to_make_folder(
+        str(Path(config).parents[0] / unsup_modelfoldername)
+    )  # for all data
 
-
-        ################################################################################
-        # Creating file structure for training &
-        # Test files as well as pose_yaml files (containing training and testing information)
-        #################################################################################
-        modelfoldername = auxiliaryfunctions.get_model_folder(cfg)
-        auxiliaryfunctions.attempt_to_make_folder(
-            Path(config).parents[0] / modelfoldername, recursive=True
+    path_unsup_train_config = str(
+        os.path.join(
+            cfg["project_path"],
+            Path(unsup_modelfoldername),
+            "model_cfg.yaml",
         )
-        auxiliaryfunctions.attempt_to_make_folder(
-            str(Path(config).parents[0] / modelfoldername) + "/train"
-        )
-        auxiliaryfunctions.attempt_to_make_folder(
-            str(Path(config).parents[0] / modelfoldername) + "/test"
-        )
+    )
+    # Make training file! 读文件路径，是存到training datasets里的两个文件
+    trainingsetfolder = auxiliaryfunctions.get_training_set_folder(cfg)
+    (
+        datafilename,
+        metadatafilename,
+    ) = auxiliaryfunctions.get_data_and_metadata_filenames(
+        trainingsetfolder, cfg
+    )
+    items2change = {
+        "project_path": str(cfg["project_path"]),  # 最外层路径
+        "dataset": Path(os.path.join(project_path, trainingsetfolder)),
+        "sample_rate": int(sample_rate),
+        "net_type": "AE_CNN",
+        "lr_init": 0.0001,
+        'batch_size': 32,
+        'max_epochs': 100,
+        'data_length': 180,
+        # 'data_colunms': ['acc_x', 'acc_y', 'acc_z']
+    }
+    dvparent_path = auxiliaryfunctions.get_deepview_path()
+    defaultconfigfile = os.path.join(dvparent_path, "model_cfg.yaml")
+    _ = MakeTrain_yaml(
+        items2change, path_unsup_train_config, defaultconfigfile)
 
-        path_train_config = str(
-            os.path.join(
-                cfg["project_path"],
-                Path(modelfoldername),
-                "train",
-                "model_cfg.yaml",
-            )
-        )
-        path_test_config = str(
-            os.path.join(
-                cfg["project_path"],
-                Path(modelfoldername),
-                "test",
-                "model_cfg.yaml",
-            )
-        )
-        # str(cfg['proj_path']+'/'+Path(modelfoldername) / 'test'  /  'pose_cfg.yaml')
-        # bodyparts = ['label1', 'label2', 'label3']
-        # dlcparent_path = auxiliaryfunctions.get_deepview_path()
-        # model_path = auxfun_models.check_for_weights(
-        #     net_type, Path(dlcparent_path))
 
-        # Make training file! 读文件路径，是存到training datasets里的两个文件
-        trainingsetfolder = auxiliaryfunctions.get_training_set_folder(cfg)
-        (
-            datafilename,
-            metadatafilename,
-        ) = auxiliaryfunctions.get_data_and_metadata_filenames(
-            trainingsetfolder, cfg
+    sup_modelfoldername = auxiliaryfunctions.get_sup_model_folder(cfg)
+
+    auxiliaryfunctions.attempt_to_make_folder(
+        str(Path(config).parents[0] / sup_modelfoldername) + "/train"
+    )
+    auxiliaryfunctions.attempt_to_make_folder(
+        str(Path(config).parents[0] / sup_modelfoldername) + "/test"
+    )
+
+
+    path_train_config = str(
+        os.path.join(
+            cfg["project_path"],
+            Path(sup_modelfoldername),
+            "train",
+            "model_cfg.yaml",
         )
-        items2change = {
-            "dataset": datafilename,
-            # "metadataset": metadatafilename,
-            # "num_joints": len(bodyparts),
-            # "all_joints": [[i] for i in range(len(bodyparts))],
-            # "all_joints_names": [str(bpt) for bpt in bodyparts],
-            "init_weights": '',
-            "project_path": str(cfg["project_path"]),
-            "net_type": net_type,
-            "dataset_type": augmenter_type,
-        }
-
-        items2drop = {}
-        if augmenter_type == "scalecrop":
-            # these values are dropped as scalecrop
-            # doesn't have rotation implemented
-            items2drop = {"rotation": 0, "rotratio": 0.0}
-        # Also drop maDLC smart cropping augmentation parameters
-        for key in ["pre_resize", "crop_size", "max_shift", "crop_sampling"]:
-            items2drop[key] = None
-
-        dvparent_path = auxiliaryfunctions.get_deepview_path()
-        defaultconfigfile = os.path.join(dvparent_path, "model_cfg.yaml")
-        trainingdata = MakeTrain_yaml(
-            items2change, path_train_config, defaultconfigfile, items2drop
+    )
+    path_test_config = str(
+        os.path.join(
+            cfg["project_path"],
+            Path(sup_modelfoldername),
+            "test",
+            "model_cfg.yaml",
         )
+    )
 
-        keys2save = [
-            "dataset",
-            # "num_joints",
-            # "all_joints",
-            # "all_joints_names",
-            "net_type",
-            "init_weights",
-            "global_scale",
-            "location_refinement",
-            "locref_stdev",
-        ]
-        MakeTest_pose_yaml(trainingdata, keys2save, path_test_config)
-        print(
-            "The training dataset is successfully created. Use the function 'train_network' to start training. Happy training!"
-        )
+    # Make training file! 读文件路径，是存到training datasets里的两个文件
+    trainingsetfolder = auxiliaryfunctions.get_training_set_folder(cfg)
+    (
+        datafilename,
+        metadatafilename,
+    ) = auxiliaryfunctions.get_data_and_metadata_filenames(
+        trainingsetfolder, cfg
+    )
 
+
+    dvparent_path = auxiliaryfunctions.get_deepview_path()
+    defaultconfigfile = os.path.join(dvparent_path, "model_cfg.yaml")
+    trainingdata = MakeTrain_yaml(
+        items2change, path_train_config, defaultconfigfile)
+
+    keys2save = [
+        "dataset",
+        "net_type",
+        "init_weights",
+    ]
+    MakeTest_pose_yaml(trainingdata, keys2save, path_test_config)
+    print(
+        "The training dataset is successfully created. Use the function 'train_network' to start training. Happy training!"
+    )
     return
 
-
-
 # --------------make yaml files-------------------
-
 def ParseYaml(configfile):
     raw = open(configfile).read()
     docs = []

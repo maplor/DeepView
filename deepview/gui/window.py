@@ -1,11 +1,11 @@
-
+# This Python file uses the following encoding: utf-8
 import os
 import logging
-import subprocess
+# import subprocess
 import sys
 from functools import cached_property
 from pathlib import Path
-from typing import List
+# from typing import List
 import qdarkstyle
 
 from PySide6.QtWidgets import QMessageBox, QMenu, QWidget, QMainWindow
@@ -30,9 +30,13 @@ from deepview.gui.widgets import StreamReceiver, StreamWriter
 from deepview.gui.tabs.create_training_dataset import CreateTrainingDataset
 from deepview.gui.tabs.open_project import OpenProject
 from deepview.gui.tabs.train_network import TrainNetwork
-from deepview.gui.tabs.evaluate_network import EvaluateNetwork
-from deepview.gui.tabs.label_data import LabelData
-from deepview.gui.tabs.interaction_plot import InteractionPlot
+# from deepview.gui.tabs.visualize_gps import GPSDisplayer
+# from deepview.gui.tabs.IMU_GPS_interact import GPSIMU_Interaction
+# from deepview.gui.tabs.evaluate_network import EvaluateNetwork
+# from deepview.gui.tabs.label_data import LabelData
+# from deepview.gui.tabs.interaction_plot import InteractionPlot
+from deepview.gui.tabs.label_with_interactive_plot import LabelWithInteractivePlotTab
+from deepview.gui.tabs.supervised_learning_new_labels import SupervisedLearningNewLabels
 
 
 class MainWindow(QMainWindow):
@@ -126,7 +130,7 @@ class MainWindow(QMainWindow):
 
     @property
     def project_folder(self) -> str:
-        return self.cfg.get("project_path", os.path.expanduser("~/Desktop"))
+        return self.cfg.get("project_path", os.path.expanduser("~\Desktop"))
 
     # @property
     # def is_multianimal(self) -> bool:
@@ -432,6 +436,7 @@ class MainWindow(QMainWindow):
     def darkmode(self):
         dark_stylesheet = qdarkstyle.load_stylesheet_pyside2()
         self.app.setStyleSheet(dark_stylesheet)
+        self.label_with_interactive_plot.update_theme('dark')
 
         names = ["new_project2.png", "open2.png", "help2.png"]
         self.remove_action()
@@ -444,6 +449,7 @@ class MainWindow(QMainWindow):
 
         style = qdarkstyle.load_stylesheet(palette=LightPalette)
         self.app.setStyleSheet(style)
+        self.label_with_interactive_plot.update_theme('light')
 
         names = ["new_project.png", "open.png", "help.png"]
         self.remove_action()
@@ -477,16 +483,7 @@ class MainWindow(QMainWindow):
         _attempt_attribute_update("testfile", self.testfile)
         _attempt_attribute_update("cfg_line", self.config)
 
-    # def is_transreid_available(self):
-    #     if self.is_multianimal:
-    #         try:
-    #             from deeplabcut.pose_tracking_pytorch import transformer_reID
-    #
-    #             return True
-    #         except ModuleNotFoundError:
-    #             return False
-    #     else:
-    #         return False
+
 
     def add_tabs(self):
         self.tab_widget = QtWidgets.QTabWidget()
@@ -498,59 +495,37 @@ class MainWindow(QMainWindow):
         )
         self.train_network = TrainNetwork(
             root=self, parent=None,
-            h1_description="Step 2. Train network",
+            h1_description="Step 2. Train unsupervised learning network",
         )
-        self.evaluate_network = EvaluateNetwork(
+
+        self.label_with_interactive_plot = LabelWithInteractivePlotTab(
             root=self,
             parent=None,
-            h1_description="Step 3. Evaluate Network",
+            h1_description="Step 3. Label with Interaction Plot",
         )
-        self.mad_gui = LabelData(
+        self.supervised_contrastive_learning = LabelWithInteractivePlotTab(
             root=self,
             parent=None,
-            h1_description="Step 4. Label Data",
+            h1_description="Step 4. Apply Supervised Contrastive Learning",
         )
-        self.interaction_plot = InteractionPlot(
+        self.supervised_learning_gui = SupervisedLearningNewLabels(
             root=self,
             parent=None,
-            h1_description="Step 5. Interaction Plot",
+            h1_description="Step 6. Label with Interaction Plot",
         )
-        # self.analyze_videos = AnalyzeVideos(
-        #     root=self, parent=None, h1_description="DeepLabCut - Analyze Videos"
-        # )
-        # self.unsupervised_id_tracking = UnsupervizedIdTracking(
-        #     root=self,
-        #     parent=None,
-        #     h1_description="DeepLabCut - Optional Unsupervised ID Tracking with Transformer",
-        # )
-        # self.create_videos = CreateVideos(
-        #     root=self,
-        #     parent=None,
-        #     h1_description="DeepLabCut - Create Videos",
-        # )
-        # self.extract_outlier_frames = ExtractOutlierFrames(
-        #     root=self,
-        #     parent=None,
-        #     h1_description="DeepLabCut - Step 8. Extract outlier frames",
-        # )
-        # self.refine_tracklets = RefineTracklets(
-        #     root=self, parent=None, h1_description="DeepLabCut - Refine labels"
-        # )
-        # self.modelzoo = ModelZoo(
-        #     root=self, parent=None, h1_description="DeepLabCut - Model Zoo"
-        # )
-        # self.video_editor = VideoEditor(
-        #     root=self, parent=None, h1_description="DeepLabCut - Optional Video Editor"
-        # )
 
         # self.tab_widget.addTab(self.manage_project, "Manage project")
         # self.tab_widget.addTab(self.extract_frames, "Extract frames")
         # self.tab_widget.addTab(self.label_frames, "Label frames")
         self.tab_widget.addTab(self.create_training_dataset, "Create training dataset")
         self.tab_widget.addTab(self.train_network, "Train network")
-        self.tab_widget.addTab(self.evaluate_network, "Evaluate network")
-        self.tab_widget.addTab(self.mad_gui, "Label data")
-        self.tab_widget.addTab(self.interaction_plot, "Interaction plot")
+        # self.tab_widget.addTab(self.evaluate_network, "Evaluate network")
+        # self.tab_widget.addTab(self.mad_gui, "Label data")
+        # self.tab_widget.addTab(self.interaction_plot, "Interaction plot")
+        # self.tab_widget.addTab(self.show_gps, "Display GPS on the map")
+        # self.tab_widget.addTab(self.imu_gps_interact, "IMU GPS interaction")
+        self.tab_widget.addTab(self.label_with_interactive_plot, "Label with interactive plot")
+        self.tab_widget.addTab(self.supervised_learning_gui, "Supervised learning with new labels")
         # self.tab_widget.addTab(self.analyze_videos, "Analyze videos")
         # self.tab_widget.addTab(
         #     self.unsupervised_id_tracking, "Unsupervised ID Tracking (*)"

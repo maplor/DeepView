@@ -1,25 +1,25 @@
-
+# This Python file uses the following encoding: utf-8
 import ast
 import os
-import warnings
+# import warnings
 
-import matplotlib.colors as mcolors
-import napari  # image viewer for Python
-import numpy as np
-import pandas as pd
-from matplotlib.collections import LineCollection
-from matplotlib.path import Path
-from matplotlib.backends.backend_qt5agg import (
-    NavigationToolbar2QT,
-    FigureCanvasQTAgg as FigureCanvas,
-)
-from matplotlib.figure import Figure
-from matplotlib.widgets import RectangleSelector, Button, LassoSelector
+# import matplotlib.colors as mcolors
+# import napari  # image viewer for Python
+# import numpy as np
+# import pandas as pd
+# from matplotlib.collections import LineCollection
+# from matplotlib.path import Path
+# from matplotlib.backends.backend_qt5agg import (
+#     NavigationToolbar2QT,
+#     FigureCanvasQTAgg as FigureCanvas,
+# )
+# from matplotlib.figure import Figure
+# from matplotlib.widgets import RectangleSelector, Button, LassoSelector
 from queue import Queue
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtGui import QStandardItemModel, QStandardItem, QCursor, QAction
-from scipy.spatial import cKDTree as KDTree
-from skimage import io  # scikit-image is a collection of algorithms for image processing
+# from scipy.spatial import cKDTree as KDTree
+# from skimage import io  # scikit-image is a collection of algorithms for image processing
 
 from deepview.utils import auxiliaryfunctions
 

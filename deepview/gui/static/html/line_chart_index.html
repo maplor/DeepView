@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Line Charts</title>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script> -->
+    <script src="../js/echarts.min.js"></script>
+    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+    <style>
+        /* .chart-box {
+            width: 600px;
+            height: 400px;
+            margin: 10px;
+            border: 1px solid #ccc;
+        } */
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            background-color: #19232d;
+        }
+
+        body.dark-mode {
+            background-color: #19232d;
+            color: white;
+        }
+
+        body.light-mode {
+            background-color: #FAFAFA;
+            color: black;
+        }
+
+        #container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            flex-direction: column;
+        }
+
+        /* 不设置最小高度的话去掉border会导致最后一个图表丢失 */
+        .chart-box {
+            width: 100%;
+            min-height: 50px;
+            /* 设置最小高度 */
+            /* margin: 2px 0;  */
+            /* background-color: lightblue; */
+            /* border: 1px solid #ccc; */
+        }
+
+        .chart-box:first-child {
+            /* height: 150px; */
+            height: 100px;
+            min-height: 50px;
+            /* 设置最小高度 */
+            /* 固定高度 */
+            flex: 0 0 auto;
+            /* 固定大小，不参与均分 */
+        }
+
+        .chart-box:not(:first-child) {
+            flex: 1;
+            /* 均分剩余高度 */
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* body {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+        } */
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+
+    <script type="text/javascript">
+        // selectedOption = {};
+        markData = [];
+        otherMarkData = [];
+        selectedDataList = null;
+        chartsTheme = 'dark';
+        oldFrame = null;
+        delectState = false;
+        currentIndex = -1;
+        lineOption = null;
+        dataFrame = null;
+        let isBoxDrawn = false;
+        let currentBox = null; // 用于存储当前绘制的框
+        let filteredData = null;
+        let labelColors = {};
+        onbrush = false;
+        // 全局变量存储框选的范围
+        let brushAreas = [];
+        charts = [];
+        // 同步操作标志
+        isSyncing = false;
+        // 第一个图表的特殊配置
+        selectedOption = {
+            grid: {
+                top: 10,
+                bottom: 20
+            },
+            xAxis: {
+                type: 'category',
+                data: [] // 保持与原始图表一致的X轴数据
+            },
+            yAxis: {
+                type: 'value',
+                min: 1 // 设置y轴最小值为1
+            },
+            series: [{
+                type: 'line',
+                markArea: {
+                    data: [],
+                    label: {
+                        show: true, // 显示标签
+                        position: 'inside', // 标签位置为区域内部
+                        color: '#000', // 标签颜色
+                        fontSize: 14, // 标签字体大小
+                        formatter: function (params) {
+                            return params.name; // 使用区域的名称作为标签内容
+                        }
+                    }
+                },
+                data: [], // 空数据
+                showSymbol: false, // 不显示数据点
+                lineStyle: {
+                    opacity: 0 // 使线条透明
+                }
+            }],
+            dataZoom: [
+                {
+                    type: 'inside',
+                    xAxisIndex: [0],
+                    start: 0,
+                    end: 100
+                }
+            ]
+        };
+
+        // 定义dark主题
+        var darkTheme = {
+            backgroundColor: '#19232d',
+            title: {
+                textStyle: {
+                    color: '#eeeeee'
+                },
+                subtextStyle: {
+                    color: '#aaaaaa'
+                }
+            },
+            categoryAxis: {
+                axisLine: {
+                    show: true,
+                    lineStyle: {
+                        color: "#eeeeee"
+                    }
+                },
+                axisTick: {
+                    show: true,
+                    lineStyle: {
+                        color: "#eeeeee"
+                    }
+                },
+                axisLabel: {
+                    show: true,
+                    color: "#eeeeee"
+                },
+                splitLine: {
+                    show: true,
+                    lineStyle: {
+                        color: ["#aaaaaa"]
+                    }
+                },
+                splitArea: {
+                    show: false,
+                    areaStyle: {
+                        color: ["#eeeeee"]
+                    }
+                }
+            },
+
+            valueAxis: {
+                axisLine: {
+                    show: true,
+                    lineStyle: {
+                        color: "#eeeeee"
+                    }
+                },
+                axisTick: {
+                    show: true,
+                    lineStyle: {
+                        color: "#eeeeee"
+                    }
+                },
+                axisLabel: {
+                    show: true,
+                    color: "#eeeeee"
+                },
+                splitLine: {
+                    show: true,
+                    lineStyle: {
+                        color: ["#aaaaaa"]
+                    }
+                },
+                splitArea: {
+                    show: false,
+                    areaStyle: {
+                        color: ["#eeeeee"]
+                    }
+                }
+            },
+            logAxis: {
+                axisLine: {
+                    show: true,
+                    lineStyle: {
+                        color: "#eeeeee"
+                    }
+                },
+                axisTick: {
+                    show: true,
+                    lineStyle: {
+                        color: "#eeeeee"
+                    }
+                },
+                axisLabel: {
+                    show: true,
+                    color: "#eeeeee"
+                },
+                splitLine: {
+                    show: true,
+                    lineStyle: {
+                        color: ["#aaaaaa"]
+                    }
+                },
+                splitArea: {
+                    show: false,
+                    areaStyle: {
+                        color: ["#eeeeee"]
+                    }
+                }
+            },
+            toolbox: {
+                iconStyle: {
+                    borderColor: "#999999"
+                },
+                emphasis: {
+                    iconStyle: {
+                        borderColor: "#666666"
+                    }
+                }
+            },
+            legend: {
+                textStyle: {
+                    color: "#eeeeee"
+                }
+            },
+            tooltip: {
+                axisPointer: {
+                    lineStyle: {
+                        color: "#eeeeee",
+                        width: "1"
+                    },
+                    crossStyle: {
+                        color: "#eeeeee",
+                        width: "1"
+                    }
+                }
+            }
+        };
+
+        var lightTheme = {
+            backgroundColor: '#FAFAFA',
+            title: {
+                textStyle: {
+                    color: "#333333"
+                },
+                subtextStyle: {
+                    color: "#aaaaaa"
+                }
+            },
+            categoryAxis: {
+                axisLine: {
+                    show: true,
+                    lineStyle: {
+                        color: "#333"
+                    }
+                },
+                axisTick: {
+                    show: true,
+                    lineStyle: {
+                        color: "#333"
+                    }
+                },
+                axisLabel: {
+                    show: true,
+                    color: "#333"
+                },
+                splitLine: {
+                    show: false,
+                    lineStyle: {
+                        color: [
+                            "#ccc"
+                        ]
+                    }
+                },
+                splitArea: {
+                    show: false,
+                    areaStyle: {
+                        color: [
+                            "rgba(250,250,250,0.3)",
+                            "rgba(200,200,200,0.3)"
+                        ]
+                    }
+                }
+            },
+            valueAxis: {
+                axisLine: {
+                    show: true,
+                    lineStyle: {
+                        color: "#333"
+                    }
+                },
+                axisTick: {
+                    show: true,
+                    lineStyle: {
+                        color: "#333"
+                    }
+                },
+                axisLabel: {
+                    show: true,
+                    color: "#333"
+                },
+                splitLine: {
+                    show: true,
+                    lineStyle: {
+                        color: [
+                            "#ccc"
+                        ]
+                    }
+                },
+                splitArea: {
+                    show: false,
+                    areaStyle: {
+                        color: [
+                            "rgba(250,250,250,0.3)",
+                            "rgba(200,200,200,0.3)"
+                        ]
+                    }
+                }
+            },
+            logAxis: {
+                axisLine: {
+                    show: true,
+                    lineStyle: {
+                        color: "#333"
+                    }
+                },
+                axisTick: {
+                    show: true,
+                    lineStyle: {
+                        color: "#333"
+                    }
+                },
+                axisLabel: {
+                    show: true,
+                    color: "#333"
+                },
+                splitLine: {
+                    show: true,
+                    lineStyle: {
+                        color: [
+                            "#ccc"
+                        ]
+                    }
+                },
+                splitArea: {
+                    show: false,
+                    areaStyle: {
+                        color: [
+                            "rgba(250,250,250,0.3)",
+                            "rgba(200,200,200,0.3)"
+                        ]
+                    }
+                }
+            },
+            toolbox: {
+                iconStyle: {
+                    borderColor: "#06467c"
+                },
+                emphasis: {
+                    iconStyle: {
+                        borderColor: "#4187c2"
+                    }
+                }
+            },
+            legend: {
+                textStyle: {
+                    color: "#333333"
+                }
+            },
+            tooltip: {
+                axisPointer: {
+                    lineStyle: {
+                        color: "#cccccc",
+                        width: 1
+                    },
+                    crossStyle: {
+                        color: "#cccccc",
+                        width: 1
+                    }
+                }
+            },
+
+        };
+
+        // let org_data = [
+        //     { index: 0, timestamp: '2024-07-20T12:00:00Z', _timestamp: 1626787200, acc_x: 0.1, acc_y: 0.2, acc_z: 0.3, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
+        //     { index: 1, timestamp: '2024-07-20T12:01:00Z', _timestamp: 1626787260, acc_x: 0.2, acc_y: 0.3, acc_z: 0.4, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
+        //     { index: 2, timestamp: '2024-07-20T12:02:00Z', _timestamp: 1626787320, acc_x: 0.3, acc_y: 0.4, acc_z: 0.5, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
+        // ];
+
+        // 新的pkl文件里datetime对应毫秒级别时间,转换一下就得到isotime。unixtime对应_timestamp
+        let org_data = [];
+        let chartsData = [
+            {
+                name: 'acceleration',
+                xAxisName: 'timestamp',
+                yAxisName: 'Y Axis 1',
+                series: ['acc_x', 'acc_y', 'acc_z']
+            },
+            {
+                name: 'gyroscope',
+                xAxisName: 'timestamp',
+                yAxisName: 'Y Axis 2',
+                series: ['gyro_x', 'gyro_y', 'gyro_z']
+            }
+        ];
+
+        // firstChartsData是占位图表，固定不变,里面的series是会被作为x轴
+        var firstChartsData =
+        {
+            name: 'seclection',
+            xAxisName: 'timestamp',
+            yAxisName: 'Y Axis 1',
+            series: ['timestamp']
+        }
+
+        // const chartsData = [
+        //     {
+        //         name: 'acceleration',
+        //         xAxisName: 'timestamp',
+        //         yAxisName: 'Y Axis 1',
+        //         series: ['acc_x', 'acc_y', 'acc_z']
+        //     },
+        //     {
+        //         name: 'gyroscope',
+        //         xAxisName: 'timestamp',
+        //         yAxisName: 'Y Axis 2',
+        //         series: ['gyro_x', 'gyro_y', 'gyro_z']
+        //     }
+        // ];
+        function convertData(org_data, firstChartsData, chartsData) {
+            const result = {};
+
+            // Initialize xAxis with values
+            // result.firstChartsData.xAxisName = data.map(entry => entry[firstChartsData.xAxisName]);
+
+            // // Initialize series arrays
+            // firstChartsData.series.forEach(seriesName => {
+            //     result[seriesName] = data.map(entry => entry[seriesName]);
+            // });
+            // Initialize series arrays
+            firstChartsData.series.forEach(seriesName => {
+                result[seriesName] = org_data.map(entry => {
+                    const value = entry[seriesName];
+                    return new Date(value).toISOString();
+                });
+            });
+
+            chartsData.forEach(chart => {
+                chart.series.forEach(seriesName => {
+                    result[seriesName] = org_data.map(entry => entry[seriesName]);
+                });
+            });
+
+            return result;
+        }
+
+
+        // const convertedData = convertData(data, firstChartsData, chartsData);
+        // console.log(convertedData);
+
+        function initialize() {
+            dataFrame = convertData(org_data, firstChartsData, chartsData);
+
+
+            // 销毁每个 echarts 实例
+            if (charts && charts.length > 0) {
+                charts.forEach(chart => {
+                    chart.dispose();
+                });
+            }
+            charts = [];
+            // chartsData.unshift(firstChartsData);
+
+            if (!chartsData.includes(firstChartsData)) {
+                chartsData.unshift(firstChartsData);
+            }
+
+            // 获取容器元素
+            var container = document.getElementById('container');
+
+            // 清空容器中的内容
+            container.innerHTML = '';
+
+
+            // 动态创建多个盒子
+            chartsData.forEach((chartData, index) => {
+                if (chartData.series && chartData.series.length > 0) {
+                    var box = document.createElement('div');
+                    box.className = 'chart-box';
+                    box.id = 'chart-box-' + (index + 1);
+                    container.appendChild(box);
+                }
+            });
+
+            // 将图表 div 添加到对应的 className 为 chart_box 的容器中
+            chartsData.forEach((chartData, index) => {
+                if (chartData.series && chartData.series.length > 0) {
+                    var box = document.getElementById('chart-box-' + (index + 1));
+                    var div = document.createElement('div');
+                    div.className = 'chart-container';
+                    div.id = 'chart' + (index + 1);
+                    box.appendChild(div);
+
+                    // 获取 box 的宽高
+                    var width = box.clientWidth;
+                    var height = box.clientHeight;
+
+                    // 配置图表
+                    var chart = echarts.init(div);
+                    charts.push(chart);
+
+                    if (chartsTheme === 'light') {
+                        chart.setOption(lightTheme);
+                    } else {
+                        chart.setOption(darkTheme);
+                    }
+
+                    var series = [];
+                    chartData.series.forEach(seriesName => {
+                        if (dataFrame[seriesName]) {
+                            series.push({
+                                name: seriesName,
+                                type: 'line',
+                                data: dataFrame[seriesName],
+                                sampling: 'lttb',
+                                emphasis: {
+                                    itemStyle: {
+                                        color: 'red',
+                                        borderColor: 'red',
+                                        borderWidth: 4,
+
+                                    },
+                                    Symbol: 'circle',
+                                    symbolSize: 20
+                                }
+                            });
+                        }
+                    });
+
+                    var option = {
+                        grid: {
+                            top: 10,
+                            bottom: 20
+                        },
+                        title: {
+                            // text: 'Line Chart ' + (index + 1)
+                            text: chartData.name
+                        },
+                        // tooltip: {
+                        //     trigger: 'axis',
+                        // },
+                        // axisPointer: {
+                        //     link: { xAxisIndex: 'all' },
+                        //     label: {
+                        //         backgroundColor: '#777'
+                        //     }
+                        // },
+                        brush: {
+                            brushType: ['lineX', 'clear'],
+                            toolBox: ['lineX', 'clear'],
+                            xAxisIndex: 'all',
+                        },
+                        toolbox: {
+                            trigger: 'axis',
+                            feature: {
+                                brush: {
+                                    type: ['lineX', 'clear']
+                                }
+                            }
+                        },
+                        legend: {
+                            data: chartData.series,
+                            orient: 'vertical',
+                            right: '5%',
+                            top: '5%',
+                            animation: false
+                        },
+                        xAxis: {
+                            name: chartData.xAxisName,
+                            type: 'category',
+                            data: dataFrame[chartData.xAxisName],
+                            animation: false,
+                            animationThreshold: 1000,
+                        },
+                        yAxis: {
+                            name: chartData.yAxisName,
+                            type: 'value',
+                            animation: false
+                        },
+                        series: series,
+                        graphic: [],
+                        dataZoom: [
+                            {
+                                type: 'inside',
+                                xAxisIndex: [0],
+                                start: 0,
+                                end: 100
+                            }
+                        ]
+                    };
+
+                    // 如果是第一个图表，添加特殊的配置
+                    if (index === 0) {
+                        selectedOption.xAxis.data = dataFrame[chartData.xAxisName]
+                        chart.setOption(selectedOption);
+                        return;
+                    }
+
+                    // 如果是最后一个图表，添加 dataZoom 配置
+                    if (index === chartsData.length - 1) {
+                        option.grid = {
+                            top: 10
+                        };
+                        option.dataZoom = [
+                            {
+                                type: 'slider',
+                                show: true,
+                                xAxisIndex: [0],
+                                start: 0,
+                                end: 100
+                            },
+                            {
+                                type: 'inside',
+                                xAxisIndex: [0],
+                                start: 0,
+                                end: 100
+                            }
+                        ];
+                    }
+                    chart.setOption(option);
+
+                    chart.on('click', function (params) {
+                        var index = params.dataIndex;
+                        console.log('click', index);
+                        HighlightDotByIndex(index);
+                    });
+
+
+                    // chart.getZr().on('click', function (event) {
+                    //     // 没有 target 意味着鼠标/指针不在任何一个图形元素上，它是从“空白处”触发的。
+                    //     if (!event.target) {
+                    //         // 点击在了空白处，取消高亮。
+                    //         chart.dispatchAction({
+                    //             type: 'downplay',
+                    //             seriesIndex: [0, 1, 2],
+                    //             // dataIndex: selectedIndex
+                    //         });
+                    //     }
+                    // });
+
+                    // Add global click event listener
+                    chart.getZr().on('click', function (event) {
+                        var pointInGrid = chart.convertFromPixel({ seriesIndex: 0 }, [event.offsetX, event.offsetY]);
+                        var xAxisValueIndex = Math.round(pointInGrid[0]);
+                        if (xAxisValueIndex >= 0 && xAxisValueIndex < option.xAxis.data.length) {
+                            HighlightDotByIndex(xAxisValueIndex);
+                            var xAxisValue = option.xAxis.data[xAxisValueIndex];
+                            console.log('Clicked nearest x-axis point:', xAxisValue);
+                        }
+                    });
+
+                    // 监听缩放事件以同步所有图表
+                    chart.on('dataZoom', function (params) {
+                        if (!isSyncing) {
+                            isSyncing = true;
+                            charts.forEach(function (otherChart) {
+                                if (otherChart !== chart) {
+                                    if (params.batch) {
+                                        otherChart.dispatchAction({
+                                            type: 'dataZoom',
+                                            start: params.batch[0].start,
+                                            end: params.batch[0].end
+                                        });
+                                    } else {
+                                        otherChart.dispatchAction({
+                                            type: 'dataZoom',
+                                            start: params.start,
+                                            end: params.end
+                                        });
+                                    }
+                                }
+                            });
+                            // updatePointPosition();
+                            isSyncing = false;
+                        }
+                    });
+                }
+            });
+            brushEnd(charts);
+        }
+
+        function brushEnd(charts) {
+            charts.forEach((chart, index) => {
+                chart.on('brushEnd', function (params) {
+                    // console.log('BrushEnd Params:', params);
+
+                    if (!params.areas) {
+                        console.error('No areas data found in brushEnd params');
+                        return;
+                    }
+
+                    var selectedData = getSelectedData(org_data, params.areas);
+                    // console.log('Selected Data:', selectedData);
+                    setStartTimeEndtime(selectedData[0].timestamp, selectedData[selectedData.length - 1].timestamp);
+
+                    // 取消其他图表的框选
+                    charts.forEach((otherChart, otherIndex) => {
+                        if (index !== otherIndex) {
+                            otherChart.dispatchAction({
+                                type: 'brush',
+                                areas: []
+                            });
+                        }
+                    });
+                    // 存储框选的范围到全局变量
+                    if (params.areas.length > 0) {
+                        brushAreas = selectedData
+                    }
+                    // 测试使用
+                    // addLabel('Selected Area');
+                });
+
+                document.addEventListener('contextmenu', function (event) {
+                    event.preventDefault();
+                    charts.forEach((otherChart, otherIndex) => {
+                        if (index !== otherIndex) {
+                            otherChart.dispatchAction({
+                                type: 'brush',
+                                areas: []
+                            });
+                        }
+                    });
+                    if (onbrush) {
+                        chart.dispatchAction({
+                            type: 'takeGlobalCursor',
+                            key: 'brush',
+                            brushOption: {
+                                // brushType: 'clear',
+                                brushType: false
+                            },
+                            areas: []
+                        });
+                        onbrush = false;
+                    } else {
+                        chart.dispatchAction({
+                            type: 'takeGlobalCursor',
+                            key: 'brush',
+                            brushOption: {
+                                brushType: 'lineX',
+                                brushMode: 'single',
+                            }
+                        });
+                        onbrush = true;
+                    }
+                });
+            });
+
+            charts[0].on('click', function (params) {
+                // console.log('click', params);
+                if (delectState) {
+                    if (params.componentType === 'markArea') {
+                        var markAreaId = params.data.id;
+                        if (markAreaId) {
+
+                            backend.confirmDelete().then(userConfirmed => {
+                                if (userConfirmed) {
+                                    // 同步删除 markData 中的对应数据
+                                    markData = markData.filter(function (area) {
+                                        return area[0].id !== markAreaId;
+                                    });
+
+                                    // 更新图表
+                                    selectedOption.series[0].markArea.data = markData;
+                                    charts[0].setOption(selectedOption);
+                                    delectState = false;
+                                }
+                            });
+                        }
+                    }
+                }
+            });
+        }
+
+        function updatePointPosition(){
+            // 取消高亮点
+            charts.forEach((chart, i) => {
+                option = chart.getOption();
+                option.graphic = [];
+                chart.setOption(option);
+            });
+        }
+        // 函数：将框选的x轴数据作为markArea添加到第一个图表
+        function addLabel(selectedValue) {
+            const currentTimestamp = Date.now();
+            // selectedValue = 'Selected Area';
+            if (!labelColors[selectedValue]) {
+                // 生成随机颜色并存储
+                labelColors[selectedValue] = '#' + Math.floor(Math.random() * 16777215).toString(16);
+            }
+            if (brushAreas.length > 0) {
+                const newArea = {
+                    name: selectedValue,
+                    xAxis: new Date(brushAreas[0].timestamp).toISOString(),
+                    // yAxis: '10',// 或者具体的值，比如 '10'
+                    id: currentTimestamp,
+                    timestamp: {
+                        start: brushAreas[0].unixtime,
+                        end: brushAreas[brushAreas.length - 1].unixtime
+                    },
+                    itemStyle: {
+                        color: labelColors[selectedValue],  // 使用标签对应的颜色
+                    },
+                };
+                const newAreaEnd = {
+                    xAxis: new Date(brushAreas[brushAreas.length - 1].timestamp).toISOString(),
+                    // yAxis: '90',// 或者具体的值，比如 '90'
+                };
+                const newArray = [newArea, newAreaEnd];
+                // 检查是否与现有的数据重叠
+                let hasOverlap = false;
+                let overlappingIndexes = [];
+
+                markData.forEach((existingArray, index) => {
+                    const existingStart = existingArray[0].xAxis;
+                    const existingEnd = existingArray[1].xAxis;
+                    const newStart = newArea.xAxis;
+                    const newEnd = newAreaEnd.xAxis;
+
+                    // 判断是否有重叠
+                    const isOverlapping = !(existingEnd <= newStart || existingStart >= newEnd);
+
+                    if (isOverlapping) {
+                        hasOverlap = true;
+                        overlappingIndexes.push(index);
+                    }
+                });
+
+                if (hasOverlap) {
+                    // 调用 PySide6 的 confirmOverlap 方法
+                    backend.confirmOverlap().then(userConfirmed => {
+                        if (userConfirmed) {
+                            // if (userConfirmed === true) {  // 明确检查是否为 true
+
+                            // 去掉旧的重叠区域
+                            overlappingIndexes.reverse().forEach(index => {
+                                markData.splice(index, 1);
+                            });
+                            // 添加新的数据
+                            markData.push(newArray);
+
+                            selectedOption.series[0].markArea.data = markData;
+                            charts[0].setOption(selectedOption);
+                        }
+                    });
+                } else {
+                    // 如果没有重叠，直接添加新的数据
+                    markData.push(newArray);
+                }
+
+                selectedOption.series[0].markArea.data = markData;
+                charts[0].setOption(selectedOption);
+
+                // 清除框选
+                charts.forEach((chart, i) => {
+                    chart.dispatchAction({
+                        type: 'brush',
+                        areas: []
+                    });
+                });
+
+            } else {
+                console.error('No brush areas available to apply as markArea.');
+            }
+        }
+
+
+        function displayData(data) {
+            console.log("Received data type:", typeof data);
+            // Replace NaN with null手动替换空值
+            data = data.replace(/NaN/g, 'null');
+
+            const parsedData = JSON.parse(data);
+
+            // Extract metadata and data from the parsed JSON
+            chartsData = parsedData.metadata;
+            org_data = parsedData.data;
+
+            // console.log("Metadata:", metadata);
+            // console.log("Filtered Data:", filteredData);
+
+            initialize();
+        }
+
+        // 点击图表高亮地图对应的标记
+        // handleHighlightDotByIndex
+        function HighlightDotByIndex(index) {
+            backend.handleHighlightDotByIndex(index);
+        }
+
+
+        function setMarkData(otherMarkData) {
+            otherMarkData = JSON.parse(otherMarkData);
+
+            // 遍历 otherMarkData 并转换 xAxis 字段
+            otherMarkData.forEach(mark => {
+                if (mark.hasOwnProperty('xAxis')) {
+                    mark.xAxis = new Date(mark.xAxis).toISOString();
+                }
+
+                if (mark.name === 'data' && mark.hasOwnProperty('xAxis')) {
+                    mark.xAxis = new Date(mark.xAxis).toISOString();
+                }
+            });
+
+            // console.log(otherMarkData);
+            selectedOption.series[0].markArea.data = otherMarkData;
+            charts[0].setOption(selectedOption);
+
+        }
+
+
+        // 清除所有标记的时候将标记改为原来的标签内容
+        function clearMarkData() {
+            otherMarkData = [];
+            charts[0].setOption({
+                series: [{
+                    markArea: {
+                        data: markData
+                    }
+                }]
+            });
+        }
+
+        // 重置所有变量
+        function handleComboxChange(data) {
+            firstChartsData =
+            {
+                name: 'seclection',
+                xAxisName: 'timestamp',
+                yAxisName: 'Y Axis 1',
+                series: ['timestamp']
+            }
+            chartsData = [];
+            markData = [];
+            otherMarkData = [];
+            selectedDataList = null;
+            oldFrame = null;
+            delectState = false;
+            lineOption = null;
+            chartsData = JSON.parse(data)
+            clearBoxes().then(() => {
+                initialize();
+            });
+            // clearBoxes()
+            // initialize()
+        }
+
+        // 使用回调函数或 Promise 来确保 clearBoxes 完成后再调用 initialize
+        function clearBoxes() {
+            return new Promise((resolve) => {
+                const container = document.getElementById('container');
+                while (container.firstChild) {
+                    container.removeChild(container.firstChild);
+                }
+                resolve();
+            });
+        }
+
+        // function clearBoxes() {
+        //     const container = document.getElementById('container');
+        //     while (container.firstChild) {
+        //         container.removeChild(container.firstChild);
+        //     }
+        // }
+
+
+        function deleteLabel(status) {
+            delectState = status;
+        }
+
+        function getSelectedArea() {
+            console.log(markData)
+            // const currentMarkdata = selectedOption.series[0].markArea.data
+            // return currentMarkdata;
+
+            return JSON.stringify(markData);
+        }
+
+        function setStartTimeEndtime(startTime, endTime) {
+            console.log(startTime, endTime)
+            backend.setStartEndTimeToLabel(startTime, endTime);
+        }
+
+        // function highlightLineChartDotByIndex(index) {
+        //     if (index !== -1) {
+        //         // 按数据
+        //         // var start = Math.max(0, (index - 10) / org_data.length * 100);
+        //         // var end = Math.min(100, (index + 10) / org_data.length * 100);
+
+        //         // 按固定显示的点数
+        //         var totalPoints = 1000;
+        //         var halfPoints = totalPoints / 2;
+
+        //         var start = Math.max(0, ((parseInt(index) - halfPoints) / org_data.length) * 100);
+        //         var end = Math.min(100, ((parseInt(index) + halfPoints) / org_data.length) * 100);
+
+        //         // TODO: 高亮不再进行缩放，直接平移
+        //         charts.forEach((chart, i) => {
+        //             chart.dispatchAction({
+        //                 type: 'dataZoom',
+        //                 start: start,
+        //                 end: end
+        //             });
+        //             chart.dispatchAction({
+        //                 type: 'downplay',
+        //                 seriesIndex: [0, 1, 2],
+        //                 // dataIndex: selectedIndex
+        //             });
+        //             chart.dispatchAction({
+        //                 type: 'highlight',
+        //                 seriesIndex: [0, 1, 2],
+        //                 dataIndex: index
+        //             });
+        //         });
+        //     }
+        // }
+
+        function highlightLineChartDotByIndex(index) {
+            if (index !== -1) {
+                charts.forEach((chart, i) => {
+                    var currentZoom = chart.getOption().dataZoom[0];
+                    var start = currentZoom.start;
+                    var end = currentZoom.end;
+
+                    var visibleRange = (end - start) / 100 * org_data.length;
+                    var visibleStartIndex = Math.floor(start / 100 * org_data.length);
+
+                    var offset = index - visibleStartIndex;
+                    var centerOffset = Math.floor(visibleRange / 2);
+
+                    var newStartIndex = Math.max(0, index - centerOffset);
+                    var newStart = (newStartIndex / org_data.length) * 100;
+                    var newEnd = newStart + (end - start);
+
+                    chart.dispatchAction({
+                        type: 'dataZoom',
+                        start: newStart,
+                        end: newEnd
+                    });
+                    chart.dispatchAction({
+                        type: 'downplay',
+                        seriesIndex: [0, 1, 2]
+                    });
+                    chart.dispatchAction({
+                        type: 'highlight',
+                        seriesIndex: [0, 1, 2],
+                        dataIndex: index
+                    });
+
+                    var indexInt = parseInt(index, 10); // 转为整数
+                    // 使用graphic来确保在降采样下也能高亮标点
+                    var xPos = chart.convertToPixel({ xAxisIndex: 0 }, indexInt);
+                    var yPos = chart.convertToPixel({ yAxisIndex: 0 }, 0); // Position on x-axis
+
+                    // Make sure to clear any existing graphics
+                    var option = chart.getOption();
+                    // option.graphic = option.graphic || [];
+                    option.graphic = [];
+
+                    option.graphic.push({
+                        type: 'circle',
+                        shape: {
+                            cx: 0,
+                            cy: 0,
+                            r: 5
+                        },
+                        style: {
+                            fill: 'red'
+                        },
+                        position: [xPos, yPos],
+                        z: 100
+                    });
+
+                    chart.setOption(option);
+                });
+            }
+        }
+
+
+        function resizeCharts() {
+            if (typeof charts !== 'undefined') {
+                charts.forEach((chart, index) => {
+                    var box = document.getElementById('chart-box-' + (index + 1));
+                    var div = document.getElementById('chart' + (index + 1));
+
+                    if (box && div) {
+                        div.style.width = box.clientWidth + 'px';
+                        div.style.height = box.clientHeight + 'px';
+                        chart.resize();
+                    }
+                });
+            }
+        }
+
+
+        function getSelectedData(data, areas) {
+            var selectedData = [];
+
+            areas.forEach(area => {
+                var xRange = area.coordRange;
+
+                var filteredData = data.filter((item, index) => {
+                    return index >= xRange[0] && index <= xRange[1];
+                });
+
+                selectedData = selectedData.concat(filteredData);
+            });
+
+            return selectedData;
+        }
+
+        function updateTheme(theme) {
+
+            if (theme === 'dark') {
+                chartsTheme = 'dark';
+                document.body.className = 'dark-mode';
+                charts.forEach(chart => {
+                    chart.setOption(darkTheme);
+                });
+            } else {
+                chartsTheme = 'light';
+                document.body.className = 'light-mode';
+                charts.forEach(chart => {
+                    chart.setOption(lightTheme);
+                });
+            }
+        }
+
+
+
+        window.addEventListener('resize', resizeCharts);
+
+
+        // resizeCharts(); // 初始化时调用一次
+        // brushEnd();
+        new QWebChannel(qt.webChannelTransport, function (channel) {
+            // console.log(channel)
+            // console.log(channel.objects)
+            // console.log(channel.objects.backend)
+            window.backend = channel.objects.backend;
+        });
+        document.documentElement.style.overflow = "hidden";
+    </script>
+</body>
+
+</html>

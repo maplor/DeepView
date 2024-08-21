@@ -1,3 +1,4 @@
+# This Python file uses the following encoding: utf-8
 #
 # DeepLabCut Toolbox (deeplabcut.org)
 # © A. & M.W. Mathis Labs
@@ -135,8 +136,9 @@ def create_new_project(
     file_path = project_path / "raw-data"
     label_path = project_path / "labeled-data"
     shuffles_path = project_path / "training-datasets"
-    results_path = project_path / "dview-models"
-    for p in [file_path, label_path, shuffles_path, results_path]:
+    # results_path = project_path / "dview-models"
+    unsupervised_path = project_path / "unsupervised-datasets"
+    for p in [file_path, label_path, shuffles_path, unsupervised_path, unsupervised_path / "allDataSet"]:
         p.mkdir(parents=True, exist_ok=DEBUG)
         print('Created "{}"'.format(p))
 
@@ -243,7 +245,7 @@ def create_new_project(
     # cfg_file["bodyparts"] = ["bodypart1", "bodypart2", "bodypart3", "objectA"]
     # cfg_file["skeleton"] = [["bodypart1", "bodypart2"], ["objectA", "bodypart3"]]
     cfg_file["default_augmenter"] = "default"
-    cfg_file["default_net_type"] = "CNN_AE"
+    cfg_file["default_net_type"] = "AE_CNN"
 
     # common parameters:
     cfg_file["Task"] = project
@@ -272,6 +274,24 @@ def create_new_project(
     cfg_file["dotsize"] = 12  # for plots size of dots
     cfg_file["alphavalue"] = 0.7  # for plots transparency of markers
     cfg_file["colormap"] = "rainbow"  # for plots type of colormap
+    cfg_file["label_dict"] = {'stationary': 0,
+                              'preening': 0,
+                              'bathing': 1,
+                              'flight_take_off': 2,
+                              'flight_cruising': 3,
+                              'foraging_dive': 4,
+                              'surface_seizing': 5,
+                              'unknown': -1}  # labels
+
+    cfg_file['sensor_dict'] = {
+        'acceleration': ['acc_x', 'acc_y', 'acc_z'],
+        'gyroscope': ['gyro_x', 'gyro_y', 'gyro_z'],
+        'magnitude': ['mag_x', 'mag_y', 'mag_z'],
+        'gps': ['latitude', 'longitude'],
+        'illumination': ['illumination'],
+        'pressure': ['pressure'],
+        'temperature': ['temperature']
+    }
 
     projconfigfile = os.path.join(str(project_path), "config.yaml")
     # Write dictionary to yaml  config file

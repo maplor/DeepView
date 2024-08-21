@@ -1,3 +1,4 @@
+# This Python file uses the following encoding: utf-8
 import math
 from PySide6.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QCheckBox
 from PySide6.QtCore import QTimer, QRectF, Qt
@@ -94,6 +95,7 @@ class PlotWithInteraction(QWidget):
             index = len(self.leftPlotList)
             
             plot.plot(df['datetime'], df[column], pen=pg.mkPen(index))
+            # plot.plot(df['datetime'], df[column].values.astype(float), pen=pg.mkPen(index))
 
             # optional - link plot viewbox range
             # if index > 0:

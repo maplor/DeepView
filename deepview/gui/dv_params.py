@@ -1,3 +1,4 @@
+# This Python file uses the following encoding: utf-8
 #
 # DeepLabCut Toolbox (deeplabcut.org)
 # © A. & M.W. Mathis Labs
@@ -20,8 +21,8 @@ class DVParams:
 
     NNETS = [
         # "dlcrnet_ms5",
-        "resnet_50",
-        'CNN_AE',
+        "SimCLR_LSTM",
+        'AE_CNN',
         # "resnet_101",
         # "resnet_152",
         # "mobilenet_v2_1.0",

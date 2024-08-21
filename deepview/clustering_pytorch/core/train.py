@@ -1,25 +1,11 @@
 
-
+# This Python file uses the following encoding: utf-8
 import argparse
 import logging
 import os
 import threading
 import warnings
 from pathlib import Path
-
-# import tensorflow as tf
-#
-# tf.compat.v1.disable_eager_execution()
-# import tf_slim as slim
-
-# from deeplabcut.pose_estimation_tensorflow.config import load_config
-# from deeplabcut.pose_estimation_tensorflow.datasets import (
-#     Batch,
-#     PoseDatasetFactory,
-# )
-# from deeplabcut.pose_estimation_tensorflow.nnets import PoseNetFactory
-# from deeplabcut.pose_estimation_tensorflow.util.logging import setup_logging
-# from deeplabcut.utils import auxfun_models
 
 import torch
 from deepview.clustering_pytorch.util.logging import setup_logging
@@ -39,7 +25,10 @@ from deepview.clustering_pytorch.nnet.common_config import (
 
 from deepview.clustering_pytorch.nnet.train_utils import (
     AE_train_time_series,
+    simclr_train_time_series,
 )
+import json
+from PySide6.QtWidgets import QProgressBar
 
 
 class LearningRate(object):
@@ -66,14 +55,18 @@ def get_batch_spec(cfg):
     }
 
 def train(
+    sensor_dict,
+    progress_update,
     config_yaml,
-    displayiters,
-    saveiters,
-    maxiters,
-    max_to_keep=5,
-    keepdeconvweights=True,
-    allow_growth=True,
+    select_filenames,
+    net_type,
+    lr,
+    batch_size,
+    num_epochs,
+    data_len,
+    data_column
 ):
+    # data_column_list = json.loads(data_column.replace('\'', '"'))
     start_path = os.getcwd()
     try:
         os.chdir(
@@ -85,23 +78,47 @@ def train(
     setup_logging()
 
     cfg = load_config(config_yaml)
-    net_type = cfg["net_type"]
     project_path = cfg['project_path']
-    data_path = os.path.join(project_path, cfg['dataset'])
-    data_path_new = os.path.join(project_path, cfg['dataset'][:-4]+'_new.pkl')
+    from deepview.utils import auxiliaryfunctions
+    data_path = os.path.join(project_path, auxiliaryfunctions.get_unsupervised_set_folder())
 
-    # xia, dataloader
-    train_dataloader = prepare_all_data(data_path, data_path_new)
+    # device = 'cpu'
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # xia, dataloader,将Train network tab中选中的文件传入这个函数， todo 目前写死了
+    if net_type in ['AE_CNN', 'shortAE']:
+        augment = False
+    elif net_type in ['SIMCLR_LSTM']:
+        augment = True
+    else:
+        augment = False
+    train_dataloader, num_channel = prepare_all_data(data_path,
+                                                     select_filenames,
+                                                     data_len,
+                                                     data_column,
+                                                     batch_size,
+                                                     augment,
+                                                     device)
 
     # print(optimizer)
     # -------------------------核心的模型训练部分，计算loss----------------------------
-    device = 'cpu'
-    # get model
-    model = get_model(p_backbone=net_type, p_setup='autoencoder')  # set backbone model=ResNet18, SSL=simclr, weight
+
+    # get model, todo, combine to above
+    # 相同代码在supervised contrastive learning的runscl出现
+    if net_type.upper() in ['AE_CNN'.upper(), 'shortAE'.upper()]:
+        p_setup = 'autoencoder'
+    elif net_type.upper() in ['simclr'.upper()]:
+        p_setup = 'simclr'
+    else:
+        raise ValueError('Unknown framework type: %s' % net_type)
+
+    model = get_model(p_backbone=net_type,
+                      p_setup=p_setup,
+                      num_channel=num_channel,
+                      data_len=data_len)  # set backbone model=ResNet18, SSL=simclr, weight
     model = model.to(device)
 
     # Criterion
-    criterion = get_criterion('mse')
+    criterion = get_criterion(p_setup)
     criterion = criterion.to(device)
 
     # Optimizer and scheduler
@@ -109,28 +126,42 @@ def train(
     optimizer = get_optimizer(p_opti, model)
 
     # training
-    start_epoch, num_epochs = 0, 3
+    start_epoch = 0
     # i = 1  # 应该一只鸟一个trainloader，暂时全拼接到一起
     # print('Starting %s-th bird data' % str(i))
     for epoch in range(start_epoch, num_epochs):
+        progress_update.emit(int((epoch+1)/num_epochs * 100))
         # Adjust lr
-        lr = adjust_learning_rate(optimizer, epoch, p_scheduler='cosine',p_epochs=num_epochs)
+        lr = adjust_learning_rate(lr, optimizer, epoch, p_scheduler='cosine', p_epochs=num_epochs)
         print('Adjusted learning rate to {:.5f}'.format(lr))
 
         # Train: the same as simclr
         print('Train ...')
-        # simclr_train_time_series(train_dataloader, model, criterion, optimizer, epoch)
-        AE_train_time_series(train_dataloader, model, criterion, optimizer, epoch, device)
+        if p_setup == 'autoencoder':
+            AE_train_time_series(train_dataloader, model, criterion, optimizer, epoch, device)
+        elif p_setup == 'simclr':
+            simclr_train_time_series(train_dataloader, model, criterion, optimizer, epoch, device)
 
-        # # Checkpoint
-        # print('Checkpoint ...')
-        # torch.save({'optimizer': optimizer.state_dict(), 'model': model.state_dict(),
-        #             'epoch': epoch + 1}, p['pretext_checkpoint'])
+    sensor_str = ''
+    for i in data_column:
+        for sensor, sensor_axis in sensor_dict.items():
+            if i in sensor_axis:
+                tmp = sensor
+            elif i in ['GPS_velocity', 'GPS_bearing']:
+                tmp = 'gps'
+            else:
+                continue
+        # tmp = [k for k, v in sensor_dict.items() if i in v][0]  # get key according to value
+        if tmp not in sensor_str:
+            sensor_str = tmp + '-' + sensor_str
 
-    # Save final model
-    print('Saving model at: ' + net_type + '_epoch%s' % str(epoch) + '.pth')
-    torch.save(model.state_dict(), net_type + '_epoch%s' % str(epoch) + '.pth')
-
+    # Save final model, xx\aaa-bbb-2024-04-24\unsup-models\iteration-0\aaaApr24\train
+    # column_list = '-'.join(data_column).replace('_','')
+    print('Saving model at: ' + net_type + '_epoch%s' % str(epoch)\
+          + '_datalen%s_' % str(cfg['data_length']) \
+          + sensor_str[:-1] + '.pth')
+    torch.save(model.state_dict(), net_type + '_epoch%s' % str(epoch) +\
+               '_datalen%s_' % str(cfg['data_length']) + sensor_str[:-1] + '.pth')
 
     # return to original path.
     os.chdir(str(start_path))

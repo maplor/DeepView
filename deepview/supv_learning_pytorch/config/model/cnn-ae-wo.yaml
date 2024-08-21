@@ -1,0 +1,9 @@
+model_name: "cnn-ae-wo"
+pretrain: false
+freeze: "cnn-ae-wo"
+kernel_size: 5
+depth: 3
+num_conv1_filters: 128
+double_conv_filters: false
+out_layer_type: "flatten-linear-2" # "1-by-1-conv" or "flatten-linear" or "flatten-linear-2"
+out_dropout_rate: 0.0
