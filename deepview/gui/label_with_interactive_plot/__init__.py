@@ -241,7 +241,7 @@ class Backend(QObject):
 
             # TODO 根据传入信号选择需要的列
             # 指定要排除的列,Python 的 json 模块不能直接序列化某些自定义对象或非基本数据类型（如 datetime、Timestamp 等
-            columns_to_drop = ['logger_id', 'animal_tag', 'gps_status',
+            columns_to_drop = ['datetime','logger_id', 'animal_tag', 'gps_status',
                                'activity_class', 'label']
 
             # 删除指定列
