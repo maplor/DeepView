@@ -1,0 +1,18 @@
+path:
+  nas:
+    rootdir: "D:/logbot-data/OstukaPaperData"
+  dataset:
+    rootdir: "${path.nas.rootdir}/data"
+    npz_format_data_dir: 
+      labelled_data: "${..rootdir}/labelled/"
+      unlabelled_data: "${..rootdir}/shuffled_20_v2/"
+  log:
+    rootdir: "${path.nas.rootdir}/model-output/${sub_root_dir}/"
+    logfile:
+      csv: log_training.csv
+    checkpoints:
+      dir: checkpoints_dir
+      fname: best_model_weights.pt
+    # pretrained:
+    #   dir: "/home/bob/protein/dl-wabc/data/model-output/${issue}/${pretrained_model_dir}/checkpoints_dir/"
+    #   fname: best_model_weights.pt

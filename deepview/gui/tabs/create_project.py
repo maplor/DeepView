@@ -1,3 +1,4 @@
+# This Python file uses the following encoding: utf-8
 #
 # DeepLabCut Toolbox (deeplabcut.org)
 # © A. & M.W. Mathis Labs
@@ -102,7 +103,7 @@ class ProjectCreator(QtWidgets.QDialog):
         # ncam_label.setBuddy(self.file_combo)
 
         self.copy_box = QtWidgets.QCheckBox("Copy files to project folder")
-        self.copy_box.setChecked(False)
+        self.copy_box.setChecked(True)
 
         browse_button = QtWidgets.QPushButton("Browse raw data")
         browse_button.clicked.connect(self.browse_rawdata)
@@ -150,15 +151,6 @@ class ProjectCreator(QtWidgets.QDialog):
 
         # n_cameras = int(self.cam_combo.currentText())
         try:
-            # if n_cameras > 1:
-            #     # _ = deeplabcut.create_new_project_3d(
-            #     #     self.proj_default,
-            #     #     self.exp_default,
-            #     #     n_cameras,
-            #     #     self.loc_default,
-            #     # )
-            #     print('create_project.py, todo, create_new_project_3d')
-            # else:
             files = list(self.file_frame.selected_items)
             if not len(files):
                 print("Add at least a file to the project.")

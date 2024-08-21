@@ -1,61 +1,85 @@
+# This Python file uses the following encoding: utf-8
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QCheckBox, QLabel, QPushButton, QMessageBox
 
-import sys
-from PySide6 import QtWidgets
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
+class CheckBoxWindow(QWidget):
+    def __init__(self):
+        super().__init__()
 
+        # 创建主布局
+        self.layout = QVBoxLayout()
 
-class PointClickHandler:
-    def __init__(self, ax, points):
-        self.ax = ax
-        self.points = points
-        self.text = ax.text(0, 0, "", visible=False, ha='center', va='center', fontsize=10)
-        self.cid = ax.figure.canvas.mpl_connect('button_press_event', self.on_click)
+        # 创建“全选”按钮
+        self.select_all_checkbox = QCheckBox("全选")
+        self.layout.addWidget(self.select_all_checkbox)
 
-    def on_click(self, event):
-        if event.inaxes == self.ax:
-            # Check if the click occurred within the axes
-            x, y = event.xdata, event.ydata
-            index = self.find_closest_point(x, y)
+        # 创建多个选项
+        self.checkboxes = [QCheckBox(f"选项 {i+1}") for i in range(5)]
+        for checkbox in self.checkboxes:
+            self.layout.addWidget(checkbox)
 
-            # Display index on the figure
-            self.text.set_text(f"Index: {index}")
-            self.text.set_position((x, y))
-            self.text.set_visible(True)
-            self.ax.figure.canvas.draw()
-            # read and save index
-            print('clicked index is ' + str(index))
+        # 创建显示当前选中选项的标签
+        self.selected_items_label = QLabel("当前选中的选项: []")
+        self.layout.addWidget(self.selected_items_label)
 
-    def find_closest_point(self, x, y):
-        # Find the index of the closest point to the clicked coordinates
-        distances = [(i, (x - px) ** 2 + (y - py) ** 2) for i, (px, py) in enumerate(self.points)]
-        index, _ = min(distances, key=lambda x: x[1])
-        return index
+        # 创建显示已选选项的按钮
+        self.show_selected_button = QPushButton("显示已选选项")
+        self.layout.addWidget(self.show_selected_button)
 
+        # 连接“全选”按钮的状态改变信号到槽函数
+        self.select_all_checkbox.stateChanged.connect(self.select_all)
 
-class GridCanvas(QtWidgets.QDialog):
-    def __init__(self, points, parent=None):
-        super().__init__(parent)
-        self.points = points
-        layout = QtWidgets.QVBoxLayout(self)
-        self.figure = Figure()
-        self.ax = self.figure.add_subplot(111)
-        self.ax.scatter(*zip(*points))
-        self.canvas = FigureCanvas(self.figure)
-        layout.addWidget(self.canvas)
+        # 连接各个选项的状态改变信号到槽函数
+        for checkbox in self.checkboxes:
+            checkbox.stateChanged.connect(self.update_select_all_checkbox)
 
-        # Create an instance of the PointClickHandler
-        self.click_handler = PointClickHandler(self.ax, points)
+        # 连接显示已选选项按钮的点击信号到槽函数
+        self.show_selected_button.clicked.connect(self.show_selected_items)
 
+        self.setLayout(self.layout)
+
+        # 标志位，用于控制槽函数逻辑
+        self.updating = False
+
+    def select_all(self, state):
+        if not self.updating:
+            self.updating = True
+            # 根据“全选”按钮的状态设置各个选项的状态
+            for checkbox in self.checkboxes:
+                checkbox.setChecked(state == Qt.Checked)
+            self.update_selected_items()
+            self.updating = False
+
+    def update_select_all_checkbox(self):
+        if not self.updating:
+            self.updating = True
+            # 检查所有选项的状态以更新“全选”按钮的状态
+            all_checked = all(checkbox.isChecked() for checkbox in self.checkboxes)
+            any_unchecked = any(not checkbox.isChecked() for checkbox in self.checkboxes)
+            if all_checked:
+                self.select_all_checkbox.setCheckState(Qt.Checked)
+            elif any_unchecked:
+                self.select_all_checkbox.setCheckState(Qt.Unchecked)
+            else:
+                self.select_all_checkbox.setTristate(False)
+                self.select_all_checkbox.setCheckState(Qt.PartiallyChecked)
+            self.update_selected_items()
+            self.updating = False
+
+    def update_selected_items(self):
+        # 更新当前选中的选项
+        selected_items = [checkbox.text() for checkbox in self.checkboxes if checkbox.isChecked()]
+        self.selected_items_label.setText(f"当前选中的选项: {selected_items}")
+
+    def show_selected_items(self):
+        # 显示当前选中的选项
+        selected_items = [checkbox.text() for checkbox in self.checkboxes if checkbox.isChecked()]
+        QMessageBox.information(self, "已选选项", f"当前选中的选项: {selected_items}")
 
 if __name__ == "__main__":
-    app = QtWidgets.QApplication(sys.argv)
+    import sys
+    from PyQt5.QtCore import Qt
 
-    # Example data: list of points (x, y)
-    points = [(1, 2), (3, 4), (5, 6), (7, 8)]
-
-    # Create and show the dialog
-    window = GridCanvas(points)
+    app = QApplication(sys.argv)
+    window = CheckBoxWindow()
     window.show()
-
     sys.exit(app.exec_())

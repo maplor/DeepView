@@ -1,4 +1,4 @@
-
+# This Python file uses the following encoding: utf-8
 import os
 import matplotlib.pyplot as plt
 import numpy as np
@@ -226,16 +226,16 @@ def extract_maps(
 
     """
     # # from deeplabcut.utils.auxfun_videos import imread, imresize
-    # from deeplabcut.pose_estimation_tensorflow.core import (
+    # from deeplabcut.pose_estimation_tensorflow.core1 import (
     #     predict,
     #     predict_multianimal as predictma,
     # )
     # from deepview.clustering_pytorch.config import load_config
-    # from deepview.clustering_pytorch.core.evaluate import AE_eval_time_series
+    # from deepview.clustering_pytorch.core1.evaluate import AE_eval_time_series
 
     # from deeplabcut.pose_estimation_tensorflow.datasets.utils import data_to_input
     from deepview.utils import auxiliaryfunctions
-    # from deepview.clustering_pytorch.core.evaluate import (
+    # from deepview.clustering_pytorch.core1.evaluate import (
     #     load_model,
     # )
     # from tqdm import tqdm

@@ -1,3 +1,4 @@
+# This Python file uses the following encoding: utf-8
 import os
 from pathlib import Path
 from PySide6.QtWidgets import QLabel
@@ -5,10 +6,10 @@ import pandas as pd
 
 from deepview.gui.components import (
     DefaultTab,
-    TestfileSpinBox,
-    _create_horizontal_layout,
-    _create_label_widget,
-    _create_vertical_layout,
+    # TestfileSpinBox,
+    # _create_horizontal_layout,
+    # _create_label_widget,
+    # _create_vertical_layout,
 )
 from deepview.gui.plot import PlotWithInteraction
 

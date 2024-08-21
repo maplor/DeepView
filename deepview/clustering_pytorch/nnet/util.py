@@ -1,3 +1,4 @@
+# This Python file uses the following encoding: utf-8
 """
 Authors: Wouter Van Gansbeke, Simon Vandenhende
 Licensed under the CC BY-NC 4.0 license (https://creativecommons.org/licenses/by-nc/4.0/)
@@ -162,7 +163,7 @@ def jitter(x, sigma=0.8):
     return x + np.random.normal(loc=0., scale=sigma, size=x.shape)
 
 
-def scaling(x, sigma=1.1): # apply same distortion to the signals from each sensor
+def scaling(x, sigma=1.1):  # apply same distortion to the signals from each sensor
     # https://arxiv.org/pdf/1706.00527.pdf
     factor = np.random.normal(loc=2., scale=sigma, size=(x.shape[0], x.shape[1]))
     ai = []

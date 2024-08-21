@@ -1,3 +1,4 @@
+# This Python file uses the following encoding: utf-8
 """
 Authors: Wouter Van Gansbeke, Simon Vandenhende
 Licensed under the CC BY-NC 4.0 license (https://creativecommons.org/licenses/by-nc/4.0/)
@@ -46,7 +47,7 @@ def simclr_train(train_loader, model, criterion, optimizer, epoch):
             progress.display(i)
 
 
-def simclr_train_time_series(train_loader, model, criterion, optimizer, epoch):
+def simclr_train_time_series(train_loader, model, criterion, optimizer, epoch, device):
     """
     Train according to the scheme from SimCLR
     https://arxiv.org/abs/2002.05709
@@ -55,18 +56,19 @@ def simclr_train_time_series(train_loader, model, criterion, optimizer, epoch):
 
     model.train()
 
-    for i, (sample) in enumerate(train_loader):
-        aug_sample1 = gen_aug(sample, 't_warp')  # t_warp, out.shape=batch64,width3,height900
-        aug_sample2 = gen_aug(sample, 'negate')  # negate
-        # reshape data by adding channel to 1, and transpose height and width
-        aug_sample1 = (aug_sample1.unsqueeze(1)).permute(0, 1, 3, 2)
-        aug_sample2 = (aug_sample2.unsqueeze(1)).permute(0, 1, 3, 2)
+    for i, (aug_sample1, aug_sample2, timestamp, label) in enumerate(tqdm(train_loader)):
+        # aug_sample1 = gen_aug(sample, 't_warp')  # t_warp, out.shape=batch64,width3,height900
+        # aug_sample2 = gen_aug(sample, 'negate')  # negate
+        # aug_sample1 = aug_sample1.to(device=device, non_blocking=True, dtype=torch.double)
+        # aug_sample2 = aug_sample2.to(device=device, non_blocking=True, dtype=torch.double)
+        aug_sample1 = aug_sample1.to(dtype=torch.double)
+        aug_sample2 = aug_sample2.to(dtype=torch.double)
 
-        b, c, h, w = aug_sample1.size()  # batch64, channel3, height32, width32
-        input_ = torch.cat([aug_sample1.unsqueeze(1), aug_sample2.unsqueeze(1)], dim=1)  # input_.shape=b,2,c,h,w
-        input_ = input_.view(-1, c, h, w)  # out.shape=b*2,c,h,w
+        b, l, d = aug_sample1.size()  # batch64, length180, dim6
+        input_ = torch.cat([aug_sample1.unsqueeze(1), aug_sample2.unsqueeze(1)], dim=1)  # input_.shape=b,2,l,d
+        input_ = input_.view(-1, l, d)  # out.shape=b*2,l,d
         # input_ = input_.cuda(non_blocking=True)
-        input_ = input_.to(device='cuda', non_blocking=True, dtype=torch.float)
+        # input_ = input_.to(device='cuda', non_blocking=True, dtype=torch.float)
         # targets = batch['target'].cuda(non_blocking=True)
 
         output = model(input_).view(b, 2, -1)  # output.shape=b,2,128, split the first dim into 2 parts
@@ -79,22 +81,16 @@ def simclr_train_time_series(train_loader, model, criterion, optimizer, epoch):
     return
 
 
-def simclr_eval_time_series(train_loader, model):
+def simclr_eval_time_series(train_loader, model, device):
     model.eval()
 
     representation_list = []
     sample_list = []
-    for i, (sample) in enumerate(train_loader):
-        # reshape data by adding channel to 1, and transpose height and width
-        aug_sample1 = (sample.unsqueeze(1)).permute(0, 1, 3, 2)
-        # aug_sample2 = (sample.unsqueeze(1)).permute(0, 1, 3, 2)
-
-        b, c, h, w = aug_sample1.size()  # batch64, channel3, height32, width32
-        input_ = torch.cat([aug_sample1.unsqueeze(1), aug_sample1.unsqueeze(1)], dim=1)  # input_.shape=b,2,c,h,w
-        input_ = input_.view(-1, c, h, w)  # out.shape=b*2,c,h,w
-        # input_ = input_.cuda(non_blocking=True)
-        input_ = input_.to(device='cuda', non_blocking=True, dtype=torch.float)
-        # targets = batch['target'].cuda(non_blocking=True)
+    for i, (sample, timestamp, label) in enumerate(train_loader):
+        sample = sample.to(device=device, non_blocking=True, dtype=torch.double)
+        b, l, d = sample.size()  # batch64, channel3, height32, width32
+        input_ = torch.cat([sample.unsqueeze(1), sample.unsqueeze(1)], dim=1)  # input_.shape=b,2,c,h,w
+        input_ = input_.view(-1, l, d)  # out.shape=b*2,c,h,w
 
         output = model(input_).view(b, 2, -1)  # output.shape=b,2,128, split the first dim into 2 parts
         tmp_representation = output[:, 0, :].detach().cpu().numpy()
@@ -114,21 +110,22 @@ def AE_train_time_series(train_loader, model, criterion, optimizer, epoch, devic
 
     model.train()
 
-    for i, (sample, timestamp, label, domain) in enumerate(tqdm(train_loader)):
+    for i, (sample, timestamp, label, label_flag) in enumerate(tqdm(train_loader)):
         # aug_sample1 = gen_aug(sample, 't_warp')  # t_warp, out.shape=batch64,width3,height900
         # reshape data by adding channel to 1, and transpose height and width
-        sample = sample.to(device=device, non_blocking=True, dtype=torch.float)
-        # input_ = (sample).permute(0, 2, 1)  # input_.shape=b512,3channel,90width
-        input_ = sample  # input_.shape=b512,90width,3channel
+        # sample = sample.to(device=device, non_blocking=True, dtype=torch.float)
+        sample = sample.to(dtype=torch.float)
 
         # input of autoencoder will be 3D, the backbone is 1d-cnn
-        x_encoded, output = model(input_)  # x_encoded.shape=batch512,outchannel128,len13
+        x_encoded, output = model(sample)  # x_encoded.shape=batch512,outchannel128,len13
         loss = criterion(sample, output)
         losses.update(loss.item())
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        if i % 10 == 0:
+            print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
     print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
     return
 
@@ -137,14 +134,12 @@ def AE_eval_time_series(train_loader, model, device):
     model.eval()
 
     representation_list = []
-    sample_list, timestamp_list, label_list, domain_list, timestr_list = [], [], [], [], []
-    for i, (sample, timestamp, label, domain) in enumerate(train_loader):
+    sample_list, timestamp_list, label_list, domain_list, timestr_list, flag_list = [], [], [], [], [], []
+    for i, (sample, timestamp, label, label_flag) in enumerate(train_loader):
         sample = sample.to(device=device, non_blocking=True, dtype=torch.float)
-        # input_ = (sample).permute(0, 2, 1)  # input.shape=b512,3channel,90width
-        input_ = sample
 
         # input of autoencoder will be 3D, the backbone is 1d-cnn
-        x_encoded, output = model(input_)  # x_encoded.shape=batch512,outchannel128,len13
+        x_encoded, output = model(sample)  # x_encoded.shape=batch512,outchannel128,len13
 
         # x_encoded, output = model(input_).view(b, 2, -1)  # output.shape=b,2,128, split the first dim into 2 parts
         tmp_representation = x_encoded.detach().cpu().numpy()
@@ -153,10 +148,35 @@ def AE_eval_time_series(train_loader, model, device):
         timestamp_list.append(timestamp)
         # timestr_list.append(timestr)
         label_list.append(label)
-        domain_list.append(domain)
+        flag_list.append(label_flag)
+        # domain_list.append(domain)
 
-    return representation_list, sample_list, timestamp_list, label_list, domain_list
+    return representation_list, sample_list, timestamp_list, label_list, flag_list
 
+def AE_eval_time_series_labelflag(train_loader, model, device):
+    model.eval()
+
+    representation_list = []
+    sample_list, timestamp_list, label_list, domain_list, timestr_list, flag_list = [], [], [], [], [], []
+    for i, (sample, timestamp, label, label_flag) in enumerate(train_loader):
+        sample = sample.to(device=device, non_blocking=True, dtype=torch.float)
+        # input_ = (sample).permute(0, 2, 1)  # input.shape=b512,3channel,90width
+        # input_ = sample
+
+        # input of autoencoder will be 3D, the backbone is 1d-cnn
+        x_encoded, output = model(sample)  # x_encoded.shape=batch512,outchannel128,len13
+
+        # x_encoded, output = model(input_).view(b, 2, -1)  # output.shape=b,2,128, split the first dim into 2 parts
+        tmp_representation = x_encoded.detach().cpu().numpy()
+        representation_list.append(tmp_representation)
+        sample_list.append(sample.cpu().numpy())
+        timestamp_list.append(timestamp)
+        # timestr_list.append(timestr)
+        label_list.append(label)
+        flag_list.append(label_flag.detach().cpu().numpy())
+        # domain_list.append(domain)
+
+    return representation_list, sample_list, timestamp_list, label_list, flag_list
 
 # ----------------------------------------step 2: clustering--------------------------------------
 

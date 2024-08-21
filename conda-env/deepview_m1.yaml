@@ -1,7 +1,6 @@
-# DEEPLABCUT_M1.yaml
+# deepview_m1.yaml
 
-#DeepLabCut2.0 Toolbox (deeplabcut.org)
-#© A. & M.W. Mathis Labs
+# extend from DeepLabCut2.0 Toolbox (deeplabcut.org)© A. & M.W. Mathis Labs
 #https://github.com/DeepLabCut/DeepLabCut
 #Please see AUTHORS for contributors.
 
@@ -19,11 +18,9 @@
 # source ~/miniconda/bin/activate
 # conda init zsh
 #
-# Then, `git clone DeepLabCut`, and run:
+# Then, `git clone DeepView`, and run:
 #
-# conda env create -f conda-environments/DEEPLABCUT_M1.yaml
-#
-# Next, activate the environment, and launch DLC with pythonw -m deeplabcut
+# conda env create -f conda-env/deepview_m1.yaml
 
 name: deepview
 channels:
@@ -39,6 +36,9 @@ dependencies:
   - python.app
   - ffmpeg
   - pyqtgraph
-  - apple::tensorflow-deps
+  - seaborn
+  - omegaconf
+  - timm
+  - fastdtw
   - pip:
     - "deeplabcut[gui,apple_mchips]"

@@ -1,5 +1,6 @@
-
+# This Python file uses the following encoding: utf-8
 import os
+from glob import glob
 import typing
 import pickle
 import warnings
@@ -93,7 +94,8 @@ def read_config(configname):
     path = Path(configname)
     if os.path.exists(path):
         try:
-            with open(path, "r") as f:
+            # with open(path, "r", encoding='utf-8') as f:
+            with open(path, "rb") as f:
                 cfg = ruamelFile.load(f)
                 curr_dir = os.path.dirname(configname)
                 if cfg["project_path"] != curr_dir:
@@ -105,7 +107,7 @@ def read_config(configname):
                     err.args[2]
                     == "could not determine a constructor for the tag '!!python/tuple'"
                 ):
-                    with open(path, "r") as ymlfile:
+                    with open(path, "rb") as ymlfile:
                         cfg = yaml.load(ymlfile, Loader=yaml.SafeLoader)
                         write_config(configname, cfg)
                 else:
@@ -117,28 +119,70 @@ def read_config(configname):
         )
     return cfg
 
-def get_model_folder(cfg, modelprefix=""):
+def get_sup_model_folder(cfg, modelprefix=""):
     Task = cfg["Task"]
     date = cfg["date"]
     iterate = "iteration-" + str(cfg["iteration"])
     return Path(
         modelprefix,
-        "dv-models",
+        "sup-models",
         iterate,
         Task
         + date
-        + "-trainset"
-        # + str(int(trainFraction * 100))
-        # + "shuffle"
-        # + str(shuffle),
     )
 
-def grab_files_in_folder(folder, ext="", relative=True):
+def get_sup_model_yaml(cfg, modelprefix=""):
+    Task = cfg["Task"]
+    date = cfg["date"]
+    iterate = "iteration-" + str(cfg["iteration"])
+    return Path(
+        modelprefix,
+        "sup-models",
+        iterate,
+        Task
+        + date,
+        'train',
+        'model_cfg.yaml'
+    )
+
+def get_sup_folder(cfg, modelprefix=""):
+    Task = cfg["Task"]
+    date = cfg["date"]
+    iterate = "iteration-" + str(cfg["iteration"])
+    return Path(
+        modelprefix,
+        "sup-models",
+        iterate,
+        Task
+        + date,
+        'train'
+    )
+
+def get_unsup_model_folder(cfg, modelprefix=""):
+    Task = cfg["Task"]
+    date = cfg["date"]
+    iterate = "iteration-" + str(cfg["iteration"])
+    return Path(
+        modelprefix,
+        "unsup-models",
+        iterate,
+        Task
+        + date
+    )
+
+def grab_files_in_folder(folder, ext=".csv", relative=True):
     """Return the paths of files with extension *ext* present in *folder*."""
     for file in os.listdir(folder):
-        if file.endswith(ext):
-            yield file if relative else os.path.join(folder, file)
+        # if file.endswith(ext):
+        yield file if relative else os.path.join(folder, file)
 
+def grab_files_in_folder_deep(folder, ext=".csv", relative=True):
+    """Return the paths of files with extension *ext* present in *folder*."""
+    all_files = []
+    for path, subdir, files in os.walk(folder):
+        for file in glob(os.path.join(path, ext)):
+            all_files.append(file)
+    return all_files
 
 def get_deepview_path():
     """Get path of where deeplabcut is currently running"""
@@ -158,13 +202,35 @@ def write_plainconfig(configname, cfg):
         YAML().dump(cfg, file)
 
 ## Various functions to get filenames, foldernames etc. based on configuration parameters.
+def get_unsupervised_set_folder():
+    """get folder for all sensor data used for unsupervised learning"""
+    # iterate = "iteration-" + str(cfg["iteration"])
+    return Path(
+        os.path.join("unsupervised-datasets", "allDataSet")
+    )
+
+def get_raw_data_folder():
+    """get folder for all sensor data used for unsupervised learning"""
+    # iterate = "iteration-" + str(cfg["iteration"])
+    return Path(
+        os.path.join("raw-data")
+    )
+
+def get_edit_data_folder():
+    """get folder for data label edited by users"""
+    return Path(
+        os.path.join("edit-data")
+    )
+
 def get_training_set_folder(cfg):
     """Training Set folder for config file based on parameters"""
     Task = cfg["Task"]
     date = cfg["date"]
-    iterate = "iteration-" + str(cfg["iteration"])
+    # iterate = "iteration-" + str(cfg["iteration"])
     return Path(
-        os.path.join("training-datasets", iterate, "UnaugmentedDataSet_" + Task + date)
+        'training-datasets',
+        Task
+        + date
     )
 
 def get_evaluation_folder(cfg, modelprefix=""):
@@ -221,7 +287,7 @@ def get_data_and_metadata_filenames(trainingsetfolder, cfg):
     )
     return metadatafn, datafn
 
-def attempt_to_make_folder(foldername, recursive=False):
+def attempt_to_make_folder(foldername, recursive=True):
     """Attempts to create a folder with specified name. Does nothing if it already exists."""
     try:
         os.path.isdir(foldername)
@@ -264,3 +330,24 @@ def create_folders_from_string(folder_string):
 # # Example usage:
 # folder_string = "root_folder/subfolder1/subfolder2"
 # create_folders_from_string(folder_string)
+
+def get_param_from_path(model_path):
+    '''
+    example of model_path="CNN_AE_epoch9_datalen180_accx-accy-accz"
+    extract and return: model name, data length, data columns
+    '''
+    filename = str(Path(model_path).name)
+    # (1) Extract model name
+    model_name = filename.split("_epoch")[0]
+
+    # (2) Extract data length
+    datalen_index = filename.find("datalen") + len("datalen")
+    underscore_index = filename.find("_", datalen_index)
+    data_length = int(filename[datalen_index:underscore_index])
+
+    # (3) Extract column names
+    column_names = filename.split("_")[-1].split(".")[0]
+    column_names_list = column_names.split('-') if '-' in column_names else [column_names]
+
+
+    return model_name, data_length, column_names_list

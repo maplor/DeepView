@@ -1,4 +1,4 @@
-
+# This Python file uses the following encoding: utf-8
 
 import os
 DEBUG = True and "DEBUG" in os.environ and os.environ["DEBUG"]
@@ -34,6 +34,10 @@ from deepview.clustering_pytorch import (
     extract_save_all_maps,
     # export_model,
     # video_inference_superanimal,
+)
+
+from deepview.supv_learning_pytorch import (
+    train_sup_network,
 )
 
 
