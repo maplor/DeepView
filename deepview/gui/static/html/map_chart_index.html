@@ -149,6 +149,34 @@
         }
 
         function LineChartHighlightDotByIndex(index) {
+
+            if (highlightedMarker) {
+                // 取消之前高亮的标记
+                highlightedMarker.setStyle({
+                    color: 'red',
+                    fillColor: '#f03',
+                    radius: 3
+                });
+            }
+
+            // 查找具有指定ID的标记
+            var marker = null;
+            markers.eachLayer(function (layer) {
+                if (layer._id === index) {
+                    marker = layer;
+                }
+            });
+
+            if (marker) {
+                // 如果标记已存在，则直接高亮
+                marker.setStyle({
+                    color: 'blue',
+                    fillColor: '#03f',
+                    radius: 10 // 增加半径以更明显地高亮
+                });
+                highlightedMarker = marker;
+            }
+
             console.log("index:", index);
             backendmap.handleHighlightLineDotByIndex(index)
         }
