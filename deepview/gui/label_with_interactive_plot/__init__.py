@@ -114,6 +114,7 @@ class Backend(QObject):
     def __init__(self):
         super().__init__()
         self.data = None
+        self.select_option = None
 
     # 创建一个函数来找到最近的有效索引
 
@@ -122,7 +123,16 @@ class Backend(QObject):
         self.data = data  # Update the data attribute
         # print("Backend's DataFrame has been updated:")
         # print(self.data)
+    
+    @Slot()
+    def handle_label_change(self, option):
+        self.select_option = option
 
+    @Slot(result='QString')
+    def get_label_option(self):
+        result = self.select_option if self.select_option is not None else ""
+        # print(f"Returning: {result}")
+        return result
     # 通过索引高亮散点，点击地图散点高亮折线图散点
     @Slot()
     def triggeLineChartHighlightDotByIndex(self, index):
@@ -241,11 +251,15 @@ class Backend(QObject):
 
             # TODO 根据传入信号选择需要的列
             # 指定要排除的列,Python 的 json 模块不能直接序列化某些自定义对象或非基本数据类型（如 datetime、Timestamp 等
-            columns_to_drop = ['logger_id', 'animal_tag', 'gps_status',
-                               'activity_class', 'label']
+            # columns_to_drop = ['datetime', 'logger_id', 'animal_tag', 'gps_status',
+            #                    'activity_class', 'label']
+            #
+            # # 删除指定列
+            # data = data.drop(columns=columns_to_drop, errors='ignore')
 
-            # 删除指定列
-            data = data.drop(columns=columns_to_drop, errors='ignore')
+            series_combined = ["timestamp", "unixtime", "index"] + [item for data in metadata for item in
+                                                                    data["series"]]
+            data = data[series_combined]
 
             # 将空字符串替换为 None
             data = data.replace('', None)
@@ -537,11 +551,17 @@ class LabelWithInteractivePlot(QWidget):
         # 第三行label选项框
         self.left_label_layout = QHBoxLayout()
         self.label_combobox = QComboBox()
+        
 
         for label in self.label_dict.keys():
             self.label_combobox.addItem(label)
+        self.backend.handle_label_change(self.label_combobox.currentText())
+        self.label_combobox.currentTextChanged.connect(
+            self.backend.handle_label_change
+            )
         self.left_label_layout.addWidget(QLabel("Label:     "))
         self.left_label_layout.addWidget(self.label_combobox, alignment=Qt.AlignLeft)
+
         # 保存csv按钮
         self.save_csv_btn = QPushButton('Save csv')
         self.save_csv_btn.clicked.connect(self.backend.getSelectedAreaToSave)
