@@ -587,7 +587,7 @@ class LabelWithInteractivePlot(QWidget):
             self.button_style + "background-color: red;" if delete_label_btn.isChecked() else self.button_style + "background-color: green;")
 
         # Reflect to latent space按钮
-        reflect_to_latent_btn = QPushButton('Reflect to latent space')
+        reflect_to_latent_btn = QPushButton('View on latent space')
         reflect_to_latent_btn.clicked.connect(lambda: self.backend.getSelectedArea())
         # 设置按钮样式
         reflect_to_latent_btn.setStyleSheet(self.button_style)

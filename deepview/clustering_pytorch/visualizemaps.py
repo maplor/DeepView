@@ -2,11 +2,11 @@
 import os
 import matplotlib.pyplot as plt
 import numpy as np
-from skimage.transform import resize
+# from skimage.transform import resize
 import seaborn as sns
 from sklearn.cluster import DBSCAN
 from sklearn.manifold import TSNE
-from datetime import datetime
+# from datetime import datetime
 import pandas as pd
 
 def extract_save_all_maps(
