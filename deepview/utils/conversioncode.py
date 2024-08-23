@@ -20,7 +20,7 @@ Licensed under GNU Lesser General Public License v3.0
 """
 import os
 import pandas as pd
-from deeplabcut.utils import auxiliaryfunctions
+from deepview.utils import auxiliaryfunctions
 from itertools import islice
 from pathlib import Path
 
