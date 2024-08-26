@@ -222,7 +222,7 @@ class Backend(QObject):
         # 显示确认对话框
         msg_box = QMessageBox()
         msg_box.setIcon(QMessageBox.Question)
-        msg_box.setText("存在重复区间，是否替换")
+        msg_box.setText("Labels overlapped, Over write?")
         msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
         result = msg_box.exec() == QMessageBox.Yes
         # print(result)
@@ -243,7 +243,7 @@ class Backend(QObject):
         return result
 
     @Slot()
-    def desplayData(self, data, metadata=None):
+    def displayData(self, data, metadata=None):
         if isinstance(data, pd.DataFrame):
             # 将列名转换为列表
             columns_list = data.columns.tolist()
@@ -340,7 +340,7 @@ class BackendMap(QObject):
 
     # 在data display之后读取gps边界，然后作为初始地图
     @Slot()
-    def desplayMapData(self, data):
+    def displayMapData(self, data):
         if isinstance(data, pd.DataFrame):
             # 将列名转换为列表
             columns_list = data.columns.tolist()
@@ -1008,8 +1008,8 @@ class LabelWithInteractivePlot(QWidget):
     # 异步处理计算的方法
     def handleComputeAsyn(self):
         metadatas = find_charts_data_columns(self.sensor_dict, self.column_names)
-        self.backend.desplayData(self.data, metadatas)
-        self.backend_map.desplayMapData(self.data)
+        self.backend.displayData(self.data, metadatas)
+        self.backend_map.displayMapData(self.data)
 
         # 初始化图表之后不用添加spacer了
         # self.right_layout.removeItem(self.spacer)
