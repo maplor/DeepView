@@ -1,4 +1,4 @@
-
+# This Python file uses the following encoding: utf-8
 from deepview.gui.components import (
     DefaultTab,
     _create_grid_layout,

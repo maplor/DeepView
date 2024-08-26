@@ -20,7 +20,7 @@ Licensed under GNU Lesser General Public License v3.0
 """
 import sys
 import os
-import logging
+# import logging
 
 import PySide6.QtWidgets as QtWidgets
 import qdarkstyle

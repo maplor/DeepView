@@ -1,4 +1,4 @@
-
+# This Python file uses the following encoding: utf-8
 
 import os
 
@@ -14,7 +14,7 @@ from deepview.gui.components import (
     _create_label_widget,
 )
 
-from deepview.gui.dv_params import DVParams
+# from deepview.gui.dv_params import DVParams
 
 import deepview
 

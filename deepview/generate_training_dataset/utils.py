@@ -1,4 +1,4 @@
-
+# This Python file uses the following encoding: utf-8
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
