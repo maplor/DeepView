@@ -124,10 +124,10 @@ def AE_train_time_series(train_loader, model, criterion, optimizer, epoch, devic
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        if i % 10 == 0:
-            print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
-    print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
-    return
+    #     if i % 10 == 0:
+    #         print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
+    # print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
+    return losses
 
 
 def AE_eval_time_series(train_loader, model, device):
