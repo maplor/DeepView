@@ -1,4 +1,4 @@
-# This Python file uses the following encoding: utf-8
+
 """ResNet in PyTorch.
 ImageNet-Style ResNet
 [1] Kaiming He, Xiangyu Zhang, Shaoqing Ren, Jian Sun

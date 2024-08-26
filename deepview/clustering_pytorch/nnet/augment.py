@@ -1,4 +1,4 @@
-# This Python file uses the following encoding: utf-8
+
 # List of augmentations based on randaugment
 import random
 

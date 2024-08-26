@@ -1,4 +1,4 @@
-# This Python file uses the following encoding: utf-8
+
 #
 # import skimage.color
 # from skimage import io

@@ -1,4 +1,4 @@
-# This Python file uses the following encoding: utf-8
+
 from __future__ import print_function
 
 import sys
@@ -58,8 +58,7 @@ def parse_option():
     # todo 这个变量需要制作文本输入框
     parser.add_argument('--batch_size', type=int, default=256,
                         help='batch_size')
-    parser.add_argument('--num_workers', type=int, default=16,
-                        help='num of workers to use')
+
     # todo 这个变量需要制作文本输入框
     parser.add_argument('--epochs', type=int, default=101,
                         help='number of training epochs')
@@ -82,6 +81,8 @@ def parse_option():
     parser.add_argument('--method', type=str, default='SupCon',
                         choices=['SupCon', 'SimCLR'], help='choose method')
 
+    parser.add_argument('--num_workers', type=int, default=16,
+                        help='num of workers to use')
     # temperature
     parser.add_argument('--temp', type=float, default=0.07,
                         help='temperature for loss function')

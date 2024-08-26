@@ -1,4 +1,4 @@
-# This Python file uses the following encoding: utf-8
+
 """
 A trainer for deep learning models
 

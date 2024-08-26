@@ -1,4 +1,4 @@
-# This Python file uses the following encoding: utf-8
+
 # from cnn import CNN
 # from cnn_ae_v5 import CNN_AE5
 # from cnn_ae_v6 import CNN_AE6

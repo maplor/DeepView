@@ -1,4 +1,4 @@
-# This Python file uses the following encoding: utf-8
+
 import os
 import pandas as pd
 from pathlib import Path
