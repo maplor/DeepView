@@ -337,9 +337,9 @@ class TrainNetwork(DefaultTab):
         )
         msg = QtWidgets.QMessageBox()
         msg.setIcon(QtWidgets.QMessageBox.Information)
-        msg.setText("The network is now trained and ready to evaluate.")
+        msg.setText("The network is now trained and ready to use.")
         msg.setInformativeText(
-            "Use the function 'evaluate_network' to evaluate the network."
+            "Use the function 'Label with Interaction Plot' to visualize the data."
         )
 
         msg.setWindowTitle("Info")
