@@ -1,4 +1,4 @@
-
+# This Python file uses the following encoding: utf-8
 '''
 # assume the unsupervised learning model is AE_CNN, used to get latent space of the labeling tab
 # now, output the scatter map of the latent space using one_day data
@@ -21,6 +21,7 @@ from deepview.clustering_pytorch.datasets.factory import prepare_unsup_dataset
 from deepview.clustering_pytorch.nnet.train_utils import AE_eval_time_series, AE_eval_time_series_labelflag
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# device = 'cpu'
 
 #-----------------prepare data-------------------------------
 def set_loader(labeled_flag):

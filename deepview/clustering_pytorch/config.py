@@ -1,3 +1,4 @@
+# This Python file uses the following encoding: utf-8
 #
 # DeepLabCut Toolbox (deeplabcut.org)
 # © A. & M.W. Mathis Labs
@@ -46,7 +47,7 @@ def cfg_from_file(filename):
     """
     Load a config from file filename and merge it into the default options.
     """
-    with open(filename, "r") as f:
+    with open(filename, "rb") as f:
         yaml_cfg = yaml.load(f, Loader=yaml.Loader)
         # yaml_cfg = yaml.load(f, Loader=yaml.SafeLoader)
 

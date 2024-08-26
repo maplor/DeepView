@@ -1,4 +1,5 @@
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QCheckBox, QLabel, QPushButton, QMessageBox
+# This Python file uses the following encoding: utf-8
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QCheckBox, QLabel, QPushButton, QMessageBox
 
 class CheckBoxWindow(QWidget):
     def __init__(self):

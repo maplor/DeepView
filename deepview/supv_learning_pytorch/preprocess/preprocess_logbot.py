@@ -1,3 +1,4 @@
+# This Python file uses the following encoding: utf-8
 # preprocess the logbot (2 bird species) and save window of data as .npz
 # run this file directly
 # todo: modify the paths to the GUI setting

@@ -1,3 +1,5 @@
+
+# This Python file uses the following encoding: utf-8
 '''
 1.选取一个文件（单天数据，pkl file），左边获得IMU数据，右边获得GPS数据
 2.点击左边或者右边的某一个点，获得对面点的位置

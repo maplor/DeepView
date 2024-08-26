@@ -36,7 +36,6 @@ dependencies:
   - python.app
   - ffmpeg
   - pyqtgraph
-  - apple::tensorflow-deps
   - seaborn
   - omegaconf
   - timm

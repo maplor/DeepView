@@ -1,30 +1,30 @@
-
+# This Python file uses the following encoding: utf-8
 
 # after new labeled are created by biologists, use this code to evaluate supervised learning performance
 
 #
 import os
-import matplotlib.image as mpimg
-from matplotlib.backends.backend_qt5agg import (
-    FigureCanvasQTAgg as FigureCanvas,
-)
-from matplotlib.figure import Figure
+# import matplotlib.image as mpimg
+# from matplotlib.backends.backend_qt5agg import (
+#     FigureCanvasQTAgg as FigureCanvas,
+# )
+# from matplotlib.figure import Figure
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QShowEvent
-from PySide6.QtWidgets import QPushButton, QFileDialog, QLineEdit
+# from PySide6.QtWidgets import QPushButton, QFileDialog, QLineEdit
 from deepview.utils import auxiliaryfunctions
 
 from deepview.gui.components import (
     DefaultTab,
-    TestfileSpinBox,
-    _create_horizontal_layout,
+    # TestfileSpinBox,
+    # _create_horizontal_layout,
     _create_label_widget,
     _create_grid_layout,
-    _create_vertical_layout,
+    # _create_vertical_layout,
 )
 
-# from deepview.gui.widgets import ConfigEditor
+from deepview.gui.widgets import ConfigEditor
 import deepview
 # from deepview.utils import auxiliaryfunctions
 # from deepview.utils.auxiliaryfunctions import get_evaluation_folder
