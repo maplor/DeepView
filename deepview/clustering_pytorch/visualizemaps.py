@@ -1,4 +1,4 @@
-# This Python file uses the following encoding: utf-8
+
 import os
 import matplotlib.pyplot as plt
 import numpy as np

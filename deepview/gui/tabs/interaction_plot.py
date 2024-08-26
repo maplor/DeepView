@@ -1,4 +1,4 @@
-# This Python file uses the following encoding: utf-8
+
 import os
 from pathlib import Path
 from PySide6.QtWidgets import QLabel

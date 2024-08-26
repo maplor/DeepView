@@ -1,4 +1,4 @@
-# This Python file uses the following encoding: utf-8
+
 
 # 导入数学模块
 # 从typing模块导入List类型

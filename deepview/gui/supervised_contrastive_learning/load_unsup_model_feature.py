@@ -1,4 +1,4 @@
-# This Python file uses the following encoding: utf-8
+
 '''
 # assume the unsupervised learning model is AE_CNN, used to get latent space of the labeling tab
 # now, output the scatter map of the latent space using one_day data

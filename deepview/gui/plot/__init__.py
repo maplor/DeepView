@@ -1,4 +1,4 @@
-# This Python file uses the following encoding: utf-8
+
 import math
 from PySide6.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QCheckBox
 from PySide6.QtCore import QTimer, QRectF, Qt
