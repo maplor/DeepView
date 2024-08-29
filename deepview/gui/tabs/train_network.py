@@ -315,13 +315,14 @@ class TrainNetwork(DefaultTab):
         for i, cb in enumerate(self.display_column_cb_list):
             if cb.isChecked():
                 newSelectColumn.append(cb.text())
-        data_columns = []
-        for sensor in newSelectColumn:
-            # replace columns of GPS sensor
-            if sensor.upper() == "GPS":
-                data_columns.extend(['GPS_velocity', 'GPS_bearing'])
-            else:
-                data_columns.extend(self.sensor_dict[sensor])
+        # data_columns = []
+        # for sensor in newSelectColumn:
+        #     # replace columns of GPS sensor
+        #     if sensor.upper() == "GPS":
+        #         data_columns.extend(['GPS_velocity', 'GPS_bearing'])
+        #     else:
+        #         data_columns.extend(self.sensor_dict[sensor])
+        data_columns = transfer_sensor2columns(newSelectColumn, self.sensor_dict)
 
         deepview.train_network(
             self.sensor_dict,
@@ -371,3 +372,13 @@ def get_sensor_columns(strings):
 
     combined_strings.append(current_combined)
     return combined_strings
+
+def transfer_sensor2columns(newSelectColumn, sensor_dict):
+    data_columns = []
+    for sensor in newSelectColumn:
+        # replace columns of GPS sensor
+        if sensor.upper() == "GPS":
+            data_columns.extend(['GPS_velocity', 'GPS_bearing'])
+        else:
+            data_columns.extend(sensor_dict[sensor])
+    return data_columns

@@ -86,17 +86,20 @@ def process_pressure_sensor(df, columns):
         df['pressure'] = df['pressure'] - 1013.25
     return df
 
+def extend_data_column(data_column):
+    extend_column = data_column.copy()
+
+    extend_column.extend(['label_flag'])
+    extend_column.extend(['unixtime'])
+    extend_column.extend(['label_id'])
+    return extend_column
 
 def prep_dataset_umineko(data_path,
                          filenames,
                          len_sw,
                          data_column,
                          labeled_flag=False):
-    extend_column = data_column.copy()
-
-    extend_column.extend(['label_flag'])
-    extend_column.extend(['unixtime'])
-    extend_column.extend(['label_id'])
+    extend_column = extend_data_column(data_column)
 
     datalist, timestamps, labels, timestr, label_flags = [], [], [], [], []
     for filename in filenames:
@@ -120,9 +123,6 @@ def prep_dataset_umineko(data_path,
             timestamps.append(tmp[:, :, -2:-1])
             labels.append(tmp[:, :, -1:])
 
-    # if not labeled_flag:
-    #     return datalist, timestamps, labels
-    # else:
     return datalist, timestamps, labels, label_flags
 
 
@@ -170,12 +170,13 @@ class base_loader(Dataset):
 
 
 class data_loader_umineko(Dataset):
-    def __init__(self, samples, labels, timestamps, augment=False, device='cpu', label_flags=[]):
+    def __init__(self, samples, labels, timestamps, augment=False,
+                 device='cpu', label_flags=[], aug1='t_warp', aug2='negate'):
         self.augment = augment
         if self.augment:
-            self.aug_sample1 = gen_aug(samples, 't_warp')
+            self.aug_sample1 = gen_aug(samples, aug1)
             self.aug_sample1 = torch.tensor(self.aug_sample1).to(device)  # t_warp, out.shape=batch64,width3,height900
-            self.aug_sample2 = gen_aug(samples, 'negate')  # negate
+            self.aug_sample2 = gen_aug(samples, aug2)  # negate
             self.aug_sample2 = torch.tensor(self.aug_sample2).to(device)
         else:
             self.samples = torch.tensor(samples).to(device)  # check data type
@@ -207,11 +208,12 @@ class data_loader_umineko(Dataset):
 
 
 def generate_dataloader(data, target, timestamps, batch_size=512, augment=False,
-                        device='cpu', label_flags=[]):
+                        device='cpu', label_flags=[], aug1='t_warp', aug2='negate'):
     # batch_size = 512
     # dataloader
     train_set_r = data_loader_umineko(data, target, timestamps, augment,
-                                      device=device, label_flags=label_flags)
+                                      device=device, label_flags=label_flags,
+                                      aug1=aug1, aug2=aug2)
     train_loader_r = DataLoader(train_set_r, batch_size=batch_size,
                                 shuffle=False, drop_last=False)
     return train_loader_r
@@ -244,7 +246,9 @@ def prepare_all_data(data_path,
     label_b = np.concatenate(labels, axis=0)  # [B, Len, dim]
 
     label_flags_b = np.concatenate(label_flags, axis=0)  # [B, Len, dim]
-    train_loader = generate_dataloader(data_b, label_b, timestamp_b, batch_size, augment, device, label_flags_b)
+    train_loader = generate_dataloader(data_b, label_b, timestamp_b,
+                                       batch_size, augment, device,
+                                       label_flags_b)
 
     # get model input channel
     num_channel = data_b.shape[-1]
