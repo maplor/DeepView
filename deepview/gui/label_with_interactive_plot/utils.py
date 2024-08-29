@@ -39,16 +39,16 @@ def get_data_from_pkl(filename, cfg, dataChanged=[]):
 
 
 
-def featureExtraction(root, data, data_length, sensor_dict, column_names, model_path, model_name):
+def featureExtraction(root, data, data_length, column_names, model_path, model_name):
     # 特征提取：找到数据帧中的列名
     # preprocessing: find column names in dataframe
-    new_column_names = find_data_columns(sensor_dict, column_names)
+    # new_column_names = find_data_columns(sensor_dict, column_names)
 
     segments, start_indices = split_dataframe(data, data_length)
     end_indices = [i + data_length for i in start_indices]
 
 
-    train_loader = prepare_unsup_dataset(segments, new_column_names)
+    train_loader = prepare_unsup_dataset(segments, column_names)
 
     config = root.config
     cfg = read_config(config)
@@ -62,7 +62,7 @@ def featureExtraction(root, data, data_length, sensor_dict, column_names, model_
     else:
         raise ValueError("Invalid model type")
 
-    model = get_model(p_backbone=model_name, p_setup=p_setup, num_channel=len(new_column_names))
+    model = get_model(p_backbone=model_name, p_setup=p_setup, num_channel=len(column_names))
 
     if torch.cuda.is_available():
         model.load_state_dict(torch.load(full_model_path))

@@ -46,7 +46,11 @@ from deepview.gui.supervised_cl.ui.select_model_widget import SelectModelWidget
 from deepview.gui.supervised_cl.ui.new_scatter_map import NewScatterMapWidget
 from deepview.gui.supervised_cl.ui.old_scatter_map import OldScatterMapWidget
 from deepview.gui.supervised_cl.ui.select_parameters_widget import SelectParametersWidget
-
+from deepview.gui.label_with_interactive_plot.utils import (
+# featureExtraction,
+get_data_from_pkl,
+)
+from deepview.gui.tabs.train_network import transfer_sensor2columns
 
 
 class SupervisedClWidget(QWidget):
@@ -78,6 +82,7 @@ class SupervisedClWidget(QWidget):
         self.data_length = 180  # todo 默认，但是需要从文件名中读取
         # 初始化列名列表
         self.column_names = []
+
 
         # 用于三个散点图的交互
         self.last_modified_points = []
@@ -176,11 +181,30 @@ class SupervisedClWidget(QWidget):
         # label.setAutoFillBackground(True)
         # label.setPalette(palette)
 
+        # read sensor data
+        # 特征提取：找到数据帧中的列名
+        model_filename = self.select_model_widget.modelComboBox.currentText()
+        # preprocessing: find column names in dataframe
+        model_name, data_length, column_names = \
+            get_param_from_path(model_filename)  # 从路径获取模型参数
+        data, _ = get_data_from_pkl(self.select_model_widget.RawDatacomboBox.currentText(),
+                                    self.cfg)
+        # transfer sensor name to columns
+        data_columns = transfer_sensor2columns(column_names, self.sensor_dict)
+
         self.scatter_title.addWidget(label)
 
         # 散点图部分
-        self.old_scatter_map_widget = OldScatterMapWidget(self)
-        self.new_scatter_map_widget = NewScatterMapWidget(self)
+        self.old_scatter_map_widget = OldScatterMapWidget(self,
+                                                          data,
+                                                          model_filename,
+                                                          data_length,
+                                                          data_columns)
+        self.new_scatter_map_widget = NewScatterMapWidget(self,
+                                                          data,
+                                                          model_filename,
+                                                          data_length,
+                                                          data_columns)
         # 添加部件到布局
         self.all_scatter_area.addWidget(self.old_scatter_map_widget, stretch=1)
         self.all_scatter_area.addWidget(self.new_scatter_map_widget, stretch=1)

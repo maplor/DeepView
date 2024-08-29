@@ -6,38 +6,33 @@ import pyqtgraph as pg
 import numpy as np
 import argparse
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QPushButton, QLabel, QComboBox,
-    QCheckBox,
-    QDialog,
-    QRadioButton,
-    QSplitter,
-    QFrame,
-    QWidget, QHBoxLayout, QVBoxLayout, QLabel,
-    QComboBox, QPushButton, QSpacerItem, QSizePolicy, QLineEdit,
-    QMessageBox
-)
-
-from PySide6.QtCore import (
-    QObject, Signal, Slot, QTimer, Qt
-)
-
-# 从deepview.utils.auxiliaryfunctions导入多个函数
-from deepview.utils.auxiliaryfunctions import (
-    read_config,
-    get_param_from_path,
-    get_unsupervised_set_folder,
-    get_raw_data_folder,
-    get_unsup_model_folder,
-    grab_files_in_folder_deep
-)
-
-# 
-# from deepview.gui.supervised_contrastive_learning.runscl_cl import parse_options, set_loader, set_model, train, evaluate
-# from deepview.gui.supervised_contrastive_learning.util import adjust_learning_rate, warmup_learning_rate, set_optimizer, save_model
 import torch
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+from PySide6.QtWidgets import (
+    QWidget, QHBoxLayout,
+)
+
+from deepview.gui.supervised_cl.train.utils import (
+    get_window_data_scl,
+    load_model_parameters,
+    train,
+    evaluate,
+    get_scl_criterion_opt,
+    adjust_learning_rate,
+)
+from deepview.clustering_pytorch.datasets.factory import (
+    generate_dataloader
+)
+from deepview.clustering_pytorch.nnet.common_config import (
+    get_model,
+)
+from deepview.utils.auxiliaryfunctions import (
+    read_config,
+    get_unsup_model_folder,
+)
+
+
+# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 p_setup = 'simclr'
 if p_setup == 'simclr':
     AUGMENT = True  # 也存到yaml文件或者opt里
@@ -45,7 +40,7 @@ else:
     AUGMENT = False  # 是否用data augment，作为参数存储
 
 class NewScatterMapWidget(QWidget):
-    def __init__(self, main_window):
+    def __init__(self, main_window, data, model_name, data_length, column_names):
         super().__init__()
 
         self.main_window = main_window  # 保存对主界面的引用
@@ -68,7 +63,7 @@ class NewScatterMapWidget(QWidget):
 
 
         # TODO Data setup，改为从主界面调用,绑定按钮事件
-        self.generate_test_data()
+        self.generate_test_data(model_name, data, data_length, column_names)
 
 
     def update_existing_labels_status(self, status):
@@ -77,21 +72,122 @@ class NewScatterMapWidget(QWidget):
     def update_manual_labels_status(self, status):
         self.manual_labels_status = status
 
-    def generate_test_data(self):
-        num_points = 100
-        repre_tsne_CLR = np.random.rand(num_points, 2)
-        flag_concat_CLR = np.random.randint(0, 2, num_points)  # 生成一维数组
-        label_concat_CLR = np.random.randint(0, 4, num_points)  # 生成一维数组
+    def get_unsup_model_path(self):
+        config = self.main_window.root.config
+        model_name = self.main_window.select_model_widget.modelComboBox.currentText()
+        cfg = read_config(config)
+        unsup_model_path = get_unsup_model_folder(cfg)
+        full_model_path = os.path.join(cfg["project_path"], unsup_model_path, model_name)
+        return full_model_path
 
-        repre_tsne_SimCLR = np.random.rand(num_points, 2)
-        flag_concat_SimCLR = np.random.randint(0, 2, num_points)
-        label_concat_SimCLR = np.random.randint(0, 4, num_points)
+    def generate_scl2cl_data(self, net_type, data, data_length, column_names, batch_size, aug1, aug2):
+        # net_type=model_name: AE_CNN, 从文件名中读取
+        # 1 calculate contrastive learning
+        # 2 calculate supervised contrastive learning
+        # 目前设定必须先cl再scl, 返回model
 
+        full_model_path = self.get_unsup_model_path()
+
+        # get parameters for data loading and training
+        selected_data, label_flag, timestamp, label = get_window_data_scl(data,
+                                                                          column_names,
+                                                                          data_length)
+
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        train_loader = generate_dataloader(selected_data, label, timestamp, batch_size,
+                                           True, device, label_flag, aug1, aug2)
+
+        # get model input channel
+        num_channel = selected_data.shape[-1]
+
+        # get model structure
+        model = get_model(p_backbone=net_type,
+                          p_setup='simclr',
+                          num_channel=num_channel,
+                          data_len=data_length)
+        model = model.to(device)
+
+        # load existing model parameters
+        loaded_model = load_model_parameters(model, full_model_path, device)
+        loaded_model, criterion, optimizer = get_scl_criterion_opt(loaded_model, device)
+
+        # training routine
+        '''
+        opt.epochs参数从Parameter选框中读取
+        当点击 Apply SCL按钮后运行下面程序
+        '''
+        method = 'SimCLR'
+        nepochs = 5
+        epoch = 0
+        for epoch in range(1, nepochs + 1):
+            # adjust_learning_rate(opt, optimizer, epoch)
+            adjust_learning_rate(optimizer, epoch, nepochs)
+            # loss = train(train_loader, model, criterion, optimizer, epoch, nepochs, opt)
+            loss = train(train_loader, model, method, criterion, optimizer, epoch, nepochs, device)
+        # evaluate and plot
+        # train_loader, _ = set_loader(augment=AUGMENT, labeled_flag=False)
+        '''
+        第一张New scatter map生成方式
+        '''
+        # evaluate(model, epoch, nepochs, train_loader, fig_name=method)
+        repre_tsne_SimCLR, flag_concat_SimCLR, label_concat_SimCLR = evaluate(model, train_loader, device)
+
+        # supervised contrastive learning
+        method = 'Supervised_SimCLR'
+        for epoch in range(1, nepochs + 1):
+            loss = train(train_loader, model, method, criterion, optimizer, epoch, nepochs, device)
+        # evaluate and plot
+        '''
+        第2张New scatter map生成方式
+        '''
+        # evaluate(model, epoch, train_loader, fig_name=method)
+        repre_tsne_CLR, _, _ = evaluate(model, train_loader, device)
+
+        # # save the last model
+        # ## 将新模型保存在旧的模型所在目录，后面加上opt.method标志
+        # full_model_path_new = r'C:\Users\dell\Desktop\ss-cc-2024-08-05\unsup-models\iteration-0\ssAug5\AE_CNN_epoch29_datalen180_gps-acceleration_%s.pth' % method
+        # state = {
+        #     # 'opt': opt,
+        #     'model': model.state_dict(),
+        #     'optimizer': optimizer.state_dict(),
+        #     'epoch': epoch,
+        # }
+        # torch.save(state, full_model_path_new)
+
+        return repre_tsne_SimCLR, flag_concat_SimCLR, label_concat_SimCLR, repre_tsne_CLR
+
+
+
+
+    def generate_test_data(self, model_name, data, data_length, column_names):
+        # 首先生成模型训representation，再生成tsne结果
+        # num_points = 100
+        # repre_tsne_CLR = np.random.rand(num_points, 2)
+        # flag_concat_CLR = np.random.randint(0, 2, num_points)  # 生成一维数组
+        # label_concat_CLR = np.random.randint(0, 4, num_points)  # 生成一维数组
+        #
+        # repre_tsne_SimCLR = np.random.rand(num_points, 2)
+        # flag_concat_SimCLR = np.random.randint(0, 2, num_points)
+        # label_concat_SimCLR = np.random.randint(0, 4, num_points)
+        aug1, aug2 = 't_warp', 't_warp'
+        batch_size = 1024
+        (repre_tsne_SimCLR, flag_concat_CLR,
+         label_concat_CLR, repre_tsne_CLR) = self.generate_scl2cl_data(
+                                                                 model_name,
+                                                                 data,
+                                                                 data_length,
+                                                                 column_names,
+                                                                 batch_size,
+                                                                 aug1,
+                                                                 aug2)
+
+        # 两张图同时化
         self.add_data_to_plot(repre_tsne_CLR, flag_concat_CLR, label_concat_CLR,
-                              repre_tsne_SimCLR, flag_concat_SimCLR, label_concat_SimCLR)
+                              repre_tsne_SimCLR, flag_concat_CLR, label_concat_CLR)
         
 
-    def add_data_to_plot(self, repre_tsne_CLR, flag_concat_CLR, label_concat_CLR, repre_tsne_SimCLR, flag_concat_SimCLR, label_concat_SimCLR):
+    def add_data_to_plot(self, repre_tsne_CLR, flag_concat_CLR, label_concat_CLR,
+                         repre_tsne_SimCLR, flag_concat_SimCLR, label_concat_SimCLR):
 
         '''
         当点击 Apply SCL按钮后运行下面程序

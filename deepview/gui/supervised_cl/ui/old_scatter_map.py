@@ -37,7 +37,7 @@ get_data_from_pkl,
 
 
 class OldScatterMapWidget(QWidget):
-    def __init__(self, main_window):
+    def __init__(self, main_window, data, model_name, data_length, column_names):
         super().__init__()
 
         self.main_window = main_window  # 保存对主界面的引用
@@ -95,7 +95,7 @@ class OldScatterMapWidget(QWidget):
         # self.add_data_to_plot()
         # self.generate_test_data()
         # todo 还需要读取文件中的label
-        self.generate_AE_data()
+        self.generate_AE_data(data, model_name, data_length, column_names)
 
     def update_existing_labels_status(self, status):
         self.existing_labels_status = status
@@ -115,28 +115,28 @@ class OldScatterMapWidget(QWidget):
         # 检查到底传哪些参数 （flag_concat, label_concat）
         self.add_data_to_plot(repre_tsne, flag_concat, label_concat)
 
-    def generate_AE_data(self):
+    def generate_AE_data(self, data, model_name, data_length, column_names):
         '''
         之后替换generate_test_data函数
         生成左侧autoencoder的latent representation
         代码复用label_with_interactive_plot/init.py的featureExtraction function
         '''
 
-        # 特征提取：找到数据帧中的列名
-        model_filename = self.main_window.select_model_widget.modelComboBox.currentText()
-        # preprocessing: find column names in dataframe
-        model_name, data_length, column_names = \
-            get_param_from_path(model_filename)  # 从路径获取模型参数
+        # # 特征提取：找到数据帧中的列名
+        # model_filename = self.main_window.select_model_widget.modelComboBox.currentText()
 
-        data, _ = get_data_from_pkl(self.main_window.select_model_widget.RawDatacomboBox.currentText(),
-                                    self.main_window.cfg)
+        # # preprocessing: find column names in dataframe
+        # model_name, data_length, column_names = \
+        #     get_param_from_path(model_filename)  # 从路径获取模型参数
+
+        # data, _ = get_data_from_pkl(self.main_window.select_model_widget.RawDatacomboBox.currentText(),
+        #                             self.main_window.cfg)
         # get representations
         start_indice, end_indice, pos = featureExtraction(self.main_window.root,
                                                           data,
                                                           data_length,
-                                                          self.sensor_dict,
                                                           column_names,
-                                                          model_filename,
+                                                          model_name,
                                                           self.model_name)
 
         # xiqxin: flag_concat 表示该tsne点是否有标签？？？
