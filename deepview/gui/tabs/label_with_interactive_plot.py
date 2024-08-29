@@ -32,10 +32,13 @@ class LabelWithInteractivePlotTab(DefaultWebTab):
     def __init__(self, root, parent, h1_description):
         super(LabelWithInteractivePlotTab, self).__init__(root, parent, h1_description)
         self.root = root
+        self.is_initialized = False
         self.label_with_interactive_plot = None
 
     @Slot(str)
     def update_theme(self, theme):
+        if not self.is_initialized:
+            return
         if theme == 'dark':
             self.web_view.page().runJavaScript("updateTheme('dark');")
             self.web_view_map.page().runJavaScript("updateMapTheme('dark');")
@@ -51,6 +54,7 @@ class LabelWithInteractivePlotTab(DefaultWebTab):
 
     # 在第一次渲染 tab 时才构造内容
     def firstShowEvent(self, event: QShowEvent) -> None:
+        self.is_initialized = True
         self._set_page()
 
     def _set_page(self):

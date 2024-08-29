@@ -1,4 +1,3 @@
-
 import os
 import logging
 import subprocess
@@ -14,7 +13,7 @@ from PySide6.QtGui import QIcon, QAction
 from PySide6 import QtWidgets, QtGui
 from PySide6.QtCore import Qt
 
-#--------------own packages------------------
+# --------------own packages------------------
 from deepview.gui import components
 from deepview.gui.tabs import ProjectCreator
 from deepview.gui import BASE_DIR
@@ -37,6 +36,7 @@ from deepview.gui.tabs.train_network import TrainNetwork
 # from deepview.gui.tabs.interaction_plot import InteractionPlot
 from deepview.gui.tabs.label_with_interactive_plot import LabelWithInteractivePlotTab
 from deepview.gui.tabs.supervised_learning_new_labels import SupervisedLearningNewLabels
+from deepview.gui.tabs.supervised_cl import SupervisedCLTab
 
 
 class MainWindow(QMainWindow):
@@ -418,7 +418,6 @@ class MainWindow(QMainWindow):
         )
         # print('Todo: open an existing project...')
 
-
     # def _goto_superanimal(self):
     #     self.tab_widget = QtWidgets.QTabWidget()
     #     self.tab_widget.setContentsMargins(0, 20, 0, 0)
@@ -436,7 +435,11 @@ class MainWindow(QMainWindow):
     def darkmode(self):
         dark_stylesheet = qdarkstyle.load_stylesheet_pyside2()
         self.app.setStyleSheet(dark_stylesheet)
-        self.label_with_interactive_plot.update_theme('dark')
+        try:
+            self.label_with_interactive_plot.update_theme('dark')
+            self.supervised_cl.update_theme('dark')
+        except AttributeError:
+            pass
 
         names = ["new_project2.png", "open2.png", "help2.png"]
         self.remove_action()
@@ -449,14 +452,17 @@ class MainWindow(QMainWindow):
 
         style = qdarkstyle.load_stylesheet(palette=LightPalette)
         self.app.setStyleSheet(style)
-        self.label_with_interactive_plot.update_theme('light')
+        try:
+            self.label_with_interactive_plot.update_theme('light')
+            self.supervised_cl.update_theme('light')
+        except AttributeError:
+            pass
 
         names = ["new_project.png", "open.png", "help.png"]
         self.remove_action()
         self.create_actions(names)
         self.create_toolbar()
         self.update_menu_bar()
-
 
     def refresh_active_tab(self):
         active_tab = self.tab_widget.currentWidget()
@@ -482,8 +488,6 @@ class MainWindow(QMainWindow):
 
         _attempt_attribute_update("testfile", self.testfile)
         _attempt_attribute_update("cfg_line", self.config)
-
-
 
     def add_tabs(self):
         self.tab_widget = QtWidgets.QTabWidget()
@@ -513,6 +517,11 @@ class MainWindow(QMainWindow):
             parent=None,
             h1_description="Step 6. Label with Interaction Plot",
         )
+        self.supervised_cl = SupervisedCLTab(
+            root=self,
+            parent=None,
+            h1_description="Step 7. SupervisedCL",
+        )
 
         # self.tab_widget.addTab(self.manage_project, "Manage project")
         # self.tab_widget.addTab(self.extract_frames, "Extract frames")
@@ -526,6 +535,7 @@ class MainWindow(QMainWindow):
         # self.tab_widget.addTab(self.imu_gps_interact, "IMU GPS interaction")
         self.tab_widget.addTab(self.label_with_interactive_plot, "Label with interactive plot")
         self.tab_widget.addTab(self.supervised_learning_gui, "Supervised learning with new labels")
+        self.tab_widget.addTab(self.supervised_cl, "SupervisedCL")
         # self.tab_widget.addTab(self.analyze_videos, "Analyze videos")
         # self.tab_widget.addTab(
         #     self.unsupervised_id_tracking, "Unsupervised ID Tracking (*)"
@@ -544,7 +554,6 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(self.tab_widget)
         self.tab_widget.currentChanged.connect(self.refresh_active_tab)
-
 
     def is_transreid_available(self):
         if self.is_multianimal:
@@ -573,4 +582,3 @@ class MainWindow(QMainWindow):
         else:
             event.ignore()
             print("")
-

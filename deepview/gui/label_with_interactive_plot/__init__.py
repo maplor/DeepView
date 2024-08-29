@@ -999,6 +999,10 @@ class LabelWithInteractivePlot(QWidget):
         self.isTraining = True
         # 更新按钮状态
         self.updateBtn()
+
+        # 重新设置选框
+        self.renderColumnList()
+
         # 获取combobox的内容
         self.get_data_from_pkl(self.RawDatacomboBox.currentText())
 
