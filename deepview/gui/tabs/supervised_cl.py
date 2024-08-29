@@ -60,6 +60,7 @@ class SupervisedCLTab(DefaultTab):
         # Read file path for pose_config file. >> pass it on
         cfg = auxiliaryfunctions.read_config(config)
 
+        # 模型计算在这里
         self.supervised_cl_widget = SupervisedClWidget(self.root, cfg)
 
         # 在这里调用init文件

@@ -178,7 +178,7 @@ class SelectModelWidget(QWidget):
         # 获取无监督数据集文件夹路径
         unsup_data_path = get_unsupervised_set_folder()
         # 构建文件路径
-        self.data_path = os.path.join(self.cfg["project_path"], unsup_data_path, filename)
+        self.data_path = os.path.join(self.main_window.cfg["project_path"], unsup_data_path, filename)
 
         self.main_window.data_name = self.data_name
         self.main_window.data_path = self.data_path

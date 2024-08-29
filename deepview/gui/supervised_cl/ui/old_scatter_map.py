@@ -17,9 +17,6 @@ from PySide6.QtWidgets import (
     QMessageBox
 )
 
-from PySide6.QtCore import (
-    QObject, Signal, Slot, QTimer, Qt
-)
 
 # 从deepview.utils.auxiliaryfunctions导入多个函数
 from deepview.utils.auxiliaryfunctions import (
@@ -31,9 +28,12 @@ from deepview.utils.auxiliaryfunctions import (
     grab_files_in_folder_deep
 )
 
-# 
-from deepview.gui.supervised_contrastive_learning.load_unsup_model_feature import handle_old_scatter_data
-# from deepview.utils import auxiliaryfunctions
+
+
+from deepview.gui.label_with_interactive_plot.utils import (
+featureExtraction,
+get_data_from_pkl,
+)
 
 
 class OldScatterMapWidget(QWidget):
@@ -93,7 +93,9 @@ class OldScatterMapWidget(QWidget):
         
         # TODO Add data to plot,绑定到display data按钮
         # self.add_data_to_plot()
-        self.generate_test_data()
+        # self.generate_test_data()
+        # todo 还需要读取文件中的label
+        self.generate_AE_data()
 
     def update_existing_labels_status(self, status):
         self.existing_labels_status = status
@@ -106,10 +108,45 @@ class OldScatterMapWidget(QWidget):
         repre_tsne = np.random.rand(num_points, 2)
         
         # 创建符合三维索引的flag_concat和label_concat
+        # xiqxin: flag_concat 表示该tsne点是否有标签？？？
+        flag_concat = np.random.randint(0, 2, (num_points, 1, 1))
+        label_concat = np.random.randint(0, 4, (num_points, 1, 1))
+        #
+        # 检查到底传哪些参数 （flag_concat, label_concat）
+        self.add_data_to_plot(repre_tsne, flag_concat, label_concat)
+
+    def generate_AE_data(self):
+        '''
+        之后替换generate_test_data函数
+        生成左侧autoencoder的latent representation
+        代码复用label_with_interactive_plot/init.py的featureExtraction function
+        '''
+
+        # 特征提取：找到数据帧中的列名
+        model_filename = self.main_window.select_model_widget.modelComboBox.currentText()
+        # preprocessing: find column names in dataframe
+        model_name, data_length, column_names = \
+            get_param_from_path(model_filename)  # 从路径获取模型参数
+
+        data, _ = get_data_from_pkl(self.main_window.select_model_widget.RawDatacomboBox.currentText(),
+                                    self.main_window.cfg)
+        # get representations
+        start_indice, end_indice, pos = featureExtraction(self.main_window.root,
+                                                          data,
+                                                          data_length,
+                                                          self.sensor_dict,
+                                                          column_names,
+                                                          model_filename,
+                                                          self.model_name)
+
+        # xiqxin: flag_concat 表示该tsne点是否有标签？？？
+        num_points = pos.shape[0]
         flag_concat = np.random.randint(0, 2, (num_points, 1, 1))
         label_concat = np.random.randint(0, 4, (num_points, 1, 1))
 
-        self.add_data_to_plot(repre_tsne, flag_concat, label_concat)
+        # todo 检查参数和generate_test_data函数最后的是否一致
+        self.add_data_to_plot(pos, flag_concat, label_concat)
+        return
 
     def add_data_to_plot(self, repre_tsne, flag_concat, label_concat):
         # Load data

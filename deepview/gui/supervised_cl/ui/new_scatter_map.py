@@ -33,8 +33,8 @@ from deepview.utils.auxiliaryfunctions import (
 )
 
 # 
-from deepview.gui.supervised_contrastive_learning.runscl_cl import parse_options, set_loader, set_model, train, evaluate
-from deepview.gui.supervised_contrastive_learning.util import adjust_learning_rate, warmup_learning_rate, set_optimizer, save_model
+# from deepview.gui.supervised_contrastive_learning.runscl_cl import parse_options, set_loader, set_model, train, evaluate
+# from deepview.gui.supervised_contrastive_learning.util import adjust_learning_rate, warmup_learning_rate, set_optimizer, save_model
 import torch
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

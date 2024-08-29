@@ -75,7 +75,7 @@ class SupervisedClWidget(QWidget):
         # 初始化模型名称
         self.model_name = ''
         # 初始化数据长度
-        self.data_length = 90
+        self.data_length = 180  # todo 默认，但是需要从文件名中读取
         # 初始化列名列表
         self.column_names = []
 

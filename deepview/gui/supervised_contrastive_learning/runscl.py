@@ -1,19 +1,15 @@
 from __future__ import print_function
 
-import sys
 import argparse
 import time
 import math
 
-import tensorboard_logger as tb_logger
 import torch
 import torch.backends.cudnn as cudnn
-from torchvision import transforms, datasets
 
-from util import TwoCropTransform, AverageMeter
-from util import adjust_learning_rate, warmup_learning_rate
-from util import set_optimizer, save_model
-from networks.resnet_big import SupConResNet
+from deepview.gui.supervised_cl.util import AverageMeter
+from deepview.gui.supervised_cl.util import adjust_learning_rate, warmup_learning_rate
+from deepview.gui.supervised_cl.util import set_optimizer
 from losses import SupConLoss
 
 import os
@@ -26,8 +22,6 @@ from deepview.clustering_pytorch.datasets import (
     prepare_all_data,
 )
 from deepview.clustering_pytorch.nnet.common_config import (
-    get_criterion,
-    get_optimizer,
     get_model,
     # adjust_learning_rate,
 )
