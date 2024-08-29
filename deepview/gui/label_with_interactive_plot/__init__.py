@@ -31,8 +31,7 @@ from PySide6.QtWidgets import (
     QMessageBox
 )
 
-# 从sklearn.manifold导入TSNE
-from sklearn.manifold import TSNE
+
 
 # 从deepview.utils.auxiliaryfunctions导入多个函数
 from deepview.utils.auxiliaryfunctions import (
@@ -42,6 +41,11 @@ from deepview.utils.auxiliaryfunctions import (
     get_raw_data_folder,
     get_unsup_model_folder,
     grab_files_in_folder_deep
+)
+
+from deepview.gui.label_with_interactive_plot.utils import (
+    get_data_from_pkl,
+    featureExtraction,
 )
 
 
@@ -850,22 +854,7 @@ class LabelWithInteractivePlot(QWidget):
         return RawDataComboBoxLabel, RawDatacomboBox
 
 
-    # 从.pkl文件获取数据的方法
-    def get_data_from_pkl(self, filename):
-        # 获取无监督数据集文件夹路径
-        unsup_data_path = get_unsupervised_set_folder()
-        # 构建文件路径
-        datapath = os.path.join(self.cfg["project_path"], unsup_data_path, filename)
-        # 打开.pkl文件
-        with open(datapath, 'rb') as f:
-            # 加载数据
-            self.data = pickle.load(f)
-            # 将UNIX时间戳转换为ISO 8601格式
-            self.data['timestamp'] = pd.to_datetime(self.data['unixtime'],
-                                                    unit='s').dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ').str[:-4] + 'Z'
-            self.data['index'] = self.data.index  # Add an index column
-            self.dataChanged.emit(self.data)
-        return
+
 
     def get_data_from_csv(self, filename):
         raw_data_path = get_unsupervised_set_folder()
@@ -1004,7 +993,7 @@ class LabelWithInteractivePlot(QWidget):
         self.renderColumnList()
 
         # 获取combobox的内容
-        self.get_data_from_pkl(self.RawDatacomboBox.currentText())
+        self.data, self.dataChanged = get_data_from_pkl(self.RawDatacomboBox.currentText(), self.cfg, self.dataChanged)
 
         # 延时100毫秒调用handleComputeAsyn方法
         self.computeTimer.singleShot(100, self.handleComputeAsyn)
@@ -1343,7 +1332,13 @@ class LabelWithInteractivePlot(QWidget):
         scatterItem = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None))
 
         # 将数据切割成片段以获取潜在特征和索引
-        start_indice, end_indice, pos = self.featureExtraction()
+        start_indice, end_indice, pos = featureExtraction(self.root,
+                                                          self.data,
+                                                          self.data_length,
+                                                          self.sensor_dict,
+                                                          self.column_names,
+                                                          self.model_path,
+                                                          self.model_name)
 
         # 保存数据到scatterItem的属性中
         n = len(start_indice)
@@ -1410,58 +1405,6 @@ class LabelWithInteractivePlot(QWidget):
                 end_indice.append(end_idx)
 
         return start_indice, end_indice, selected_dfs
-
-    def featureExtraction(self):
-        # 特征提取：找到数据帧中的列名
-        # preprocessing: find column names in dataframe
-        new_column_names = find_data_columns(self.sensor_dict, self.column_names)
-
-        segments, start_indices = split_dataframe(self.data, self.data_length)
-        end_indices = [i + self.data_length for i in start_indices]
-
-        # 获取潜在特征
-        # get latent feature
-        from deepview.clustering_pytorch.nnet.common_config import get_model
-        from deepview.clustering_pytorch.datasets.factory import prepare_unsup_dataset
-        from deepview.clustering_pytorch.nnet.train_utils import AE_eval_time_series, simclr_eval_time_series
-
-        train_loader = prepare_unsup_dataset(segments, new_column_names)
-
-        config = self.root.config
-        cfg = read_config(config)
-        unsup_model_path = get_unsup_model_folder(cfg)
-        full_model_path = os.path.join(self.cfg["project_path"], unsup_model_path, self.model_path)
-
-        if 'AE_CNN' in self.model_path.upper():
-            p_setup = 'autoencoder'
-        elif 'simclr' in self.model_path.upper():
-            p_setup = 'simclr'
-        else:
-            raise ValueError("Invalid model type")
-
-        model = get_model(p_backbone=self.model_name, p_setup=p_setup, num_channel=len(new_column_names))
-        # model.load_state_dict(torch.load(full_model_path))
-
-        if torch.cuda.is_available():
-            model.load_state_dict(torch.load(full_model_path))
-        else:
-            model.load_state_dict(torch.load(full_model_path, map_location=torch.device('cpu')))
-
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        model = model.to(device)
-
-        if p_setup == 'autoencoder':
-            representation_list, _, _, _, _ = \
-                AE_eval_time_series(train_loader, model, device)
-        elif p_setup == 'simclr':
-            representation_list, _ = simclr_eval_time_series(train_loader, model, device)
-
-        # PCA latent representation to shape=(2, len) PCA降维到形状为 (2, len)
-        repre_concat = np.concatenate(representation_list)
-        repre_reshape = repre_concat.reshape(repre_concat.shape[0], -1)
-        repre_tsne = reduce_dimension_with_tsne(repre_reshape)
-
-        return start_indices, end_indices, repre_tsne
 
 
     '''
@@ -1718,39 +1661,8 @@ def combine_rectangles(rectangles, threshold_seconds=100):
     return combined_rectangles
 
 
-def split_dataframe(df, segment_size):
-    '''
-    将DataFrame按segment_size分割成多个片段
-    split the dataframe into segments based on segment_size
-    '''
-    segments = []
-    start_indices = []
-    num_segments = len(df) // segment_size
-
-    for i in range(num_segments):
-        start_index = i * segment_size
-        end_index = start_index + segment_size
-        segment = df.iloc[start_index:end_index]
-        segments.append(segment)
-        start_indices.append(start_index)
-
-    # 处理最后一个片段，如果其大小不足一个segment_size
-    # Handle the last segment which may not have the full segment size
-    start_index = num_segments * segment_size
-    last_segment = df.iloc[start_index:]
-    if len(last_segment) == segment_size:
-        segments.append(last_segment)
-        start_indices.append(start_index)
-
-    return segments, start_indices
 
 
-def find_data_columns(sensor_dict, column_names):
-    new_column_names = []
-    for column_name in column_names:
-        real_names = sensor_dict[column_name]  # 获取每个列名对应的实际列名
-        new_column_names.extend(real_names)  # 将实际列名添加到新的列名列表中
-    return new_column_names
 
 
 def find_charts_data_columns(sensor_dict, column_names):
@@ -1774,8 +1686,3 @@ def find_charts_data_columns(sensor_dict, column_names):
     return metadatas
 
 
-def reduce_dimension_with_tsne(array, method='tsne'):
-    # tsne or pca
-    tsne = TSNE(n_components=2)  # 创建TSNE对象，降维到2维
-    reduced_array = tsne.fit_transform(array)  # 对数组进行降维
-    return reduced_array
