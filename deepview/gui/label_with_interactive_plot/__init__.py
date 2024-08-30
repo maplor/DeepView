@@ -1335,7 +1335,6 @@ class LabelWithInteractivePlot(QWidget):
         start_indice, end_indice, pos = featureExtraction(self.root,
                                                           self.data,
                                                           self.data_length,
-                                                          self.sensor_dict,
                                                           self.column_names,
                                                           self.model_path,
                                                           self.model_name)
