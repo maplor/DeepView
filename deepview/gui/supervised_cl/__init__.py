@@ -103,7 +103,7 @@ class SupervisedClWidget(QWidget):
         # 左上模型选择区域
         self.select_model_widget = SelectModelWidget(self)
         
-        # self.select_model_widget.display_button.connect()
+        
 
         # self.top_layout.addLayout(self.select_model_widget)
         
@@ -119,42 +119,23 @@ class SupervisedClWidget(QWidget):
         # 显示标签选择框部分
         self.old_checkbox_layout = QHBoxLayout()
         self.old_checkbox_layout.setAlignment(Qt.AlignLeft)
-        self.old_existing_checkbox = QCheckBox("Show existing \n    labels")
+        self.old_existing_checkbox = QCheckBox("Show existing\n    labels")
         self.old_existing_checkbox.setChecked(True)
         self.old_checkbox_layout.addWidget(self.old_existing_checkbox)
-        self.old_manual_checkbox = QCheckBox("Show manual \n    labels")
+        self.old_manual_checkbox = QCheckBox("Show manual\n    labels")
         self.old_manual_checkbox.setChecked(True)
         self.old_checkbox_layout.addWidget(self.old_manual_checkbox)
 
         self.new_checkbox_layout = QHBoxLayout()
         self.new_checkbox_layout.setAlignment(Qt.AlignLeft)
-        self.new_existing_checkbox = QCheckBox("Show existing \n    labels")
+        self.new_existing_checkbox = QCheckBox("Show existing\n    labels")
         self.new_existing_checkbox.setChecked(True)
         self.new_checkbox_layout.addWidget(self.new_existing_checkbox)
-        self.new_manual_checkbox = QCheckBox("Show manual \n    labels")
+        self.new_manual_checkbox = QCheckBox("Show manual\n    labels")
         self.new_manual_checkbox.setChecked(True)
         self.new_checkbox_layout.addWidget(self.new_manual_checkbox)
         # 设置勾选框的背景颜色为紫色
-        self.setStyleSheet("QCheckBox { background-color: #c76dff; color: white;}")
-        # 设置文字的背景颜色为紫色，字体颜色为白色
-        # self.setStyleSheet("""
-        #             QCheckBox::indicator {
-        #                 subcontrol-origin: padding;
-        #             }
-        #             QCheckBox {
-        #                 color: white;
-        #             }
-        #             QCheckBox::indicator:checked {
-        #                 background-color: transparent;
-        #             }
-        #             QCheckBox::indicator:unchecked {
-        #                 background-color: transparent;
-        #             }
-        #             QCheckBox {
-        #                 padding: 5px;
-        #                 background-color: #c76dff;
-        #             }
-        #         """)
+        self.setStyleSheet("QCheckBox { background-color: #c76dff; color: white; padding-right: 17px;}")
 
 
         # 添加到布局
@@ -174,12 +155,7 @@ class SupervisedClWidget(QWidget):
                 font-size: 16px;  /* 字体大小 */
             }
         """)
-        # # 设置标签的样式
-        # palette = label.palette()
-        # palette.setColor(QPalette.Window, QColor("#ADD8E6"))  # 浅蓝色背景
-        # palette.setColor(QPalette.WindowText, QColor("#FFFFFF"))  # 白色字体
-        # label.setAutoFillBackground(True)
-        # label.setPalette(palette)
+
 
         # read sensor data
         # 特征提取：找到数据帧中的列名
@@ -216,6 +192,9 @@ class SupervisedClWidget(QWidget):
         self.main_layout.addLayout(self.select_lable_layout)
         self.main_layout.addLayout(self.scatter_title)
         self.main_layout.addLayout(self.all_scatter_area)
+
+        # data display按钮连接generate_AE_data方法
+        self.select_model_widget.display_button.clicked.connect(self.old_scatter_map_widget.display_data)
 
         # 勾选框改变触发
         self.old_existing_checkbox.stateChanged.connect(self.old_scatter_map_widget.update_existing_labels_status)

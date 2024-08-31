@@ -102,10 +102,11 @@
         let filteredData = null;
 
         // 预定义颜色数组
-        const colorPalette = ['#91cc75', '#5470c6', '#fac858', '#ee6666',
-            '#73c0de', '#3ba272', '#fc8452', '#9a60b4',
-            '#ea7ccc', '#fff018', '#6800ff', '#4bb0ff',
-            '#1bff00', '#09ffdb'];
+        // const colorPalette = ['#91cc75', '#5470c6', '#fac858', '#ee6666',
+        //     '#73c0de', '#3ba272', '#fc8452', '#9a60b4',
+        //     '#ea7ccc', '#fff018', '#6800ff', '#4bb0ff',
+        //     '#1bff00', '#09ffdb'];
+        const colorPalette = [];
         let usedColors = new Set(); // 用于跟踪已使用的颜色  
 
         labelColors = {};
@@ -777,11 +778,13 @@
                         console.error('No areas data found in brushEnd params');
                         return;
                     }
-
+                    // selectedData包含了选择的点的所有信息，包括id
                     var selectedData = getSelectedData(org_data, params.areas);
                     // console.log('Selected Data:', selectedData);
-                    setStartTimeEndtime(selectedData[0].timestamp, selectedData[selectedData.length - 1].timestamp);
-
+                    const currentStartSelectedData = selectedData[0];
+                    const currentEndSelectedData = selectedData[selectedData.length - 1];
+                    setStartTimeEndtime(currentStartSelectedData.timestamp, currentEndSelectedData.timestamp);
+                    setStartAndEndData(currentStartSelectedData.index, currentStartSelectedData.longitude, currentStartSelectedData.latitude, currentEndSelectedData.index, currentEndSelectedData.longitude, currentEndSelectedData.latitude);
                     // 取消其他图表的框选
                     charts.forEach((otherChart, otherIndex) => {
                         if (index !== otherIndex) {
@@ -1122,6 +1125,7 @@
             // Extract metadata and data from the parsed JSON
             chartsData = parsedData.metadata;
             org_data = parsedData.data;
+            labelColors = parsedData.labelColors;
 
             // console.log("Metadata:", metadata);
             // console.log("Filtered Data:", filteredData);
@@ -1133,6 +1137,9 @@
         // handleHighlightDotByIndex
         function HighlightDotByIndex(index) {
             backend.handleHighlightDotByIndex(index);
+
+            // 右边图中的对应时间的点也高亮显示
+            backend.handleHighlightScatterDotByIndex(index);
         }
 
 
@@ -1238,6 +1245,12 @@
         function setStartTimeEndtime(startTime, endTime) {
             console.log(startTime, endTime)
             backend.setStartEndTimeToLabel(startTime, endTime);
+        }
+
+        function setStartAndEndData(startIndex,startLongitude,startLatitude,endIndex,endLongitude,endLatitude) {
+            // console.log(startIndex,startLongitude,startLatitude,endIndex,endLongitude,endLatitude)
+            
+            backend.setStartAndEndData(startIndex,startLongitude,startLatitude,endIndex,endLongitude,endLatitude);
         }
 
         function highlightLineChartDotByIndex(index) {
