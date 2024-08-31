@@ -55,17 +55,23 @@ class OldScatterMapWidget(QWidget):
         self.old_map = pg.PlotWidget()
         self.layout.addWidget(self.old_map)
 
+        self.data = data
+        self.model_name = model_name
+        self.data_length = data_length
+        self.column_names = column_names
+
+
         # Add a plot to the widget
         # self.plot = self.win.addPlot(title="Autoencoder, Encoder Latent Representation")
 
         # TODO Data setup，改为从主界面调用
-        self.model_name = 'AE_CNN'
-        self.p_setup = 'autoencoder'
-        self.full_model_path = r'C:\Users\user\Desktop\fast-test-2024-08-04\unsup-models\iteration-0\fastAug4\AE_CNN_epoch0_datalen180_gps-acceleration.pth'
-        self.new_column_names = ['acc_x', 'acc_y', 'acc_z', 'GPS_velocity', 'GPS_bearing']
-        self.labeled_flag = False
-        self.data_path = r'C:\Users\user\Desktop\fast-test-2024-08-04\unsupervised-datasets\allDataSet'
-        self.select_filenames = ['Omizunagidori2018_raw_data_9B36578_lb0009_25Hz.pkl']
+        # self.model_name = 'AE_CNN'
+        # self.p_setup = 'autoencoder'
+        # self.full_model_path = r'C:\Users\user\Desktop\fast-test-2024-08-04\unsup-models\iteration-0\fastAug4\AE_CNN_epoch0_datalen180_gps-acceleration.pth'
+        # self.new_column_names = ['acc_x', 'acc_y', 'acc_z', 'GPS_velocity', 'GPS_bearing']
+        # self.labeled_flag = False
+        # self.data_path = r'C:\Users\user\Desktop\fast-test-2024-08-04\unsupervised-datasets\allDataSet'
+        # self.select_filenames = ['Omizunagidori2018_raw_data_9B36578_lb0009_25Hz.pkl']
 
         # self.model_name = self.main_window.select_model_widget.model_name
         # self.full_model_path = self.main_window.select_model_widget.full_model_path
@@ -95,7 +101,18 @@ class OldScatterMapWidget(QWidget):
         # self.add_data_to_plot()
         # self.generate_test_data()
         # todo 还需要读取文件中的label
-        self.generate_AE_data(data, model_name, data_length, column_names)
+
+
+    def display_data(self):
+        # data = self.main_window.data
+        # model_name = self.main_window.select_model_widget.model_name
+        # data_length = self.main_window.select_model_widget.data_length
+        # column_names = self.main_window.select_model_widget.column_names
+
+        self.generate_AE_data(self.data, self.model_name, self.data_length, self.column_names)
+
+
+        # self.generate_AE_data(data, model_name, data_length, column_names)
 
     def update_existing_labels_status(self, status):
         self.existing_labels_status = status

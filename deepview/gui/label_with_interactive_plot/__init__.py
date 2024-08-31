@@ -31,8 +31,6 @@ from PySide6.QtWidgets import (
     QMessageBox
 )
 
-
-
 # 从deepview.utils.auxiliaryfunctions导入多个函数
 from deepview.utils.auxiliaryfunctions import (
     read_config,
@@ -46,8 +44,8 @@ from deepview.utils.auxiliaryfunctions import (
 from deepview.gui.label_with_interactive_plot.utils import (
     get_data_from_pkl,
     featureExtraction,
+    find_data_columns,
 )
-
 
 # 创建一个蓝色的pg.mkPen对象，宽度为2
 clickedPen = pg.mkPen('b', width=2)
@@ -111,8 +109,11 @@ def find_nearest_index(target_index, valid_indices):
 
 class Backend(QObject):
     highlightDotByindex = Signal(int, float, float)
+    # TODO 参数待定
+    highlightScatterDotByindexSign = Signal(int)
     getSelectedAreaByHtml = Signal(str)
     setStartEndTime = Signal(str, str)
+    setStartAndEndDataSign = Signal(str, str, str, str, str, str)
     getSelectedAreaToSaveSign = Signal(str)
 
     def __init__(self):
@@ -121,13 +122,12 @@ class Backend(QObject):
         self.select_option = None
 
     # 创建一个函数来找到最近的有效索引
-
     @Slot(pd.DataFrame)
     def handle_data_changed(self, data):
         self.data = data  # Update the data attribute
         # print("Backend's DataFrame has been updated:")
         # print(self.data)
-    
+
     @Slot()
     def handle_label_change(self, option):
         self.select_option = option
@@ -137,6 +137,7 @@ class Backend(QObject):
         result = self.select_option if self.select_option is not None else ""
         # print(f"Returning: {result}")
         return result
+
     # 通过索引高亮散点，点击地图散点高亮折线图散点
     @Slot()
     def triggeLineChartHighlightDotByIndex(self, index):
@@ -148,6 +149,18 @@ class Backend(QObject):
     def setStartEndTimeToLabel(self, start_time, end_time):
         print(f"Setting start time: {start_time}, end time: {end_time}")
         self.setStartEndTime.emit(start_time, end_time)
+
+    @Slot(str, str, str, str, str, str)
+    def setStartAndEndData(self, id1, lon1, lat1, id2, lon2, lat2):
+        # print("Setting start and end data...")
+        self.setStartAndEndDataSign.emit(id1, lon1, lat1, id2, lon2, lat2)
+
+    # 通过索引高亮散点，点击折线图散点高亮散点图散点
+    @Slot(int)
+    def handleHighlightScatterDotByIndex(self, index):
+        print(f"Triggering highlight dot({index})...")
+        self.highlightScatterDotByindexSign.emit(index)
+        
 
     # 通过索引高亮散点，点击折线图散点高亮地图散点
     @Slot(int)
@@ -247,13 +260,8 @@ class Backend(QObject):
         return result
 
     @Slot()
-    def displayData(self, data, metadata=None):
+    def displayData(self, data, metadata=None, label_colors=None):
         if isinstance(data, pd.DataFrame):
-            # 将列名转换为列表
-            columns_list = data.columns.tolist()
-            logging.debug(f"columns_list: {columns_list}")
-
-            # TODO 根据传入信号选择需要的列
             # 指定要排除的列,Python 的 json 模块不能直接序列化某些自定义对象或非基本数据类型（如 datetime、Timestamp 等
             # columns_to_drop = ['datetime', 'logger_id', 'animal_tag', 'gps_status',
             #                    'activity_class', 'label']
@@ -261,8 +269,10 @@ class Backend(QObject):
             # # 删除指定列
             # data = data.drop(columns=columns_to_drop, errors='ignore')
 
-            series_combined = ["timestamp", "unixtime", "index"] + [item for data in metadata for item in
-                                                                    data["series"]]
+            # 根据传入信号选择需要的列
+            series_combined = ["timestamp", "unixtime", "index", "latitude", "longitude"] + [item for data in metadata
+                                                                                             for item in
+                                                                                             data["series"]]
             data = data[series_combined]
 
             # 将空字符串替换为 None
@@ -294,7 +304,8 @@ class Backend(QObject):
             # 将元数据和数据打包到一个字典中
             result = {
                 "metadata": metadata,
-                "data": data_records
+                "data": data_records,
+                "labelColors": label_colors
             }
         else:
             # 如果数据不是 DataFrame，则直接使用传入的数据
@@ -342,6 +353,11 @@ class BackendMap(QObject):
         print("handleing highlight dot...")
         self.highlightLineChartDotByindex.emit(index)
 
+    @Slot()
+    def highlightLineChartTwoDots(self, id1, lon1, lat1, id2, lon2, lat2):
+        print("highlightLineChartTwoDots...")
+        self.view.page().runJavaScript(f"highlightTwoMarkers('{id1}', {lat1}, {lon1}, '{id2}', {lat2}, {lon2})")
+
     # 在data display之后读取gps边界，然后作为初始地图
     @Slot()
     def displayMapData(self, data):
@@ -352,7 +368,7 @@ class BackendMap(QObject):
             # 选择需要的列 index、latitude 和 longitude，并去除 latitude 和 longitude 中的缺失值。
             data = data[['index', 'latitude', 'longitude']].dropna(subset=['latitude', 'longitude'])
             # 使用 iloc 按索引进行降采样, 一万个条目取一个。
-            interval = 10*60*25  # 25 is sampling rate, 10 is minutes
+            interval = 10 * 60 * 25  # 25 is sampling rate, 10 is minutes
             data = data.iloc[::interval]
 
             data = data.to_dict(orient='records')
@@ -370,6 +386,8 @@ class LabelWithInteractivePlot(QWidget):
     def __init__(self, root, cfg) -> None:
         super().__init__()
         # 创建一个日志记录器
+        self.end_indice = []
+        self.start_indice = []
         self.logger = logging.getLogger("GUI")
         self.backend = Backend()
         self.backend_map = BackendMap()
@@ -379,10 +397,13 @@ class LabelWithInteractivePlot(QWidget):
 
         # 将折线图backend的点击折线图事件连接到backend_map的高亮地图散点方法
         self.backend.highlightDotByindex.connect(self.backend_map.triggeLineMapHighlightDotByIndex)
+        # 点击折线散点高亮散点图散点
+        self.backend.highlightScatterDotByindexSign.connect(self.handle_highlight_scatter_dot_by_index)
         # 点击地图散点高亮折线图散点
         self.backend_map.highlightLineChartDotByindex.connect(self.backend.triggeLineChartHighlightDotByIndex)
         self.backend.getSelectedAreaByHtml.connect(self.handleReflectToLatent)
         self.backend.setStartEndTime.connect(self.setStartEndTime)
+        self.backend.setStartAndEndDataSign.connect(self.backend_map.highlightLineChartTwoDots)
         self.backend.getSelectedAreaToSaveSign.connect(self.getSelectedAreaToSave)
 
         self.button_style = """QPushButton {
@@ -412,8 +433,20 @@ class LabelWithInteractivePlot(QWidget):
         root_cfg = read_config(root.config)
         # 保存标签字典
         self.label_dict = root_cfg['label_dict']
+        # 初始化最后修改的点
+        self.last_modified_points = []
+        # 预定义颜色数组
+        self.colorPalette = ['#91cc75', '#5470c6', '#fac858', '#ee6666',
+                             '#73c0de', '#3ba272', '#fc8452', '#9a60b4',
+                             '#ea7ccc', '#fff018', '#6800ff', '#4bb0ff',
+                             '#1bff00', '#09ffdb']
+        # 保存标签颜色字典 
+        self.label_colors = {}
+        self.init_label_colors()
+
         # 保存传感器字典
         self.sensor_dict = root_cfg['sensor_dict']
+        self.all_sensor = list(self.sensor_dict.keys())
 
         # 初始化主布局、顶部布局和底部布局
         self.initLayout()
@@ -427,6 +460,7 @@ class LabelWithInteractivePlot(QWidget):
         self.cfg = cfg
 
         # 模型参数
+        self.model_path_list = None
         # 初始化模型路径列表
         self.model_path = []
         # 初始化模型名称
@@ -456,6 +490,12 @@ class LabelWithInteractivePlot(QWidget):
 
         # 更新按钮状态
         self.updateBtn()
+
+    def init_label_colors(self):
+        for i, label in enumerate(self.label_dict.keys()):
+            # 使用取余运算符来循环使用颜色
+            color_index = i % len(self.colorPalette)
+            self.label_colors[label] = self.colorPalette[color_index]
 
         # self.logger.debug(
         #     "Attempting..."
@@ -519,13 +559,11 @@ class LabelWithInteractivePlot(QWidget):
         # 创建中心图表
         self.createCenterPlot()
 
-
     def init_timer(self):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.backend.getSelectedAreaToSave)
         # 设置定时器每隔五分钟（300000 毫秒）触发一次
         self.timer.start(600000)
-
 
     '''
     ==================================================
@@ -555,14 +593,13 @@ class LabelWithInteractivePlot(QWidget):
         # 第三行label选项框
         self.left_label_layout = QHBoxLayout()
         self.label_combobox = QComboBox()
-        
 
         for label in self.label_dict.keys():
             self.label_combobox.addItem(label)
         self.backend.handle_label_change(self.label_combobox.currentText())
         self.label_combobox.currentTextChanged.connect(
             self.backend.handle_label_change
-            )
+        )
         self.left_label_layout.addWidget(QLabel("Label:     "))
         self.left_label_layout.addWidget(self.label_combobox, alignment=Qt.AlignLeft)
 
@@ -633,6 +670,13 @@ class LabelWithInteractivePlot(QWidget):
             # 如果first=False，使用已有的标签
             # 如果first=True，使用手动标签
             color = self.checkColor(self.data.loc[start, 'label'], first=True)
+            # original_brush = spot.brush()  # 读取原有颜色
+            # color = original_brush.color()  # 默认使用原有颜色
+            # spots.append({
+            # 'pos': (pos.x(), pos.y()),
+            # 'data': (i, start, end),
+            # 'brush': pg.mkBrush(color)
+            # })
             spot = {'pos': (pos.x(), pos.y()), 'data': (i, start, end),
                     'brush': pg.mkBrush(color)}
             spots.append(spot)
@@ -642,12 +686,12 @@ class LabelWithInteractivePlot(QWidget):
             name = reg[0].get("name")
             first_timestamp = reg[0].get("timestamp", {}).get("start")
             second_timestamp = reg[0].get("timestamp", {}).get("end")
-            color = reg[0].get("itemStyle", {}).get("color")
+            new_color = reg[0].get("itemStyle", {}).get("color")
 
             idx_begin, idx_end = self._to_idx(int(first_timestamp), int(second_timestamp))
             for spot in spots:
                 if idx_begin < spot['data'][1] and idx_end > spot['data'][2]:
-                    spot['brush'] = pg.mkBrush(color)
+                    spot['brush'] = pg.mkBrush(new_color)
 
         self.scatterItem.setData(spots=spots)
 
@@ -686,6 +730,9 @@ class LabelWithInteractivePlot(QWidget):
         # check_box布局
         self.checkbox_layout = QHBoxLayout()
 
+        # 颜色展示
+        self.color_layout = QHBoxLayout()
+
         # 第三行布局 Display data 按钮
         self.third_row1_layout = QHBoxLayout()
         featureExtractBtn = self.createFeatureExtractButton()
@@ -697,9 +744,39 @@ class LabelWithInteractivePlot(QWidget):
         self.nestend_layout.addLayout(self.first_row1_layout)
         self.nestend_layout.addLayout(self.second_row1_layout)
         self.nestend_layout.addLayout(self.checkbox_layout)
+        self.nestend_layout.addLayout(self.color_layout)
         self.nestend_layout.addLayout(self.third_row1_layout)
 
         self.renderColumnList()
+        # self.clear_color_layout()
+        self.display_colors(self.label_colors)
+
+    def display_colors(self, colors):
+        # 创建水平布局并添加标签和颜色框
+        for color_name, color_value in colors.items():
+            layout = QHBoxLayout()
+
+            label = QLabel(color_name + ":")
+            layout.addWidget(label)
+
+            color_frame = QFrame()
+            color_frame.setFixedSize(20, 20)
+            color_frame.setStyleSheet(f"background-color: {color_value};")
+            layout.addWidget(color_frame)
+
+            self.color_layout.addLayout(layout)
+        self.color_layout.addStretch()
+
+    def clear_color_layout(self):
+        # 移除并删除所有布局项
+        while self.color_layout.count() > 0:  # 改为0以清除所有
+            item = self.color_layout.takeAt(0)
+            if item.layout():
+                while item.layout().count():
+                    widget = item.layout().takeAt(0).widget()
+                    if widget:
+                        widget.deleteLater()
+                item.layout().deleteLater()
 
     '''
     ==================================================
@@ -853,9 +930,6 @@ class LabelWithInteractivePlot(QWidget):
         # 返回标签和组合框
         return RawDataComboBoxLabel, RawDatacomboBox
 
-
-
-
     def get_data_from_csv(self, filename):
         raw_data_path = get_unsupervised_set_folder()
         datapath = os.path.join(self.cfg["project_path"], raw_data_path, filename)
@@ -880,6 +954,29 @@ class LabelWithInteractivePlot(QWidget):
         # self.data = self.data.dropna(subset=['acc_x', 'acc_y', 'acc_z'])
         self.data['index'] = self.data.index  # Add an index column
         self.dataChanged.emit(self.data)
+        return
+
+    def update_model_combobox(self):
+        # 清空原有的选项
+        self.modelComboBox.clear()
+
+        # 获取根对象配置
+        config = self.root.config
+        # 读取配置
+        cfg = read_config(config)
+        # 获取无监督模型文件夹路径
+        unsup_model_path = get_unsup_model_folder(cfg)
+
+        # 获取所有.pth文件路径
+        model_path_list = grab_files_in_folder_deep(
+            os.path.join(self.cfg["project_path"], unsup_model_path),
+            ext='*.pth')
+        # 保存模型路径列表
+        self.model_path_list = model_path_list
+        if model_path_list:
+            # 遍历路径列表
+            for path in model_path_list:
+                self.modelComboBox.addItem(str(Path(path).name))
         return
 
     # 创建模型组合框的方法
@@ -911,6 +1008,8 @@ class LabelWithInteractivePlot(QWidget):
                 # 将文件名添加到组合框
                 modelComboBox.addItem(str(Path(path).name))
             # modelComboBox.currentIndexChanged.connect(self.handleModelComboBoxChange)
+
+            self.modelComboBox = modelComboBox
 
             # if selection changed, run this code
             # 如果选择改变，运行这段代码
@@ -947,7 +1046,6 @@ class LabelWithInteractivePlot(QWidget):
             # 保存列名列表
             self.column_names = column_names
         return
-
 
     # 创建特征提取按钮的方法
     def createFeatureExtractButton(self):
@@ -1001,7 +1099,7 @@ class LabelWithInteractivePlot(QWidget):
     # 异步处理计算的方法
     def handleComputeAsyn(self):
         metadatas = find_charts_data_columns(self.sensor_dict, self.column_names)
-        self.backend.displayData(self.data, metadatas)
+        self.backend.displayData(self.data, metadatas, self.label_colors)
         self.backend_map.displayMapData(self.data)
 
         # 初始化图表之后不用添加spacer了
@@ -1034,18 +1132,14 @@ class LabelWithInteractivePlot(QWidget):
             if widget is not None:
                 widget.deleteLater()
 
-        # for i in reversed(range(self.checkbox_layout.count())):
-        #     # 删除布局中的所有小部件
-        #     self.checkbox_layout.itemAt(i).widget().deleteLater()
-
         # 初始化复选框列表
         self.checkboxList = []
         # 遍历列名列表
-        for column in self.column_names:
+        for column in self.all_sensor:
             # 创建复选框
             cb = QCheckBox(column)
-            # 设置复选框为选中状态
-            cb.setChecked(True)
+            # 设置复选框为选中状态，如果在列名列表中
+            cb.setChecked(column in self.column_names)
             # 将复选框添加到布局中
             self.checkbox_layout.addWidget(cb)
             # 将复选框添加到列表中
@@ -1056,13 +1150,12 @@ class LabelWithInteractivePlot(QWidget):
         # 添加一个伸缩项以填充剩余区域并保持复选框左对齐
         self.checkbox_layout.addStretch()
 
-
     # 处理复选框状态改变的方法
     def handleCheckBoxStateChange(self):
         # 创建新选择列列表
         newSelectColumn = []
         # 遍历列名列表
-        for i, column in enumerate(self.column_names):
+        for i, column in enumerate(self.all_sensor):
             # 如果复选框被选中
             if self.checkboxList[i].isChecked():
                 # 添加列到新选择列列表
@@ -1076,8 +1169,6 @@ class LabelWithInteractivePlot(QWidget):
 
         # 更新左下图表
         self.backend.handleComboxSelection(metadata)
-
-
 
     '''
     ==================================================
@@ -1331,11 +1422,13 @@ class LabelWithInteractivePlot(QWidget):
         # 创建一个散点图项
         scatterItem = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None))
 
+        new_column_names = find_data_columns(self.sensor_dict, self.column_names)
+
         # 将数据切割成片段以获取潜在特征和索引
         start_indice, end_indice, pos = featureExtraction(self.root,
                                                           self.data,
                                                           self.data_length,
-                                                          self.column_names,
+                                                          new_column_names,
                                                           self.model_path,
                                                           self.model_name)
 
@@ -1346,6 +1439,8 @@ class LabelWithInteractivePlot(QWidget):
                   'brush': self.checkColor(self.data.loc[i * self.data_length, 'label'], first=True)}
                  for i in range(n)]
 
+        self.start_indice = start_indice
+        self.end_indice = end_indice
         # 在散点图中绘制点
         scatterItem.addPoints(spots)
         self.scatterItem = scatterItem
@@ -1353,21 +1448,57 @@ class LabelWithInteractivePlot(QWidget):
         self.viewC.addItem(scatterItem)
         return
 
-        # 显示原始标签在右下散点图上
+    def find_i_by_indice(self, indice, start_indice, end_indice):
+        for i in range(len(start_indice)):
+            if start_indice[i] <= indice < end_indice[i]:
+                return i
+        return None  # 如果没有找到合适的范围
 
+    def handle_highlight_scatter_dot_by_index(self, index):
+        indice = self.find_i_by_indice(index, self.start_indice, self.end_indice)
+        for p, original_size, original_brush in self.last_modified_points:
+            p.setSize(original_size)
+            p.setBrush(original_brush)
+            
+        self.last_modified_points = []  # Clear the list
+        if indice is not None:
+            for spot in self.scatterItem.points():
+                i, start, end = spot.data()
+                if i == indice:
+                    # Save current properties
+                    original_size = spot.size()
+                    original_brush = spot.brush()
+                    self.last_modified_points.append((spot, original_size, original_brush))
+                    spot.setSize(15)
+                    spot.setBrush(pg.mkBrush(255, 0, 0, 255))
+
+        
+
+
+
+    # 显示原始标签在右下散点图上
     def toggleLabelColor(self):
 
         spots = []
         for spot in self.scatterItem.points():
             pos = spot.pos()
             i, start, end = spot.data()
+            # spots.append({
+            # 'pos': (pos.x(), pos.y()),
+            # 'data': (i, start, end),
+            # 'brush': pg.mkBrush(color)
+            # })
             if self.data.loc[start, 'label_flag'] == 0:
-                color = self.checkColor(self.data.loc[start, 'label'], first=True)  # 相同背景色
+                original_brush = spot.brush()  # 读取原有颜色
+                color = original_brush.color()  # 默认使用原有颜色
+                # color = self.checkColor(self.data.loc[start, 'label'], first=True)  # 相同背景色
             else:
                 if self.is_toggled:
                     color = self.checkColor(self.data.loc[start, 'label'], first=False)
                 else:
-                    color = self.checkColor(self.data.loc[start, 'label'], first=True)  # 相同背景色
+                    original_brush = spot.brush()  # 读取原有颜色
+                    color = original_brush.color()  # 默认使用原有颜色
+                    # color = self.checkColor(self.data.loc[start, 'label'], first=True)  # 相同背景色
             spot = {'pos': (pos.x(), pos.y()), 'data': (i, start, end),
                     'brush': pg.mkBrush(color)}
             spots.append(spot)
@@ -1404,7 +1535,6 @@ class LabelWithInteractivePlot(QWidget):
                 end_indice.append(end_idx)
 
         return start_indice, end_indice, selected_dfs
-
 
     '''
     ==================================================
@@ -1485,11 +1615,12 @@ class LabelWithInteractivePlot(QWidget):
                         self.data.to_csv(new_path)
                         break
             else:
+                new_path = edit_data_path
                 self.data.to_csv(edit_data_path)
         except:
             print('save data error!')
         else:
-            print('save success')
+            print(f'文件已经保存在{new_path}')
 
     # 创建标签按钮
     def createLabelButton(self):
@@ -1660,10 +1791,6 @@ def combine_rectangles(rectangles, threshold_seconds=100):
     return combined_rectangles
 
 
-
-
-
-
 def find_charts_data_columns(sensor_dict, column_names):
     # new_column_names = []
     metadatas = []
@@ -1683,5 +1810,3 @@ def find_charts_data_columns(sensor_dict, column_names):
         }
         metadatas.append(metadata)
     return metadatas
-
-
