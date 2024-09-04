@@ -46,7 +46,8 @@ class BaseNet(metaclass=abc.ABCMeta):
             lr = adjust_learning_rate(p, optimizer, epoch)
             print('Adjusted learning rate to {:.5f}'.format(lr))
             loss_value = AE_train_time_series(train_dataloaders[0], model, criterion, optimizer, epoch, device)
-            # todo
+            print('loss of the ' + str(epoch) + '-th training epoch is :' + loss_value.__str__())
+
         # batch[Batch.part_score_targets], heads[pred_layer]
 
         loss = {"part_loss": loss_value}
