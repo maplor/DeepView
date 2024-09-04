@@ -37,7 +37,7 @@ get_data_from_pkl,
 
 
 class OldScatterMapWidget(QWidget):
-    def __init__(self, main_window, data, model_name, data_length, column_names):
+    def __init__(self, main_window):
         super().__init__()
 
         self.main_window = main_window  # 保存对主界面的引用
@@ -55,10 +55,10 @@ class OldScatterMapWidget(QWidget):
         self.old_map = pg.PlotWidget()
         self.layout.addWidget(self.old_map)
 
-        self.data = data
-        self.model_name = model_name
-        self.data_length = data_length
-        self.column_names = column_names
+        # self.data = data
+        # self.model_name = model_name
+        # self.data_length = data_length
+        # self.column_names = column_names
 
 
         # Add a plot to the widget
@@ -103,13 +103,8 @@ class OldScatterMapWidget(QWidget):
         # todo 还需要读取文件中的label
 
 
-    def display_data(self):
-        # data = self.main_window.data
-        # model_name = self.main_window.select_model_widget.model_name
-        # data_length = self.main_window.select_model_widget.data_length
-        # column_names = self.main_window.select_model_widget.column_names
-
-        self.generate_AE_data(self.data, self.model_name, self.data_length, self.column_names)
+    def display_data(self, data, model_path, data_length, column_names, model_name):
+        self.generate_AE_data(data, model_path, data_length, column_names, model_name)
 
 
         # self.generate_AE_data(data, model_name, data_length, column_names)
@@ -132,7 +127,7 @@ class OldScatterMapWidget(QWidget):
         # 检查到底传哪些参数 （flag_concat, label_concat）
         self.add_data_to_plot(repre_tsne, flag_concat, label_concat)
 
-    def generate_AE_data(self, data, model_name, data_length, column_names):
+    def generate_AE_data(self, data, model_path, data_length, column_names, model_name):
         '''
         之后替换generate_test_data函数
         生成左侧autoencoder的latent representation
@@ -153,8 +148,8 @@ class OldScatterMapWidget(QWidget):
                                                           data,
                                                           data_length,
                                                           column_names,
-                                                          model_name,
-                                                          self.model_name)
+                                                          model_path,
+                                                          model_name)
 
         # xiqxin: flag_concat 表示该tsne点是否有标签？？？
         num_points = pos.shape[0]
@@ -208,7 +203,7 @@ class OldScatterMapWidget(QWidget):
             p.setBrush(original_brush)
 
         self.main_window.last_modified_points = []  # Clear the list
-
+        # TODO 在另一个散点图还没初始化时不能触发这个，不然会报错
         if self.main_window.new_scatter_map_widget.scatter1 is not None:
             # Change properties of new points
             for scatter in [self.scatter1, self.scatter2, self.main_window.new_scatter_map_widget.scatter1, self.main_window.new_scatter_map_widget.scatter2, self.main_window.new_scatter_map_widget.scatter3, self.main_window.new_scatter_map_widget.scatter4]:

@@ -11,6 +11,7 @@ import torch
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout,
 )
+from PySide6.QtCore import QCoreApplication
 
 from deepview.gui.supervised_cl.train.utils import (
     get_window_data_scl,
@@ -40,7 +41,7 @@ else:
     AUGMENT = False  # 是否用data augment，作为参数存储
 
 class NewScatterMapWidget(QWidget):
-    def __init__(self, main_window, data, model_name, data_length, column_names):
+    def __init__(self, main_window):
         super().__init__()
 
         self.main_window = main_window  # 保存对主界面的引用
@@ -63,7 +64,10 @@ class NewScatterMapWidget(QWidget):
 
 
         # TODO Data setup，改为从主界面调用,绑定按钮事件
-        self.generate_test_data(model_name, data, data_length, column_names)
+        # self.generate_test_data(model_name, data, data_length, column_names)
+
+    def display_data(self, data, model_name, data_length, column_names):
+        self.generate_test_data(data, model_name, data_length, column_names)
 
 
     def update_existing_labels_status(self, status):
@@ -124,6 +128,8 @@ class NewScatterMapWidget(QWidget):
             adjust_learning_rate(optimizer, epoch, nepochs)
             # loss = train(train_loader, model, criterion, optimizer, epoch, nepochs, opt)
             loss = train(train_loader, model, method, criterion, optimizer, epoch, nepochs, device)
+            print('SimCLR loss of the ' + str(epoch) + '-th training epoch is :' + loss.__str__())
+            QCoreApplication.processEvents()
         # evaluate and plot
         # train_loader, _ = set_loader(augment=AUGMENT, labeled_flag=False)
         '''
@@ -136,6 +142,8 @@ class NewScatterMapWidget(QWidget):
         method = 'Supervised_SimCLR'
         for epoch in range(1, nepochs + 1):
             loss = train(train_loader, model, method, criterion, optimizer, epoch, nepochs, device)
+            print('Supervised_SimCLR loss of the ' + str(epoch) + '-th training epoch is :' + loss.__str__())
+            QCoreApplication.processEvents()
         # evaluate and plot
         '''
         第2张New scatter map生成方式
@@ -159,7 +167,7 @@ class NewScatterMapWidget(QWidget):
 
 
 
-    def generate_test_data(self, model_name, data, data_length, column_names):
+    def generate_test_data(self, data, model_name, data_length, column_names):
         # 首先生成模型训representation，再生成tsne结果
         # num_points = 100
         # repre_tsne_CLR = np.random.rand(num_points, 2)

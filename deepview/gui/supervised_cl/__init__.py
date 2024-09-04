@@ -157,30 +157,24 @@ class SupervisedClWidget(QWidget):
         """)
 
 
-        # read sensor data
-        # 特征提取：找到数据帧中的列名
-        model_filename = self.select_model_widget.modelComboBox.currentText()
-        # preprocessing: find column names in dataframe
-        model_name, data_length, column_names = \
-            get_param_from_path(model_filename)  # 从路径获取模型参数
-        data, _ = get_data_from_pkl(self.select_model_widget.RawDatacomboBox.currentText(),
-                                    self.cfg)
-        # transfer sensor name to columns
-        data_columns = transfer_sensor2columns(column_names, self.sensor_dict)
-
         self.scatter_title.addWidget(label)
 
-        # 散点图部分
-        self.old_scatter_map_widget = OldScatterMapWidget(self,
-                                                          data,
-                                                          model_filename,
-                                                          data_length,
-                                                          data_columns)
-        self.new_scatter_map_widget = NewScatterMapWidget(self,
-                                                          data,
-                                                          model_filename,
-                                                          data_length,
-                                                          data_columns)
+        # # 散点图部分
+        # self.old_scatter_map_widget = OldScatterMapWidget(self,
+        #                                                   data,
+        #                                                   model_filename,
+        #                                                   data_length,
+        #                                                   data_columns)
+        # self.new_scatter_map_widget = NewScatterMapWidget(self,
+        #                                                   data,
+        #                                                   model_filename,
+        #                                                   data_length,
+        #                                                   data_columns)
+        self.old_scatter_map_widget = OldScatterMapWidget(self)
+        self.new_scatter_map_widget = NewScatterMapWidget(self)
+
+
+
         # 添加部件到布局
         self.all_scatter_area.addWidget(self.old_scatter_map_widget, stretch=1)
         self.all_scatter_area.addWidget(self.new_scatter_map_widget, stretch=1)
@@ -193,8 +187,10 @@ class SupervisedClWidget(QWidget):
         self.main_layout.addLayout(self.scatter_title)
         self.main_layout.addLayout(self.all_scatter_area)
 
-        # data display按钮连接generate_AE_data方法
-        self.select_model_widget.display_button.clicked.connect(self.old_scatter_map_widget.display_data)
+        # data display按钮连接到display_old_scatter_data方法
+        self.select_model_widget.display_button.clicked.connect(self.display_old_scatter_data)
+        # applySCL_button按钮连接到display_new_scatter_data方法
+        self.select_parameters_widget.applySCL_button.clicked.connect(self.display_new_scatter_data)
 
         # 勾选框改变触发
         self.old_existing_checkbox.stateChanged.connect(self.old_scatter_map_widget.update_existing_labels_status)
@@ -202,10 +198,51 @@ class SupervisedClWidget(QWidget):
         self.new_existing_checkbox.stateChanged.connect(self.new_scatter_map_widget.update_existing_labels_status)
         self.new_manual_checkbox.stateChanged.connect(self.new_scatter_map_widget.update_manual_labels_status)
 
+    def process_and_display_data(self, widget, display_method):
+        # read sensor data
+        model_filename = self.select_model_widget.modelComboBox.currentText()
+        # preprocessing: find column names in dataframe
+        model_name, data_length, column_names = get_param_from_path(model_filename)
+        data, _ = get_data_from_pkl(self.select_model_widget.RawDatacomboBox.currentText(), self.cfg)
+        # transfer sensor name to columns
+        data_columns = transfer_sensor2columns(column_names, self.sensor_dict)
+        display_method(data, model_filename, data_length, data_columns)
 
-    
+    # def display_old_scatter_data(self):
+    #     self.process_and_display_data(self.old_scatter_map_widget, self.old_scatter_map_widget.display_data)
+
+    # def display_new_scatter_data(self):
+    #     self.process_and_display_data(self.new_scatter_map_widget, self.new_scatter_map_widget.display_data)
+
+
+    def display_old_scatter_data(self):
+        # read sensor data
+        # 特征提取：找到数据帧中的列名
+        model_filename = self.select_model_widget.modelComboBox.currentText()
+        # preprocessing: find column names in dataframe
+        model_name, data_length, column_names = \
+            get_param_from_path(model_filename)  # 从路径获取模型参数
+        data, _ = get_data_from_pkl(self.select_model_widget.RawDatacomboBox.currentText(),
+                                    self.cfg)
+        # transfer sensor name to columns
+        data_columns = transfer_sensor2columns(column_names, self.sensor_dict)
+        self.old_scatter_map_widget.display_data(data, model_filename, data_length, data_columns, model_name)
+
+    def display_new_scatter_data(self):
+        # read sensor data
+        # 特征提取：找到数据帧中的列名
+        model_filename = self.select_model_widget.modelComboBox.currentText()
+        # preprocessing: find column names in dataframe
+        model_name, data_length, column_names = \
+            get_param_from_path(model_filename)  # 从路径获取模型参数
+        data, _ = get_data_from_pkl(self.select_model_widget.RawDatacomboBox.currentText(),
+                                    self.cfg)
+        # transfer sensor name to columns
+        data_columns = transfer_sensor2columns(column_names, self.sensor_dict)
+        self.new_scatter_map_widget.display_data(data, model_filename, data_length, data_columns)
+
+
     def handleCompute(self):
-
         self.get_data_from_pkl(self.select_model_widget.RawDatacomboBox.currentText())
 
 
