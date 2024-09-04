@@ -19,6 +19,7 @@ from PySide6.QtCore import (
 )
 # 从PySide6.QtCore导入QTimer, QRectF, Qt
 from PySide6.QtCore import QRectF
+from PySide6.QtCore import QRunnable, QThreadPool, Slot
 # 从PySide6.QtWidgets导入多个类
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -98,6 +99,61 @@ class LabelOption(QDialog):
         # 返回选中的选项
         return selected_option
 
+# 定义一个QObject来保存各种后台线程信号
+class TaskSignals(QObject):
+    # 后台保存csv文件完成信号，SaveCsvTask
+    save_csv_finished = Signal(str)
+
+# 后台保存csv文件类
+class SaveCsvTask(QRunnable):
+    def __init__(self, area_data, data, cfg, combo_box_text, is_timer):
+        super().__init__()
+        self.signals = TaskSignals()
+        self.area_data = area_data
+        self.data = data
+        self.cfg = cfg
+        self.combo_box_text = combo_box_text
+        self.is_timer = is_timer
+
+    @Slot()
+    def run(self):
+        # Parse the area data
+        try:
+            area_data = json.loads(self.area_data)
+        except json.JSONDecodeError as e:
+            print("Failed to decode JSON:", e)
+            return
+
+        for reg in area_data:
+            name = reg[0].get("name")
+            first_timestamp = reg[0].get("timestamp", {}).get("start")
+            second_timestamp = reg[0].get("timestamp", {}).get("end")
+            self.data.loc[
+                (self.data['unixtime'] >= int(first_timestamp)) &
+                (self.data['unixtime'] <= int(second_timestamp)), 'label'] = name
+
+        # Handle saving the data
+        os.makedirs(os.path.join(self.cfg["project_path"], "edit-data"), exist_ok=True)
+        edit_data_path = os.path.join(self.cfg["project_path"], "edit-data", self.combo_box_text)
+
+        try:
+            if os.path.exists(edit_data_path):
+                for num in range(1, 100):
+                    firstname = edit_data_path.split('Hz')[0]
+                    new_path = firstname + '_' + str(num) + '.pkl'
+                    if not os.path.exists(new_path):
+                        self.data.to_csv(new_path)
+                        break
+            else:
+                new_path = edit_data_path
+                self.data.to_csv(edit_data_path)
+        except Exception as e:
+            print('Save data error:', e)
+        else:
+            print(f'File saved at {new_path}')
+            if self.is_timer == 0:
+                self.signals.save_csv_finished.emit(new_path)
+                
 
 # 创建一个函数来找到最近的有效索引
 def find_nearest_index(target_index, valid_indices):
@@ -115,6 +171,7 @@ class Backend(QObject):
     setStartEndTime = Signal(str, str)
     setStartAndEndDataSign = Signal(str, str, str, str, str, str)
     getSelectedAreaToSaveSign = Signal(str)
+    getSelectedAreaToSaveTimerSign = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -224,14 +281,27 @@ class Backend(QObject):
     def test_callback(self, result):
         self.getSelectedAreaByHtml.emit(result)
 
-    @Slot()
-    def getSelectedAreaToSave(self):
-        print("getSelectedAreaToSave..")
-        return self.view.page().runJavaScript("getSelectedArea()", 0, self.save_callback)
+    # @Slot()
+    # def getSelectedAreaToSave(self):
+    #     print("getSelectedAreaToSave..")
+    #     return self.view.page().runJavaScript("getSelectedArea()", 0, self.save_callback)
 
-    def save_callback(self, result):
-        print(result)
-        self.getSelectedAreaToSaveSign.emit(result)
+    # def save_callback(self, result):
+    #     # print(result)
+    #     self.getSelectedAreaToSaveSign.emit(result)
+
+    @Slot()
+    def getSelectedAreaToSave(self, is_timer):
+        print("getSelectedAreaToSave..")
+        # 使用lambda传递参数给save_callback
+        self.view.page().runJavaScript("getSelectedArea()", 0, lambda result: self.save_callback(result, is_timer))
+
+    def save_callback(self, result, is_timer):
+        # 根据传入的参数选择要发射的信号
+        if is_timer == 1:
+            self.getSelectedAreaToSaveTimerSign.emit(result)
+        elif is_timer == 0:
+            self.getSelectedAreaToSaveSign.emit(result)
 
     # 添加label弹出确认提示框
     @Slot(result='QVariant')
@@ -392,6 +462,8 @@ class LabelWithInteractivePlot(QWidget):
         self.backend = Backend()
         self.backend_map = BackendMap()
 
+        self.save_csv_thread_pool = QThreadPool()
+
         # self.data改变时同步数据到backend
         self.dataChanged.connect(self.backend.handle_data_changed)
 
@@ -405,6 +477,8 @@ class LabelWithInteractivePlot(QWidget):
         self.backend.setStartEndTime.connect(self.setStartEndTime)
         self.backend.setStartAndEndDataSign.connect(self.backend_map.highlightLineChartTwoDots)
         self.backend.getSelectedAreaToSaveSign.connect(self.getSelectedAreaToSave)
+        self.backend.getSelectedAreaToSaveTimerSign.connect(self.getSelectedAreaToSaveTimer)
+
 
         self.button_style = """QPushButton {
             background-color: #1ea123; 
@@ -561,7 +635,7 @@ class LabelWithInteractivePlot(QWidget):
 
     def init_timer(self):
         self.timer = QTimer(self)
-        self.timer.timeout.connect(self.backend.getSelectedAreaToSave)
+        self.timer.timeout.connect(lambda: self.backend.getSelectedAreaToSave(1))
         # 设置定时器每隔五分钟（300000 毫秒）触发一次
         self.timer.start(600000)
 
@@ -605,7 +679,7 @@ class LabelWithInteractivePlot(QWidget):
 
         # 保存csv按钮
         self.save_csv_btn = QPushButton('Save csv')
-        self.save_csv_btn.clicked.connect(self.backend.getSelectedAreaToSave)
+        self.save_csv_btn.clicked.connect(lambda: self.backend.getSelectedAreaToSave(0))
         self.save_csv_btn.setStyleSheet(self.button_style)
         self.left_label_layout.addWidget(self.save_csv_btn)
         self.left_label_layout.addStretch()
@@ -1564,6 +1638,8 @@ class LabelWithInteractivePlot(QWidget):
         saveButton.clicked.connect(self.handleSaveButton)
         self.settingPannel.addWidget(saveButton)
 
+
+
     # def getSelectedAreaToSave(self, area_data):
     #     # print(areaData)
     #     try:
@@ -1576,25 +1652,25 @@ class LabelWithInteractivePlot(QWidget):
     #         name = reg[0].get("name")
     #         first_timestamp = reg[0].get("timestamp", {}).get("start")
     #         second_timestamp = reg[0].get("timestamp", {}).get("end")
-    #         self.data.loc[(self.data['_timestamp'] >= int(first_timestamp)) & (
-    #                 self.data['_timestamp'] <= int(second_timestamp)), 'label'] = name
+    #         self.data.loc[(self.data['unixtime'] >= int(first_timestamp)) & (
+    #                 self.data['unixtime'] <= int(second_timestamp)), 'label'] = name
     #     self.handleSaveButton()
 
     def getSelectedAreaToSave(self, area_data):
-        # print(areaData)
-        try:
-            area_data = json.loads(area_data)  # 解析 JSON 字符串
-            # print("Parsed data:", areaData)
-        except json.JSONDecodeError as e:
-            print("Failed to decode JSON:", e)
-            return
-        for reg in area_data:
-            name = reg[0].get("name")
-            first_timestamp = reg[0].get("timestamp", {}).get("start")
-            second_timestamp = reg[0].get("timestamp", {}).get("end")
-            self.data.loc[(self.data['unixtime'] >= int(first_timestamp)) & (
-                    self.data['unixtime'] <= int(second_timestamp)), 'label'] = name
-        self.handleSaveButton()
+        print("Saving CSV in the background.")
+        combo_box_text = self.RawDatacomboBox.currentText()
+        save_task = SaveCsvTask(area_data, self.data, self.cfg, combo_box_text, 0)
+        save_task.signals.save_csv_finished.connect(self.on_save_finished)
+        self.save_csv_thread_pool.start(save_task)
+
+    def on_save_finished(self, new_path):
+        QMessageBox.information(None, "保存CSV", f"文件已保存于 {new_path}", QMessageBox.Ok)
+    
+    def getSelectedAreaToSaveTimer(self, area_data):
+        print("Saving CSV in the background.")
+        combo_box_text = self.RawDatacomboBox.currentText()
+        save_task = SaveCsvTask(area_data, self.data, self.cfg, combo_box_text, 1)
+        self.save_csv_thread_pool.start(save_task)
 
     # 处理保存按钮点击事件
     def handleSaveButton(self):
