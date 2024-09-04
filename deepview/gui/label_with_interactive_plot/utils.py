@@ -65,9 +65,9 @@ def featureExtraction(root, data, data_length, column_names, model_path, model_n
     model = get_model(p_backbone=model_name, p_setup=p_setup, num_channel=len(column_names))
 
     if torch.cuda.is_available():
-        model.load_state_dict(torch.load(full_model_path))
+        model.load_state_dict(torch.load(full_model_path, weights_only=False))
     else:
-        model.load_state_dict(torch.load(full_model_path, map_location=torch.device('cpu')))
+        model.load_state_dict(torch.load(full_model_path, weights_only=False, map_location=torch.device('cpu')))
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
