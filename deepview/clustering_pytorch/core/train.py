@@ -29,7 +29,7 @@ from deepview.clustering_pytorch.nnet.train_utils import (
 )
 import json
 from PySide6.QtWidgets import QProgressBar
-
+from PySide6.QtCore import QCoreApplication
 
 class LearningRate(object):
     def __init__(self, cfg):
@@ -138,9 +138,11 @@ def train(
         # Train: the same as simclr
         print('Train ...')
         if p_setup == 'autoencoder':
-            AE_train_time_series(train_dataloader, model, criterion, optimizer, epoch, device)
+            losses = AE_train_time_series(train_dataloader, model, criterion, optimizer, epoch, device)
         elif p_setup == 'simclr':
-            simclr_train_time_series(train_dataloader, model, criterion, optimizer, epoch, device)
+            losses = simclr_train_time_series(train_dataloader, model, criterion, optimizer, epoch, device)
+        print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
+        QCoreApplication.processEvents()
 
     sensor_str = ''
     for i in data_column:

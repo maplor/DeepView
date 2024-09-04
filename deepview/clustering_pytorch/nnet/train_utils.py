@@ -11,6 +11,7 @@ from deepview.clustering_pytorch.nnet.util import (
 )
 # from util import gen_aug
 from tqdm import tqdm
+from PySide6.QtCore import QCoreApplication
 
 
 def simclr_train(train_loader, model, criterion, optimizer, epoch):
@@ -77,7 +78,7 @@ def simclr_train_time_series(train_loader, model, criterion, optimizer, epoch, d
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-    return
+    return losses
 
 
 def simclr_eval_time_series(train_loader, model, device):
@@ -123,10 +124,10 @@ def AE_train_time_series(train_loader, model, criterion, optimizer, epoch, devic
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        if i % 10 == 0:
-            print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
-    print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
-    return
+        # if i % 10 == 0:
+        #     print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
+    # print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
+    return losses
 
 
 def AE_eval_time_series(train_loader, model, device):
