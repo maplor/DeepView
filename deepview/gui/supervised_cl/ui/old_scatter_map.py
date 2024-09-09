@@ -203,8 +203,11 @@ class OldScatterMapWidget(QWidget):
             p.setBrush(original_brush)
 
         self.main_window.last_modified_points = []  # Clear the list
-        # TODO 在另一个散点图还没初始化时不能触发这个，不然会报错
-        if self.main_window.new_scatter_map_widget.scatter1 is not None:
+        
+        # 检查 new_scatter_map_widget 是否已初始化
+        if hasattr(self.main_window, 'new_scatter_map_widget') and \
+           hasattr(self.main_window.new_scatter_map_widget, 'scatter1') and \
+           self.main_window.new_scatter_map_widget.scatter1 is not None:
             # Change properties of new points
             for scatter in [self.scatter1, self.scatter2, self.main_window.new_scatter_map_widget.scatter1, self.main_window.new_scatter_map_widget.scatter2, self.main_window.new_scatter_map_widget.scatter3, self.main_window.new_scatter_map_widget.scatter4]:
                 points = scatter.points()
@@ -219,19 +222,14 @@ class OldScatterMapWidget(QWidget):
                         p.setSize(new_size)
                         p.setBrush(pg.mkBrush(new_color))
         else:
-            # Change properties of new points
-            for scatter in [self.scatter1, self.scatter2]:
-                points = scatter.points()
-                for p in points:
-                    if p.data() in indices:
-                        # Save current properties
-                        original_size = p.size()
-                        original_brush = p.brush()
-                        self.main_window.last_modified_points.append((p, original_size, original_brush))
+            # 如果控件未初始化，显示消息框
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.setText("新的散点图控件尚未初始化。")
+            msg_box.setInformativeText("请先初始化控件，然后再继续。")
+            msg_box.setWindowTitle("初始化错误")
+            msg_box.exec_()
 
-                        # Change to new properties
-                        p.setSize(new_size)
-                        p.setBrush(pg.mkBrush(new_color))
 
     # def on_click(self, points):
     def on_click(self, scatter, points):
