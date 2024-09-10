@@ -103,17 +103,11 @@ class SupervisedClWidget(QWidget):
         # 左上模型选择区域
         self.select_model_widget = SelectModelWidget(self)
         
-        
 
-        # self.top_layout.addLayout(self.select_model_widget)
-        
         # 右上参数选择区域
         self.select_parameters_widget = SelectParametersWidget(self)
-
         self.top_layout.addWidget(self.select_model_widget, stretch=1)
         self.top_layout.addWidget(self.select_parameters_widget, stretch=1)
-        # self.top_layout.addWidget(self.select_model_widget)
-        # self.top_layout.addWidget(self.select_parameters_widget)
         
 
         # 显示标签选择框部分

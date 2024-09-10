@@ -47,13 +47,14 @@ class SelectParametersWidget(QWidget):
 
         self.repre_tsne, self.flag_concat, self.label_concat = None, None, None
 
-        self.augmentation_list = ['na', 'shuffle', 'jit_scal', 'perm_jit']
-        self.augmentation_CLR_choice = self.augmentation_list[0]
-        self.augmentation_SimCLR_choice = self.augmentation_list[0]
+        # clustering_pytorch/nnet/util.py
+        self.augmentation_list = ['na', 'shuffle', 'jit_scale', 'perm_jit', 'resample', 'noise', 'scale', 'negate', 't_flip', 'perm', 't_warp']
+        self.augmentation_CLR_choice = self.augmentation_list[1]
+        self.augmentation_SimCLR_choice = self.augmentation_list[3]
 
         self.methods = ['SupCon', 'SimCLR']
         self.method = self.methods[0]
-        self.max_iter = 30
+        self.max_iter = 10
         self.learning_rate = 0.0001
         self.batch_size = 512
 
@@ -65,7 +66,7 @@ class SelectParametersWidget(QWidget):
         layout = QVBoxLayout()
 
 
-        # 第一行Select augmentation组合框
+        # 第一行tation组合框
         self.first_layout = QHBoxLayout()
         first_nested_layout = QHBoxLayout()
         first_nested_layout.setAlignment(Qt.AlignLeft)
@@ -105,7 +106,7 @@ class SelectParametersWidget(QWidget):
         nested_layout.setAlignment(Qt.AlignLeft)
 
         # ParametersLabel
-        parametersLabel = QLabel("Parameters:")
+        # parametersLabel = QLabel("Parameters:")
 
         method_label = QLabel("method:")
         self.display_method_type = QComboBox()
@@ -117,6 +118,7 @@ class SelectParametersWidget(QWidget):
         self.display_iters_spin = QSpinBox()
         self.display_iters_spin.setMinimum(1)
         self.display_iters_spin.setMaximum(10000)
+        self.display_iters_spin.setMaximumWidth(10)
         self.display_iters_spin.setValue(30)
         self.display_iters_spin.valueChanged.connect(self.log_display_iters)
 
@@ -134,6 +136,7 @@ class SelectParametersWidget(QWidget):
         self.batchsize_spin = QSpinBox()
         self.batchsize_spin.setMinimum(1)
         self.batchsize_spin.setMaximum(10000)
+        self.batchsize_spin.setMaximumWidth(10)
         self.batchsize_spin.setValue(1028)
         self.batchsize_spin.valueChanged.connect(self.log_batch_size)
 
@@ -147,7 +150,7 @@ class SelectParametersWidget(QWidget):
         # self.second_layout.addWidget(maxiters_label, alignment=Qt.AlignLeft)
         # self.second_layout.addWidget(self.batchsize_spin, alignment=Qt.AlignLeft)
 
-        nested_layout.addWidget(parametersLabel)
+        # nested_layout.addWidget(parametersLabel)
         nested_layout.addWidget(method_label)
         nested_layout.addWidget(self.display_method_type)
         nested_layout.addWidget(dispiters_label)
