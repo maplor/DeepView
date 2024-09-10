@@ -100,14 +100,15 @@ def confusion_matrix(predictions, gt, class_names, output_file=None):
     plt.close()
 
 
-
+# ['na', 'shuffle', 'jit_scale', 'perm_jit', 'resample', 'noise', 'scale', 'negate', 't_flip', 'perm', 't_warp']
 
 def gen_aug(sample, ssh_type):
     if ssh_type == 'na':
         return sample
     elif ssh_type == 'shuffle':  # 8
         return shuffle(sample)
-    elif ssh_type == 'jit_scal':
+    # elif ssh_type == 'jit_scal':
+    elif ssh_type == 'jit_scale':
         scale_sample = scaling(sample, sigma=2)
         return torch.from_numpy(scale_sample)
     elif ssh_type == 'perm_jit':
@@ -122,7 +123,7 @@ def gen_aug(sample, ssh_type):
         return negated(sample)
     elif ssh_type == 't_flip':
         return time_flipped(sample)
-    elif ssh_type == 'rotation':  # 3
+    elif ssh_type == 'rotation':  # 3, 只能处理三轴
         if isinstance(multi_rotation(sample), np.ndarray):
             return torch.from_numpy(multi_rotation(sample))
         else:

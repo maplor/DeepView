@@ -540,7 +540,7 @@ class MainWindow(QMainWindow):
         # self.tab_widget.addTab(self.imu_gps_interact, "IMU GPS interaction")
         self.tab_widget.addTab(self.label_with_interactive_plot, "Label with interactive plot")
         self.tab_widget.addTab(self.supervised_contrastive_learning, "SupervisedCL")
-        self.tab_widget.addTab(self.supervised_learning_gui, "Supervised learning with new labels")
+        # self.tab_widget.addTab(self.supervised_learning_gui, "Supervised learning with new labels")
 
         # self.tab_widget.addTab(self.analyze_videos, "Analyze videos")
         # self.tab_widget.addTab(

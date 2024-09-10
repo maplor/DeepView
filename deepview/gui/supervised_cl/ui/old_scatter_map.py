@@ -225,9 +225,12 @@ class OldScatterMapWidget(QWidget):
             # 如果控件未初始化，显示消息框
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Warning)
-            msg_box.setText("新的散点图控件尚未初始化。")
-            msg_box.setInformativeText("请先初始化控件，然后再继续。")
-            msg_box.setWindowTitle("初始化错误")
+            # msg_box.setText("新的散点图控件尚未初始化。")
+            msg_box.setText("All scatter plots have not yet been initialized.")
+            # msg_box.setInformativeText("请先初始化控件，然后再继续。")
+            msg_box.setInformativeText("Please initialize the scatter plots before continuing.")
+            # msg_box.setWindowTitle("初始化错误")
+            msg_box.setWindowTitle("Plotting error.")
             msg_box.exec_()
 
 
