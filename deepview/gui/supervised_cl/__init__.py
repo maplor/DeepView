@@ -46,6 +46,7 @@ from deepview.gui.supervised_cl.ui.select_model_widget import SelectModelWidget
 from deepview.gui.supervised_cl.ui.new_scatter_map import NewScatterMapWidget
 from deepview.gui.supervised_cl.ui.old_scatter_map import OldScatterMapWidget
 from deepview.gui.supervised_cl.ui.select_parameters_widget import SelectParametersWidget
+from deepview.gui.supervised_cl.ui.data_attributs import DataAttributesWidget
 from deepview.gui.label_with_interactive_plot.utils import (
 # featureExtraction,
 get_data_from_pkl,
@@ -124,12 +125,30 @@ class SupervisedClWidget(QWidget):
         self.new_checkbox_layout.setAlignment(Qt.AlignLeft)
         self.new_existing_checkbox = QCheckBox("Show existing\n    labels")
         self.new_existing_checkbox.setChecked(True)
+        # 获取checkbox的值
+
         self.new_checkbox_layout.addWidget(self.new_existing_checkbox)
         self.new_manual_checkbox = QCheckBox("Show manual\n    labels")
         self.new_manual_checkbox.setChecked(True)
         self.new_checkbox_layout.addWidget(self.new_manual_checkbox)
         # 设置勾选框的背景颜色为紫色
-        self.setStyleSheet("QCheckBox { background-color: #c76dff; color: white; padding-right: 17px;}")
+        # self.setStyleSheet("QCheckBox { background-color: #c76dff; color: white; padding-right: 17px;}")
+
+        # 设置对象名称
+        self.old_existing_checkbox.setObjectName("oldExistingCheckbox")
+        self.old_manual_checkbox.setObjectName("oldManualCheckbox")
+        self.new_existing_checkbox.setObjectName("newExistingCheckbox")
+        self.new_manual_checkbox.setObjectName("newManualCheckbox")
+
+        # 设置特定复选框的样式
+        self.setStyleSheet("""
+            QCheckBox#oldExistingCheckbox, QCheckBox#oldManualCheckbox,
+            QCheckBox#newExistingCheckbox, QCheckBox#newManualCheckbox {
+                background-color: #c76dff;
+                color: white;
+                padding-right: 17px;
+            }
+        """)
 
 
         # 添加到布局
@@ -175,11 +194,16 @@ class SupervisedClWidget(QWidget):
         # self.all_scatter_area.addWidget(self.old_scatter_map_widget)
         # self.all_scatter_area.addWidget(self.new_scatter_map_widget)
 
+        # 底部组件
+
+        self.data_attribute_widget = DataAttributesWidget(self)
+
         # 按顺序摆放各个区域
         self.main_layout.addLayout(self.top_layout)
         self.main_layout.addLayout(self.select_lable_layout)
         self.main_layout.addLayout(self.scatter_title)
         self.main_layout.addLayout(self.all_scatter_area)
+        self.main_layout.addWidget(self.data_attribute_widget)
 
         # data display按钮连接到display_old_scatter_data方法
         self.select_model_widget.display_button.clicked.connect(self.display_old_scatter_data)
