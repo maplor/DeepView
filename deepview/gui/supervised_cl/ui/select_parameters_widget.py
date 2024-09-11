@@ -49,8 +49,9 @@ class SelectParametersWidget(QWidget):
 
         # clustering_pytorch/nnet/util.py
         self.augmentation_list = ['na', 'shuffle', 'jit_scale', 'perm_jit', 'resample', 'noise', 'scale', 'negate', 't_flip', 'perm', 't_warp']
-        self.augmentation_CLR_choice = self.augmentation_list[1]
-        self.augmentation_SimCLR_choice = self.augmentation_list[3]
+        
+        self.augmentation_CLR_choice = self.augmentation_list[0]
+        self.augmentation_SimCLR_choice = self.augmentation_list[0]
 
         self.methods = ['SupCon', 'SimCLR']
         self.method = self.methods[0]
@@ -75,6 +76,9 @@ class SelectParametersWidget(QWidget):
         # 创建CLR组合框
         self.augmentationComboBox_CLR = QComboBox()
         self.augmentationComboBox_CLR.addItems(self.augmentation_list)
+        # 默认选择第11个
+        self.augmentationComboBox_CLR.setCurrentIndex(10)
+
         # 连接组合框文本改变事件到主窗口的方法
         self.augmentationComboBox_CLR.currentTextChanged.connect(
             self.log_augmentation_CLR_choice
@@ -83,6 +87,9 @@ class SelectParametersWidget(QWidget):
         # 创建SimCLR组合框
         self.augmentationComboBox_SimCLR = QComboBox()
         self.augmentationComboBox_SimCLR.addItems(self.augmentation_list)
+        # 默认选择第3个
+        self.augmentationComboBox_SimCLR.setCurrentIndex(2)
+
         self.augmentationComboBox_SimCLR.currentTextChanged.connect(
             self.log_augmentation_SimCLR_choice
         )
@@ -118,7 +125,7 @@ class SelectParametersWidget(QWidget):
         self.display_iters_spin = QSpinBox()
         self.display_iters_spin.setMinimum(1)
         self.display_iters_spin.setMaximum(10000)
-        self.display_iters_spin.setMaximumWidth(10)
+        # self.display_iters_spin.setMaximumWidth(10)
         self.display_iters_spin.setValue(30)
         self.display_iters_spin.valueChanged.connect(self.log_display_iters)
 
@@ -126,8 +133,8 @@ class SelectParametersWidget(QWidget):
         saveiters_label = QLabel("Learning rate")
         self.save_iters_spin = QLineEdit()
         # self.save_iters_spin.setFixedWidth(2)
-        # self.save_iters_spin.setFixedWidth(100)
-        self.save_iters_spin.setMaximumWidth(10)
+        self.save_iters_spin.setFixedWidth(100)
+        # self.save_iters_spin.setMaximumWidth(10)
         self.save_iters_spin.setText("0.0001")
         self.save_iters_spin.textChanged.connect(self.log_init_lr)
 
@@ -136,7 +143,7 @@ class SelectParametersWidget(QWidget):
         self.batchsize_spin = QSpinBox()
         self.batchsize_spin.setMinimum(1)
         self.batchsize_spin.setMaximum(10000)
-        self.batchsize_spin.setMaximumWidth(10)
+        # self.batchsize_spin.setMaximumWidth(10)
         self.batchsize_spin.setValue(1028)
         self.batchsize_spin.valueChanged.connect(self.log_batch_size)
 
@@ -152,13 +159,13 @@ class SelectParametersWidget(QWidget):
 
         # nested_layout.addWidget(parametersLabel)
         nested_layout.addWidget(method_label)
-        nested_layout.addWidget(self.display_method_type)
+        nested_layout.addWidget(self.display_method_type, alignment=Qt.AlignLeft)
         nested_layout.addWidget(dispiters_label)
-        nested_layout.addWidget(self.display_iters_spin)
+        nested_layout.addWidget(self.display_iters_spin, alignment=Qt.AlignLeft)
         nested_layout.addWidget(saveiters_label)
-        nested_layout.addWidget(self.save_iters_spin)
+        nested_layout.addWidget(self.save_iters_spin, alignment=Qt.AlignLeft)
         nested_layout.addWidget(maxiters_label)
-        nested_layout.addWidget(self.batchsize_spin)
+        nested_layout.addWidget(self.batchsize_spin, alignment=Qt.AlignLeft)
 
         self.second_layout.addLayout(nested_layout)
         
@@ -173,7 +180,19 @@ class SelectParametersWidget(QWidget):
         self.applySCL_button.setFixedWidth(160)
         self.applySCL_button.setStyleSheet(styles.button_style)
 
+        # 保存模型按钮
+        self.save_model_button = QPushButton('Save model')
+
+        # 设置按钮宽度
+        self.save_model_button.setFixedWidth(160)
+        self.save_model_button.setStyleSheet(styles.button_style)
+
+        # TODO 连接按钮点击事件到保存模型的方法
+        # self.save_model_button.clicked.connect(self.save_model)
+
         button_layout.addWidget(self.applySCL_button)
+        button_layout.addWidget(self.save_model_button)
+
         self.third_layout.addLayout(button_layout)
         # self.third_layout.addWidget(self.applySCL_button)
 

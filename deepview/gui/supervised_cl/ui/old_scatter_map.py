@@ -49,46 +49,8 @@ class OldScatterMapWidget(QWidget):
         # Create a vertical layout
         self.layout = QVBoxLayout(self)
         
-
-        # Create a GraphicsLayoutWidget
-        # self.old_map = pg.GraphicsLayoutWidget(show=True, title="Autoencoder Latent Representation")
         self.old_map = pg.PlotWidget()
         self.layout.addWidget(self.old_map)
-
-        # self.data = data
-        # self.model_name = model_name
-        # self.data_length = data_length
-        # self.column_names = column_names
-
-
-        # Add a plot to the widget
-        # self.plot = self.win.addPlot(title="Autoencoder, Encoder Latent Representation")
-
-        # TODO Data setup，改为从主界面调用
-        # self.model_name = 'AE_CNN'
-        # self.p_setup = 'autoencoder'
-        # self.full_model_path = r'C:\Users\user\Desktop\fast-test-2024-08-04\unsup-models\iteration-0\fastAug4\AE_CNN_epoch0_datalen180_gps-acceleration.pth'
-        # self.new_column_names = ['acc_x', 'acc_y', 'acc_z', 'GPS_velocity', 'GPS_bearing']
-        # self.labeled_flag = False
-        # self.data_path = r'C:\Users\user\Desktop\fast-test-2024-08-04\unsupervised-datasets\allDataSet'
-        # self.select_filenames = ['Omizunagidori2018_raw_data_9B36578_lb0009_25Hz.pkl']
-
-        # self.model_name = self.main_window.select_model_widget.model_name
-        # self.full_model_path = self.main_window.select_model_widget.full_model_path
-
-
-        # self.model_path = self.main_window.select_model_widget.model_path
-        # self.model_name = self.main_window.select_model_widget.model_name
-        # self.data_length = self.main_window.select_model_widget.data_length
-        # self.column_names = self.main_window.select_model_widget.column_names
-
-
-    
-        # self.model_path = self.main_window.select_model_widget.model_path
-        # self.model_name = self.main_window.select_model_widget.model_name
-        # self.data_length = self.main_window.select_model_widget.data_length
-        # self.column_names = self.main_window.select_model_widget.column_names
-
 
         # Initialize scatter plot items
         self.scatter1 = None
@@ -98,16 +60,12 @@ class OldScatterMapWidget(QWidget):
         self.manual_labels_status = True
         
         # TODO Add data to plot,绑定到display data按钮
-        # self.add_data_to_plot()
-        # self.generate_test_data()
-        # todo 还需要读取文件中的label
 
 
     def display_data(self, data, model_path, data_length, column_names, model_name):
         self.generate_AE_data(data, model_path, data_length, column_names, model_name)
-
-
         # self.generate_AE_data(data, model_name, data_length, column_names)
+
 
     def update_existing_labels_status(self, status):
         self.existing_labels_status = status
@@ -225,11 +183,8 @@ class OldScatterMapWidget(QWidget):
             # 如果控件未初始化，显示消息框
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Warning)
-            # msg_box.setText("新的散点图控件尚未初始化。")
             msg_box.setText("All scatter plots have not yet been initialized.")
-            # msg_box.setInformativeText("请先初始化控件，然后再继续。")
             msg_box.setInformativeText("Please initialize the scatter plots before continuing.")
-            # msg_box.setWindowTitle("初始化错误")
             msg_box.setWindowTitle("Plotting error.")
             msg_box.exec_()
 

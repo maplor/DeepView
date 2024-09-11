@@ -8,8 +8,17 @@ import argparse
 
 import torch
 
+
 from PySide6.QtWidgets import (
-    QWidget, QHBoxLayout,
+    QWidget, QVBoxLayout, QPushButton, QLabel, QComboBox,
+    QCheckBox,
+    QDialog,
+    QRadioButton,
+    QSplitter,
+    QFrame,
+    QWidget, QHBoxLayout, QVBoxLayout, QLabel,
+    QComboBox, QPushButton, QSpacerItem, QSizePolicy, QLineEdit,
+    QMessageBox, QSpinBox
 )
 from PySide6.QtCore import QCoreApplication
 
@@ -169,15 +178,21 @@ class NewScatterMapWidget(QWidget):
 
     def generate_test_data(self, data, model_name, data_length, column_names):
         # 首先生成模型训representation，再生成tsne结果
-        # num_points = 100
-        # repre_tsne_CLR = np.random.rand(num_points, 2)
-        # flag_concat_CLR = np.random.randint(0, 2, num_points)  # 生成一维数组
-        # label_concat_CLR = np.random.randint(0, 4, num_points)  # 生成一维数组
-        #
-        # repre_tsne_SimCLR = np.random.rand(num_points, 2)
-        # flag_concat_SimCLR = np.random.randint(0, 2, num_points)
-        # label_concat_SimCLR = np.random.randint(0, 4, num_points)
         aug1, aug2 = 't_warp', 't_warp'
+
+        aug1 = self.main_window.select_parameters_widget.augmentationComboBox_CLR.currentText()
+        aug2 = self.main_window.select_parameters_widget.augmentationComboBox_SimCLR.currentText()
+
+        # show existing labels
+        # self.main_window.select_parameters_widget.existing_labels_checkbox.isChecked()
+
+        # show manual labels
+        # self.main_window.select_parameters_widget.manual_labels_checkbox.isChecked()
+
+        # 使用augmentation_CLR_choice得先设置默认值
+        # aug1 = self.main_window.select_parameters_widget.augmentation_CLR_choice
+        # aug2 = self.main_window.select_parameters_widget.augmentation_SimCLR_choice
+
         batch_size = 1024
         (repre_tsne_SimCLR, flag_concat_CLR,
          label_concat_CLR, repre_tsne_CLR) = self.generate_scl2cl_data(
@@ -196,6 +211,10 @@ class NewScatterMapWidget(QWidget):
 
     def add_data_to_plot(self, repre_tsne_CLR, flag_concat_CLR, label_concat_CLR,
                          repre_tsne_SimCLR, flag_concat_SimCLR, label_concat_SimCLR):
+        
+        # 重新初始化两张图
+        self.map_1.clear()
+        self.map_2.clear()
 
         '''
         当点击 Apply SCL按钮后运行下面程序
@@ -268,10 +287,13 @@ class NewScatterMapWidget(QWidget):
 
         self.main_window.last_modified_points = []  # Clear the list
 
-        # 如果old scatter map有点被点击，new scatter map中的点也会被点击，如果old scatter map未就绪，new scatter map中的点不会被点击
         # Change properties of new points
         
-        if self.main_window.old_scatter_map_widget.scatter1 is not None:
+        # if self.main_window.old_scatter_map_widget.scatter1 is not None:
+        # 检查 new_scatter_map_widget 是否已初始化
+        if hasattr(self.main_window, 'new_scatter_map_widget') and \
+           hasattr(self.main_window.new_scatter_map_widget, 'scatter1') and \
+           self.main_window.new_scatter_map_widget.scatter1 is not None:
             for scatter in [self.scatter1, self.scatter2, self.scatter3, self.scatter4, self.main_window.old_scatter_map_widget.scatter1, self.main_window.old_scatter_map_widget.scatter2]:
                 points = scatter.points()
                 for p in points:
@@ -285,18 +307,25 @@ class NewScatterMapWidget(QWidget):
                         p.setSize(new_size)
                         p.setBrush(pg.mkBrush(new_color))
         else:
-            for scatter in [self.scatter1, self.scatter2, self.scatter3, self.scatter4]:
-                points = scatter.points()
-                for p in points:
-                    if p.data() in indices:
-                        # Save current properties
-                        original_size = p.size()
-                        original_brush = p.brush()
-                        self.main_window.last_modified_points.append((p, original_size, original_brush))
+            # 如果控件未初始化，显示消息框
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.setText("All scatter plots have not yet been initialized.")
+            msg_box.setInformativeText("Please initialize the scatter plots before continuing.")
+            msg_box.setWindowTitle("Plotting error.")
+            msg_box.exec_()
+            # for scatter in [self.scatter1, self.scatter2, self.scatter3, self.scatter4]:
+            #     points = scatter.points()
+            #     for p in points:
+            #         if p.data() in indices:
+            #             # Save current properties
+            #             original_size = p.size()
+            #             original_brush = p.brush()
+            #             self.main_window.last_modified_points.append((p, original_size, original_brush))
 
-                        # Change to new properties
-                        p.setSize(new_size)
-                        p.setBrush(pg.mkBrush(new_color))
+            #             # Change to new properties
+            #             p.setSize(new_size)
+            #             p.setBrush(pg.mkBrush(new_color))
 
     def on_click(self, scatter, points):
         idxs = []  # Initialize idxs list
