@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QComboBox, QPushButton, QSpacerItem, QSizePolicy, QLineEdit,
     QMessageBox
 )
-
+from PySide6.QtCore import QThread, Signal, QObject
 
 # 从deepview.utils.auxiliaryfunctions导入多个函数
 from deepview.utils.auxiliaryfunctions import (
@@ -34,6 +34,36 @@ from deepview.gui.label_with_interactive_plot.utils import (
 featureExtraction,
 get_data_from_pkl,
 )
+
+
+class AEDataWorker(QThread):
+    finished = Signal(object, object, object)  # Signals to return data
+
+    def __init__(self, data, model_path, data_length, column_names, model_name):
+        super().__init__()
+        self.data = data
+        self.model_path = model_path
+        self.data_length = data_length
+        self.column_names = column_names
+        self.model_name = model_name
+
+    def run(self):
+        # Call the featureExtraction function
+        start_indice, end_indice, pos = featureExtraction(
+            None,  # Replace with actual parameter if needed
+            self.data,
+            self.data_length,
+            self.column_names,
+            self.model_path,
+            self.model_name
+        )
+
+        num_points = pos.shape[0]
+        flag_concat = np.random.randint(0, 2, (num_points, 1, 1))
+        label_concat = np.random.randint(0, 4, (num_points, 1, 1))
+
+        # Emit the result
+        self.finished.emit(pos, flag_concat, label_concat)
 
 
 class OldScatterMapWidget(QWidget):
