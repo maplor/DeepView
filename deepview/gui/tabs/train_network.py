@@ -32,13 +32,61 @@ from deepview.utils import auxiliaryfunctions
 from PySide6.QtCore import Signal
 
 
+class TrainWorker(QtCore.QObject):
+    progress = QtCore.Signal(int)
+    finished = QtCore.Signal()
+    stopped = QtCore.Signal()
+
+
+    def __init__(self,config, net_type, sensor_dict, select_filenames, learning_rate, batch_size, max_iter, data_length, data_columns):
+        super().__init__()
+        self.config = config
+        self.net_type = net_type
+        self.sensor_dict = sensor_dict
+        self.select_filenames = select_filenames
+        self.learning_rate = learning_rate
+        self.batch_size = batch_size
+        self.max_iter = max_iter
+        self.data_length = data_length
+        self.data_columns = data_columns
+        self._is_running = True
+
+ 
+    def train_network(self):
+        self.progress.emit(0)
+
+
+        # Call the training function
+        deepview.train_network(
+            self.sensor_dict,
+            self.progress,
+            self.config,
+            self.select_filenames,
+            net_type=self.net_type,
+            lr=self.learning_rate,
+            batch_size=self.batch_size,
+            num_epochs=self.max_iter,
+            data_len=self.data_length,
+            data_column=self.data_columns
+        )
+        if not self._is_running:
+            self.stopped.emit()
+            return
+        
+        self.finished.emit()
+
+    def stop(self):
+        self._is_running = False
+
+
+
 class TrainNetwork(DefaultTab):
     # 定义进度信号
     progress_update = Signal(int)
 
     def __init__(self, root, parent, h1_description):
         super(TrainNetwork, self).__init__(root, parent, h1_description)
-
+        self.root = root
         # get sensor/columns dictionary from config.yaml
         root_cfg = auxiliaryfunctions.read_config(self.root.config)
         self.sensor_dict = root_cfg['sensor_dict']
@@ -75,13 +123,26 @@ class TrainNetwork(DefaultTab):
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
 
+        self.button_layout = QtWidgets.QHBoxLayout()
         self.ok_button = QtWidgets.QPushButton("Train Network")
         self.ok_button.setMinimumWidth(150)
-        self.ok_button.clicked.connect(self.train_network)
+        self.ok_button.clicked.connect(self.start_training)
+        # self.ok_button.clicked.connect(self.train_network)
+
+        self.stop_button = QtWidgets.QPushButton("Stop")
+        self.stop_button.setMinimumWidth(150)
+        self.stop_button.clicked.connect(self.stop_training)
+        self.stop_button.setEnabled(False)
+
+        self.button_layout.addStretch()
+        self.button_layout.addWidget(self.ok_button)
+        self.button_layout.addWidget(self.stop_button)
 
         # self.main_layout.addWidget(self.edit_posecfg_btn, alignment=Qt.AlignRight)
         self.main_layout.addWidget(self.progress_bar)
-        self.main_layout.addWidget(self.ok_button, alignment=Qt.AlignRight)
+        # self.main_layout.addWidget(self.ok_button, alignment=Qt.AlignRight)
+        self.main_layout.addLayout(self.button_layout)
+
 
         # 连接信号和槽
         self.progress_update.connect(self.updateProgress)
@@ -292,6 +353,74 @@ class TrainNetwork(DefaultTab):
     def open_posecfg_editor(self):
         editor = ConfigEditor(self.root.model_cfg_path)  # pose_cfg_path
         editor.show()
+
+
+    def start_training(self):
+
+        config = self.root.config
+
+        net_type = str(self.net_type.upper())
+        learning_rate = float(self.save_iters_spin.text())
+        batch_size = int(self.batchsize_spin.text())
+        max_iter = int(self.display_iters_spin.text())
+
+        data_length = int(self.display_datalen_spin.text())
+
+        newSelectFilename = []
+        for cb in self.display_dataset_cb_list:
+            if cb.isChecked():
+                newSelectFilename.append(cb.text())
+        select_filenames = newSelectFilename
+
+        newSelectColumn = []
+        for i, cb in enumerate(self.display_column_cb_list):
+            if cb.isChecked():
+                newSelectColumn.append(cb.text())
+        data_columns = transfer_sensor2columns(newSelectColumn, self.sensor_dict)
+
+
+        self.train_thread = QtCore.QThread()
+        self.train_worker = TrainWorker(config, net_type, self.sensor_dict, select_filenames, learning_rate, batch_size, max_iter, data_length, data_columns)
+        self.train_worker.moveToThread(self.train_thread)
+
+        self.train_worker.progress.connect(self.progress_bar.setValue)
+        self.train_worker.finished.connect(self.on_training_finished)
+        self.train_worker.stopped.connect(self.on_training_stopped)
+        self.train_thread.started.connect(self.train_worker.train_network)
+        self.train_worker.finished.connect(self.train_thread.quit)
+        self.train_worker.finished.connect(self.train_worker.deleteLater)
+        self.train_thread.finished.connect(self.train_thread.deleteLater)
+
+        self.ok_button.setEnabled(False)
+        self.stop_button.setEnabled(True)
+
+        self.train_thread.start()
+
+    def stop_training(self):
+        self.train_worker.stop()
+
+    def on_training_finished(self):
+        self.stop_button.setEnabled(False)
+        self.ok_button.setEnabled(True)
+        self.show_message("The network is now trained and ready to use.")
+
+    def on_training_stopped(self):
+        self.stop_button.setEnabled(False)
+        self.ok_button.setEnabled(True)
+        self.show_message("Training was stopped.")
+
+    def show_message(self, text):
+        msg = QtWidgets.QMessageBox()
+        msg.setIcon(QtWidgets.QMessageBox.Information)
+        msg.setText(text)
+        msg.setWindowTitle("Info")
+        msg.setMinimumWidth(900)
+        logo_dir = os.path.dirname(os.path.realpath("logo.png")) + os.path.sep
+        logo = logo_dir + "assets/logo.png"
+        msg.setWindowIcon(QIcon(logo))
+        msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
+        msg.exec_()
+
 
     def train_network(self):
         self.progress_bar.setValue(0)
