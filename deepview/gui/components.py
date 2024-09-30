@@ -78,7 +78,7 @@ class DefaultWebTab(QtWidgets.QWidget):
             h1_description: str = "",
     ):
         super(DefaultWebTab, self).__init__(parent)
-        # os.environ["QTWEBENGINE_REMOTE_DEBUGGING"] = "9024"
+        os.environ["QTWEBENGINE_REMOTE_DEBUGGING"] = "9024"
         self.web_view = QWebEngineView()
         self.web_view_map = QWebEngineView()
 

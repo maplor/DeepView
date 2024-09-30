@@ -50,7 +50,8 @@ def train_network(
     batch_size,
     num_epochs,
     data_len,
-    data_column
+    data_column,
+    stop_callback
 ):
 
     # if allow_growth:
@@ -101,7 +102,8 @@ def train_network(
             batch_size=batch_size,
             num_epochs=num_epochs,
             data_len=data_len,
-            data_column=data_column
+            data_column=data_column,
+            stop_callback=stop_callback
         )  # pass on path and file name for pose_cfg.yaml!
 
     except BaseException as e:

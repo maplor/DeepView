@@ -656,6 +656,23 @@
                         ]
                     };
 
+                    // 如果是加速度图表，添加 dataZoom 配置
+                    if (chartData.name === 'acceleration') {
+                        // option.dataZoom.push({
+                        //     type: 'inside',
+                        //     yAxisIndex: [0],
+                        //     start: 0,
+                        //     end: 100
+                        // });
+                        option.dataZoom.push({
+                                type: 'slider',
+                                show: true,
+                                yAxisIndex: [0],
+                                start: 0,
+                                end: 100
+                            });
+                    }
+
                     // 如果是第一个图表，添加特殊的配置
                     if (index === 0) {
                         selectedOption.xAxis.data = dataFrame[chartData.xAxisName]
@@ -665,6 +682,7 @@
 
                     // 如果是最后一个图表，添加 dataZoom 配置
                     if (index === chartsData.length - 1) {
+                        
                         option.grid = {
                             top: 10
                         };
@@ -683,6 +701,15 @@
                                 end: 100
                             }
                         ];
+                        if (chartData.name === 'acceleration') {
+                            option.dataZoom.push({
+                                type: 'slider',
+                                show: true,
+                                yAxisIndex: [0],
+                                start: 0,
+                                end: 100
+                            });
+                        }
                     }
                     chart.setOption(option);
 
@@ -1247,10 +1274,10 @@
             backend.setStartEndTimeToLabel(startTime, endTime);
         }
 
-        function setStartAndEndData(startIndex,startLongitude,startLatitude,endIndex,endLongitude,endLatitude) {
+        function setStartAndEndData(startIndex, startLongitude, startLatitude, endIndex, endLongitude, endLatitude) {
             // console.log(startIndex,startLongitude,startLatitude,endIndex,endLongitude,endLatitude)
-            
-            backend.setStartAndEndData(startIndex,startLongitude,startLatitude,endIndex,endLongitude,endLatitude);
+
+            backend.setStartAndEndData(startIndex, startLongitude, startLatitude, endIndex, endLongitude, endLatitude);
         }
 
         function highlightLineChartDotByIndex(index) {

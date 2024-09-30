@@ -3,6 +3,8 @@ from pathlib import Path
 import pickle
 import pandas as pd
 
+from PySide6 import QtWidgets
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QLabel, QComboBox,
     QCheckBox,
@@ -14,6 +16,7 @@ from PySide6.QtWidgets import (
     QComboBox, QPushButton, QSpacerItem, QSizePolicy, QLineEdit,
     QMessageBox
 )
+
 
 from PySide6.QtCore import (
     QObject, Signal, Slot, QTimer, Qt
@@ -29,8 +32,16 @@ from deepview.utils.auxiliaryfunctions import (
     grab_files_in_folder_deep
 )
 
+from deepview.gui.components import (
+    DefaultTab,
+    # ShuffleSpinBox,
+    _create_grid_layout,
+    _create_label_widget,
+)
+
 # from deepview.gui.supervised_contrastive_learning import styles
 
+from deepview.utils import auxiliaryfunctions
 from deepview.gui.supervised_cl.ui import styles
 
 
@@ -56,11 +67,22 @@ class SelectModelWidget(QWidget):
 
         # 第二行布局
         # 创建原始数据组合框和标签
-        RawDataComboBoxLabel, RawDatacomboBox = self.createRawDataComboBox()
-        self.second_row1_layout = QHBoxLayout()
-        self.second_row1_layout.addWidget(RawDataComboBoxLabel, alignment=Qt.AlignLeft)
-        self.second_row1_layout.addWidget(RawDatacomboBox, alignment=Qt.AlignLeft)
-        self.second_row1_layout.addStretch()  # 添加一个伸缩因子来填充剩余空间
+        # RawDataComboBoxLabel, RawDatacomboBox = self.createRawDataComboBox()
+        # self.second_row1_layout = QHBoxLayout()
+        # self.second_row1_layout.addWidget(RawDataComboBoxLabel, alignment=Qt.AlignLeft)
+        # self.second_row1_layout.addWidget(RawDatacomboBox, alignment=Qt.AlignLeft)
+        # self.second_row1_layout.addStretch()  # 添加一个伸缩因子来填充剩余空间
+
+        self.second_row1_layout = QVBoxLayout()
+        # ---------
+        # self.second_row1_layout.addWidget(_create_label_widget("Data Attributes", "font:bold"))
+        self.dataset_attributes_dataset = _create_grid_layout(margins=(0, 0, 0, 0))
+        self._generate_layout_attributes_dataset(self.dataset_attributes_dataset)
+        self.second_row1_layout.addLayout(self.dataset_attributes_dataset)
+        # ---------
+        # self.second_row1_layout.addStretch()
+
+
 
         self.third_row1_layout = QHBoxLayout()
         self.display_button = QPushButton('Data display')
@@ -204,5 +226,88 @@ class SelectModelWidget(QWidget):
 
 
 
+    def _generate_layout_attributes_dataset(self, layout):
+        trainingsetfolder = auxiliaryfunctions.get_unsupervised_set_folder()
+
+        select_label = QtWidgets.QLabel("Select dataset file")
+
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scrollContent = QtWidgets.QWidget(scroll)
+        grid = QtWidgets.QGridLayout(scrollContent)
+        grid.setAlignment(Qt.AlignTop)
+        scrollContent.setLayout(grid)
+        scroll.setWidget(scrollContent)
+
+        # 创建“全选”按钮
+        cb_label = QtWidgets.QLabel("Select all files")
+        self.select_all_checkbox = QtWidgets.QCheckBox("All")
+        selected = QtWidgets.QVBoxLayout()
+        selected.addWidget(self.select_all_checkbox)
+        # self.layout.addWidget(self.select_all_checkbox)
+        # 连接“全选”按钮的状态改变信号到槽函数
+        self.select_all_checkbox.stateChanged.connect(self.select_all)
+
+        self.display_dataset_cb_list = []
+        column_list = []
+        rowNum = 3  # default one row 3 columns
+        self.checkboxes = QtWidgets.QCheckBox('')
+        if os.path.exists(os.path.join(self.main_window.root.project_folder, trainingsetfolder)):
+            for filename in auxiliaryfunctions.grab_files_in_folder(
+                    os.path.join(self.main_window.root.project_folder, trainingsetfolder),
+                    relative=False,
+            ):
+                if len(column_list) == 0:
+                    df = pd.read_pickle(filename)
+                    column_list = list(df.columns)
+                self.checkboxes = QtWidgets.QCheckBox(os.path.split(filename)[-1])
+                grid.addWidget(self.checkboxes, len(self.display_dataset_cb_list) // rowNum,
+                               len(self.display_dataset_cb_list) % rowNum)
+                self.display_dataset_cb_list.append(self.checkboxes)  # display filenames
+
+        # 标志位，用于控制槽函数逻辑
+        self.updating = False
+
+        # 连接各个选项的状态改变信号到槽函数
+        for checkbox in self.display_dataset_cb_list:
+            checkbox.stateChanged.connect(self.update_select_all_checkbox)
+
+
+
+        layout.addWidget(cb_label, 0, 0)
+        layout.addLayout(selected, 0, 1)
+        layout.addWidget(select_label, 1, 0)
+        layout.addWidget(scroll, 1, 1)
+
+
+    def select_all(self, state):
+        if not self.updating:
+            self.updating = True
+            # 根据“全选”按钮的状态设置各个选项的状态
+            for checkbox in self.display_dataset_cb_list:
+                checkbox.setChecked(state == Qt.Checked)
+            self.update_selected_items()
+            self.updating = False
+
+    def update_select_all_checkbox(self):
+        if not self.updating:
+            self.updating = True
+            # 检查所有选项的状态以更新“全选”按钮的状态
+            all_checked = all(checkbox.isChecked() for checkbox in self.display_dataset_cb_list)
+            any_unchecked = any(not checkbox.isChecked() for checkbox in self.display_dataset_cb_list)
+            if all_checked:
+                self.select_all_checkbox.setCheckState(Qt.Checked)
+            elif any_unchecked:
+                self.select_all_checkbox.setCheckState(Qt.Unchecked)
+            else:
+                self.select_all_checkbox.setTristate(False)
+                self.select_all_checkbox.setCheckState(Qt.PartiallyChecked)
+            self.update_selected_items()
+            self.updating = False
+
+    def update_selected_items(self):
+        # 更新当前选中的选项
+        selected_items = [checkbox.text() for checkbox in self.display_dataset_cb_list if checkbox.isChecked()]
+        print(f"当前选中的选项: {selected_items}")
 
 

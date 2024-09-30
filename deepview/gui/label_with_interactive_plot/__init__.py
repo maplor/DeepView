@@ -9,6 +9,8 @@ import pickle
 from functools import partial
 from pathlib import Path
 
+import cv2
+
 import matplotlib
 import numpy as np
 import pandas as pd
@@ -19,7 +21,7 @@ from PySide6.QtCore import (
 )
 # 从PySide6.QtCore导入QTimer, QRectF, Qt
 from PySide6.QtCore import QRectF
-from PySide6.QtCore import QRunnable, QThreadPool, Slot
+from PySide6.QtCore import QRunnable, QThreadPool, Slot, QThread, QObject, Signal, QFileSystemWatcher
 # 从PySide6.QtWidgets导入多个类
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -29,8 +31,13 @@ from PySide6.QtWidgets import (
     QFrame,
     QWidget, QHBoxLayout, QVBoxLayout, QLabel,
     QComboBox, QPushButton, QSpacerItem, QSizePolicy, QLineEdit,
-    QMessageBox
+    QMessageBox, QDoubleSpinBox, QFileDialog
 )
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QStandardItemModel, QStandardItem, QColor
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QComboBox, QHBoxLayout, QPushButton, QMessageBox, QInputDialog
+
+from PySide6.QtGui import QImage, QPixmap
 
 # 从deepview.utils.auxiliaryfunctions导入多个函数
 from deepview.utils.auxiliaryfunctions import (
@@ -45,11 +52,72 @@ from deepview.utils.auxiliaryfunctions import (
 from deepview.gui.label_with_interactive_plot.utils import (
     get_data_from_pkl,
     featureExtraction,
-    find_data_columns,
+    find_data_columns
 )
 
 # 创建一个蓝色的pg.mkPen对象，宽度为2
 clickedPen = pg.mkPen('b', width=2)
+
+
+class ClickableLabel(QLabel):
+    clicked = Signal()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+
+# 带删除的选择框
+class ReComboBox:
+    def __init__(self, _comboBox, label_dict):
+        self.comboBox = _comboBox
+        self.comboBox.setModel(QStandardItemModel(self.comboBox))
+        self.label_dict = label_dict
+
+    def addItem(self, itemTxt):
+        QS_item = QStandardItem(itemTxt)
+        # 设置文字颜色
+        QS_item.setBackground(QColor('#19232d'))
+        QS_item.setForeground(QColor('#ffffff'))
+        QS_item.setText(itemTxt)
+        self.comboBox.model().appendRow(QS_item)
+        index = self.comboBox.count()-1
+        self.comboBox.view().repaint()
+        self.add_btn(index, itemTxt)
+
+    def add_btn(self, _index, _itemTxt):
+        # 创建一个水平布局，并将标签和删除按钮添加到其中
+        layout = QHBoxLayout()
+        layout.setContentsMargins(75, 0, 0, 0)
+        layout.setAlignment(Qt.AlignRight)  # Align the button to the right
+        button = QPushButton('x')
+        button.setStyleSheet("QPushButton { border: none; color:#6D6D6D ; font-size: 15px}")
+        button.setFixedSize(20, 20)
+        layout.addWidget(button)
+        # 将水平布局添加到下拉菜单项的QWidget中
+        widget = QWidget()
+        widget.setLayout(layout)
+        item = self.comboBox.model().item(_index)
+        item.setSizeHint(widget.sizeHint())
+        self.comboBox.view().setIndexWidget(item.index(), widget)
+        # 将按钮连接到槽函数，用于从下拉列表中删除相应的项目
+        button.clicked.connect(lambda: self.remove_Row(_itemTxt))
+
+    def remove_Row(self, i):
+        reply = QMessageBox.question(
+            None,
+            "Confirm Delete",
+            f"Are you sure you want to remove '{i}'?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            index = self.comboBox.findText(i)
+            if index != -1:
+                self.comboBox.model().removeRow(index)
+                # Remove the item from the dictionary
+                if i in self.label_dict:
+                    del self.label_dict[i]
+                    # print(self.label_dict)
+                    # print(f"Removed {i} from dictionary")
 
 
 # 定义LabelOption类，继承自QDialog
@@ -154,6 +222,91 @@ class SaveCsvTask(QRunnable):
             if self.is_timer == 0:
                 self.signals.save_csv_finished.emit(new_path)
                 
+
+# 后台handleComputeData类
+class HandleComputeWorker(QObject):
+    dataChangedSignal = Signal(pd.DataFrame)
+    finished = Signal(object)
+    stopped = Signal()
+
+    def __init__(self, root, RawDataName, cfg, dataChanged, sensor_dict, column_names, data_length, model_path, model_name):
+        super().__init__()
+        self.root = root
+        self.RawDataName = RawDataName
+        self.cfg = cfg
+        self.dataChanged = dataChanged
+        self.sensor_dict = sensor_dict
+        self.column_names = column_names
+        self.model_path = model_path
+        self.data_length = data_length
+        self.model_name = model_name
+        self._is_running = True
+
+    @Slot()
+    def run(self):
+
+        # 获取combobox的内容
+        self.data, self.dataChanged = get_data_from_pkl(self.RawDataName, self.cfg, self.dataChanged)
+        self.dataChangedSignal.emit(self.data)
+
+        new_column_names = find_data_columns(self.sensor_dict, self.column_names)
+
+        # 将数据切割成片段以获取潜在特征和索引
+        start_indice, end_indice, pos = featureExtraction(self.root,
+                                                          self.data,
+                                                          self.data_length,
+                                                          new_column_names,
+                                                          self.model_path,
+                                                          self.model_name)
+
+        # 保存数据到scatterItem的属性中
+        n = len(start_indice)
+        spots = [{'pos': pos[i, :],
+                  'data': (i, start_indice[i], end_indice[i]),
+                  'brush': self.checkColor(self.data.loc[i * self.data_length, 'label'], first=True)}
+                 for i in range(n)]
+        
+        if not self._is_running:
+            self.stopped.emit()
+            return
+
+        # Emit the result
+        self.finished.emit((spots, start_indice, end_indice))
+
+    def stop(self):
+        self._is_running = False
+    
+    def checkColor(self, label, first=False):
+        if first:
+            # 如果是第一次调用，返回默认的白色笔刷
+            # return pg.mkBrush(255, 255, 255, 120)
+            # 改成灰色
+            return pg.mkBrush(72, 72, 96, 120)
+
+        if label not in list(self.label_dict.keys()):
+            # # 如果标签不在标签字典中，返回默认的白色笔刷
+            # return pg.mkBrush(255, 255, 255, 120)
+            # 改成灰色
+            return pg.mkBrush(72, 72, 96, 120)
+
+        # 定义一组颜色
+        list_color = [pg.mkBrush(0, 0, 255, 120),
+                      pg.mkBrush(255, 0, 0, 120),
+                      pg.mkBrush(0, 255, 0, 120),
+                      pg.mkBrush(255, 255, 255, 120),
+                      pg.mkBrush(255, 0, 255, 120),
+                      pg.mkBrush(0, 255, 255, 120),
+                      pg.mkBrush(255, 255, 0, 120),
+                      pg.mkBrush(5, 5, 5, 120)]
+        count = 0
+        for lstr, _ in self.label_dict.items():
+            if label == lstr:
+                # 根据标签返回相应的颜色
+                return list_color[count % len(list_color)]
+            count += 1
+
+
+
 
 # 创建一个函数来找到最近的有效索引
 def find_nearest_index(target_index, valid_indices):
@@ -496,6 +649,13 @@ class LabelWithInteractivePlot(QWidget):
             background-color: #148f1d; 
         }"""
 
+        self.remove_button_style = """QPushButton { 
+            border: none;
+            color:#6D6D6D; 
+            font-size: 15px; 
+            }
+        """
+
         # 初始化特征提取按钮为None
         self.featureExtractBtn = None
         # 初始化当前高亮散点为None
@@ -544,6 +704,15 @@ class LabelWithInteractivePlot(QWidget):
         # 初始化列名列表
         self.column_names = []
 
+        # 手动校准视频时间
+        self.offset = 0.0
+
+        # 初始化最小时间
+        self.min_time = 0
+
+        # 初始化视频路径
+        self.cap = None
+
         # 状态
         # 初始化训练状态为False
         self.isTraining = False
@@ -559,11 +728,23 @@ class LabelWithInteractivePlot(QWidget):
         # 创建左中按钮区域
         self.createLeftBotton()
 
+        # 创建左上视频区域
+        self.createVideoArea()
+
         # 初始化定时器，保存到csv
         self.init_timer()
 
         # 更新按钮状态
         self.updateBtn()
+
+        self.model_watcher = QFileSystemWatcher()
+        self.data_watcher = QFileSystemWatcher()
+
+        self.model_watcher.directoryChanged.connect(self.update_model_combobox)
+        self.data_watcher.directoryChanged.connect(self.update_data_combobox)
+
+        self.update_model_combobox()
+        self.update_data_combobox()
 
     def init_label_colors(self):
         for i, label in enumerate(self.label_dict.keys()):
@@ -587,9 +768,16 @@ class LabelWithInteractivePlot(QWidget):
         # 创建左侧布局
         self.left_layout = QVBoxLayout()
 
+
+
         # 创建左侧row1布局
+        self.left_row1_layout_all = QHBoxLayout()
         self.left_row1_layout = QHBoxLayout()
-        self.left_layout.addLayout(self.left_row1_layout)
+        self.left_row1_video_layout = QVBoxLayout()
+        self.left_row1_layout_all.addLayout(self.left_row1_layout)
+        self.left_row1_layout_all.addLayout(self.left_row1_video_layout)
+        self.left_layout.addLayout(self.left_row1_layout_all)
+        # self.left_layout.addLayout(self.left_row1_layout)
 
         # 创建左侧row2布局
         self.left_row2_layout = QVBoxLayout()
@@ -667,15 +855,38 @@ class LabelWithInteractivePlot(QWidget):
         # 第三行label选项框
         self.left_label_layout = QHBoxLayout()
         self.label_combobox = QComboBox()
+        self.label_combobox.setStyleSheet(self.remove_button_style) 
+        self.label_combobox.setModel(QStandardItemModel(self.label_combobox))
 
-        for label in self.label_dict.keys():
-            self.label_combobox.addItem(label)
-        self.backend.handle_label_change(self.label_combobox.currentText())
+        # self.comboBoxHandler = ReComboBox(self.label_combobox, self.label_dict)
+        # self.label_dict
+        # self.label_combobox = ReComboBox()
+
+
+        # for label in self.label_dict.keys():
+        #     self.comboBoxHandler.addItem(label)
+
+        for item in self.label_dict.keys():
+            self.addItem(item)
+        
         self.label_combobox.currentTextChanged.connect(
             self.backend.handle_label_change
         )
+        
+        # for label in self.label_dict.keys():
+        #     self.label_combobox.addItem(label)
+        # self.backend.handle_label_change(self.label_combobox.currentText())
+        # self.label_combobox.currentTextChanged.connect(
+        #     self.backend.handle_label_change
+        # )
         self.left_label_layout.addWidget(QLabel("Label:     "))
         self.left_label_layout.addWidget(self.label_combobox, alignment=Qt.AlignLeft)
+
+        # 添加label按钮
+        add_label_btn = QPushButton('Add label')
+        add_label_btn.clicked.connect(self.add_item)
+        add_label_btn.setStyleSheet(self.button_style)
+        self.left_label_layout.addWidget(add_label_btn)
 
         # 保存csv按钮
         self.save_csv_btn = QPushButton('Save csv')
@@ -716,6 +927,63 @@ class LabelWithInteractivePlot(QWidget):
         self.left_button_layout.addStretch(10)
 
         self.left_row2_layout.addLayout(self.left_button_layout)
+
+    def addItem(self, itemTxt):
+        QS_item = QStandardItem(itemTxt)
+        QS_item.setBackground(QColor('#19232d'))
+        QS_item.setForeground(QColor('#ffffff'))
+        QS_item.setText(itemTxt)
+        self.label_combobox.model().appendRow(QS_item)
+        index = self.label_combobox.count() - 1
+        self.add_btn(index, itemTxt)
+
+    def add_btn(self, _index, _itemTxt):
+        layout = QHBoxLayout()
+        layout.setContentsMargins(75, 0, 0, 0)
+        layout.setAlignment(Qt.AlignRight)
+        button = QPushButton('x')
+        button.setFixedSize(20, 20)
+        button.setStyleSheet(self.remove_button_style)
+        layout.addWidget(button)
+        widget = QWidget()
+        widget.setLayout(layout)
+        item = self.label_combobox.model().item(_index)
+        item.setSizeHint(widget.sizeHint())
+        self.label_combobox.view().setIndexWidget(item.index(), widget)
+        button.clicked.connect(lambda: self.remove_Row(_itemTxt))
+
+    def remove_Row(self, i):
+        reply = QMessageBox.question(
+            None,
+            "Confirm Delete",
+            f"Are you sure you want to remove '{i}'?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            index = self.label_combobox.findText(i)
+            if index != -1:
+                self.label_combobox.model().removeRow(index)
+                # Remove the item from the dictionary
+                if i in self.label_dict:
+                    del self.label_dict[i]
+
+    def add_item(self):
+        key, ok = QInputDialog.getText(self, 'Add Label', 'Enter the Label:')
+        if ok and key:
+            if key not in self.label_dict:
+                value = f"{self.label_combobox.count() + 1}"
+                self.label_dict[key] = value
+                self.addItem(key)
+                # self.comboBoxHandler.addItem(key)
+                print(self.label_dict)
+            else:
+                QMessageBox.warning(self, 'Error', 'Label already exists.')
+
+
+
+
+
+
 
     def setStartEndTime(self, start_time, end_time):
         self.start_input_box.setText(start_time)
@@ -776,6 +1044,99 @@ class LabelWithInteractivePlot(QWidget):
     '''
     # 在外层定义
 
+
+
+    '''
+    ==================================================
+    左上视频
+    ==================================================
+    '''
+
+    def createVideoArea(self):
+        # 手动校准视频时间
+        self.video_time_layout = QHBoxLayout()
+        self.video_time_layout.addWidget(QLabel("Offset(s):"))
+        self.timestamp_input = QDoubleSpinBox()
+        self.timestamp_input.setRange(-10000.0, 10000.0)  # Set desired range
+        self.timestamp_input.setSingleStep(0.1)  # Set step size for increment/decrement
+        self.timestamp_input.setValue(0.0)  # Default value
+        self.video_time_layout.addWidget(self.timestamp_input)
+        
+        # 视频标签
+        # self.video_label = QLabel(self)
+        self.video_label = ClickableLabel(self)
+        self.video_label.setAlignment(Qt.AlignCenter)
+        self.left_row1_video_layout.addWidget(self.video_label)
+        self.left_row1_video_layout.addLayout(self.video_time_layout)
+
+        self.video_label.clicked.connect(self.open_file_dialog)
+
+        # self.update_video('')
+        self.init_video()
+
+    def init_video(self):
+        # cv显示一个白色的图片
+        self.qt_image = QImage(600, 400, QImage.Format_RGB888)
+        self.qt_image.fill(Qt.white)
+        self.video_label.setPixmap(QPixmap.fromImage(self.qt_image))
+        self.video_label.setScaledContents(True)
+
+
+    def open_file_dialog(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Video File", "", "Video Files (*.mp4 *.avi *.mov)")
+        if file_path:
+            self.update_video(file_path)
+
+    def update_video(self, video_path):
+        if self.cap:
+            self.cap.release()
+        self.cap = cv2.VideoCapture(video_path)
+        self.display_frame(0)
+    # def update_video(self, video_path):
+    #     # self.cap = cv2.VideoCapture(r'C:\Users\user\Videos\test_hardware_encoder.mp4')
+    #     # self.cap = cv2.VideoCapture(r'C:\Users\user\Documents\WeChat Files\wxid_mi05poeuk7a022\FileStorage\File\2024-09\xia-san-video-sample\umineko\LB11\PBOT0001.avi')
+    #     self.cap = cv2.VideoCapture(r'G:\素材\9月30日.mp4')
+    #     self.display_frame(0)
+
+    def display_frame(self, frame_number):
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+        ret, frame = self.cap.read()
+        if ret:
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            h, w, ch = frame_rgb.shape
+            bytes_per_line = ch * w
+            self.qt_image = QImage(frame_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
+
+            # 缩放图像以适应 QLabel
+            scaled_pixmap = QPixmap.fromImage(self.qt_image).scaled(
+                self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
+            # self.video_label.setPixmap(QPixmap.fromImage(self.qt_image))
+            self.video_label.setPixmap(scaled_pixmap)
+            self.video_label.setScaledContents(True)
+
+    def jump_to_timestamp(self, index):
+        try:
+            # self.offset = float(self.timestamp_input.text())
+            self.offset = self.timestamp_input.value()
+            unixtime = self.data.loc[index, 'unixtime']
+            timestamp = unixtime - self.min_time
+            # timestamp = float(self.timestamp_input.text())
+            fps = self.cap.get(cv2.CAP_PROP_FPS)
+            frame_number = int(fps * (timestamp + self.offset))
+            self.display_frame(frame_number)
+        except ValueError:
+            print("Please enter a valid timestamp.")       
+
+
+    # def update_video(self, video_path):
+        # print(video_path)
+        # self.video_label.setPixmap(QPixmap(video_path))
+        # self.video_label.setScaledContents(True)
+        # self.video_label.setFixedSize(600, 400)
+
+
+
     '''
     ==================================================
     右上区域复选框: 列表
@@ -791,6 +1152,10 @@ class LabelWithInteractivePlot(QWidget):
         self.first_row1_layout = QHBoxLayout()
         self.first_row1_layout.addWidget(modelComboBoxLabel, alignment=Qt.AlignLeft)
         self.first_row1_layout.addWidget(modelComboBox, alignment=Qt.AlignLeft)
+        self.refresh_btn = QPushButton('Refresh')
+        self.refresh_btn.setStyleSheet(self.button_style)
+        self.refresh_btn.clicked.connect(self.handleRefresh)
+        self.first_row1_layout.addWidget(self.refresh_btn, alignment=Qt.AlignLeft)
         self.first_row1_layout.addStretch()  # 添加一个伸缩因子来填充剩余空间
 
         # 第二行布局
@@ -824,6 +1189,11 @@ class LabelWithInteractivePlot(QWidget):
         self.renderColumnList()
         # self.clear_color_layout()
         self.display_colors(self.label_colors)
+    
+    def handleRefresh(self):
+        self.update_model_combobox()
+        self.update_data_combobox()
+
 
     def display_colors(self, colors):
         # 创建水平布局并添加标签和颜色框
@@ -1041,17 +1411,46 @@ class LabelWithInteractivePlot(QWidget):
         # 获取无监督模型文件夹路径
         unsup_model_path = get_unsup_model_folder(cfg)
 
-        # 获取所有.pth文件路径
-        model_path_list = grab_files_in_folder_deep(
-            os.path.join(self.cfg["project_path"], unsup_model_path),
-            ext='*.pth')
+        full_path = os.path.join(self.cfg["project_path"], unsup_model_path)
+        model_path_list = grab_files_in_folder_deep(full_path, ext='*.pth')
+
+        # # 获取所有.pth文件路径
+        # model_path_list = grab_files_in_folder_deep(
+        #     os.path.join(self.cfg["project_path"], unsup_model_path),
+        #     ext='*.pth')
         # 保存模型路径列表
         self.model_path_list = model_path_list
         if model_path_list:
             # 遍历路径列表
             for path in model_path_list:
                 self.modelComboBox.addItem(str(Path(path).name))
-        return
+
+        # 更新监控的目录
+        self.model_watcher.removePaths(self.model_watcher.directories())
+        self.model_watcher.addPath(full_path)
+    
+
+    def update_data_combobox(self):
+        # 清空原有的选项
+        self.RawDatacomboBox.clear()
+
+        # 获取无监督数据集文件夹路径
+        unsup_data_path = get_unsupervised_set_folder()
+
+        full_path = os.path.join(self.cfg["project_path"], unsup_data_path)
+        rawdata_file_path_list = list(Path(full_path).glob('*.pkl'))
+
+        # 获取所有.pkl文件路径
+        # rawdata_file_path_list = list(
+        #     Path(os.path.join(self.cfg["project_path"], unsup_data_path)).glob('*.pkl'),
+        # )
+        # 遍历路径列表
+        for path in rawdata_file_path_list:
+            self.RawDatacomboBox.addItem(str(Path(path).name))
+
+         # 更新监控的目录
+        self.data_watcher.removePaths(self.data_watcher.directories())
+        self.data_watcher.addPath(full_path)
 
     # 创建模型组合框的方法
     def createModelComboBox(self):
@@ -1134,7 +1533,8 @@ class LabelWithInteractivePlot(QWidget):
         # 设置按钮不可用
         featureExtractBtn.setEnabled(False)
         # 连接按钮点击事件到handleCompute方法
-        featureExtractBtn.clicked.connect(self.handleCompute)
+        # featureExtractBtn.clicked.connect(self.handleCompute)
+        featureExtractBtn.clicked.connect(self.start_handle_compute)
         # 返回按钮
         return featureExtractBtn
 
@@ -1186,6 +1586,64 @@ class LabelWithInteractivePlot(QWidget):
         self.isTraining = False
 
         self.updateBtn()
+
+    def start_handle_compute(self):
+        # 打印开始训练
+        print('start training...')
+        # 设置训练状态为True
+        self.isTraining = True
+        # 更新按钮状态
+        self.updateBtn()
+
+        # 重新设置选框
+        self.renderColumnList()
+
+        self.handle_compute_thread = QThread()
+        self.handle_compute_worker = HandleComputeWorker(self.root, self.RawDatacomboBox.currentText(), self.cfg, self.dataChanged, self.sensor_dict, self.column_names, self.data_length, self.model_path, self.model_name)
+        self.handle_compute_worker.moveToThread(self.handle_compute_thread)
+        self.handle_compute_thread.started.connect(self.handle_compute_worker.run)
+        self.handle_compute_worker.finished.connect(self.handle_compute_finished)
+        self.handle_compute_worker.stopped.connect(self.on_training_stopped)
+        self.handle_compute_worker.dataChangedSignal.connect(self.compute_data_changed)
+        self.handle_compute_worker.finished.connect(self.handle_compute_thread.quit)
+        self.handle_compute_worker.finished.connect(self.handle_compute_worker.deleteLater)
+        self.handle_compute_thread.finished.connect(self.handle_compute_thread.deleteLater)
+        self.handle_compute_thread.start()
+
+    def stop_training(self):
+        self.handle_compute_worker.stop()
+
+
+    def on_training_stopped(self):
+        # TODO 绑定停止训练的方法
+        # self.stop_button.setEnabled(False)
+        self.isTraining = False
+        self.updateBtn()
+        print("Training was stopped.")
+
+    def compute_data_changed(self, data):
+        self.data = data
+        self.min_time = self.data['unixtime'].min()
+        metadatas = find_charts_data_columns(self.sensor_dict, self.column_names)
+        self.backend.displayData(self.data, metadatas, self.label_colors)
+        self.backend_map.displayMapData(self.data)
+
+    def handle_compute_finished(self, data):
+        (spots, start_indice, end_indice) = data
+        # 设置训练状态为False
+        self.isTraining = False
+        self.updateBtn()
+        # 清除中央绘图区域
+        self.viewC.clear()
+        # 创建一个散点图项
+        scatterItem = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None))
+        self.start_indice = start_indice
+        self.end_indice = end_indice
+        # 在散点图中绘制点
+        scatterItem.addPoints(spots)
+        self.scatterItem = scatterItem
+        self.viewC.addItem(scatterItem)
+        return
 
     # 更新按钮状态的方法
     def updateBtn(self):
@@ -1529,6 +1987,7 @@ class LabelWithInteractivePlot(QWidget):
         return None  # 如果没有找到合适的范围
 
     def handle_highlight_scatter_dot_by_index(self, index):
+        self.jump_to_timestamp(index)
         indice = self.find_i_by_indice(index, self.start_indice, self.end_indice)
         for p, original_size, original_brush in self.last_modified_points:
             p.setSize(original_size)
