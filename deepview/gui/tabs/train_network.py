@@ -67,16 +67,25 @@ class TrainWorker(QtCore.QObject):
             batch_size=self.batch_size,
             num_epochs=self.max_iter,
             data_len=self.data_length,
-            data_column=self.data_columns
+            data_column=self.data_columns,
+            stop_callback=self.check_running
         )
-        if not self._is_running:
+        # if not self._is_running:
+        #     self.stopped.emit()
+        #     return
+
+        # 根据运行状态发出信号
+        if self._is_running:
+            self.finished.emit()
+        else:
             self.stopped.emit()
-            return
-        
-        self.finished.emit()
+        # self.finished.emit()
 
     def stop(self):
         self._is_running = False
+    
+    def check_running(self):
+        return self._is_running
 
 
 
@@ -356,6 +365,11 @@ class TrainNetwork(DefaultTab):
 
 
     def start_training(self):
+        
+        # TODO: check if training is already in progress
+        if hasattr(self, 'training_in_progress') and self.training_in_progress:
+            print("Training is already in progress.")
+            return
 
         config = self.root.config
 
@@ -387,14 +401,22 @@ class TrainNetwork(DefaultTab):
         self.train_worker.finished.connect(self.on_training_finished)
         self.train_worker.stopped.connect(self.on_training_stopped)
         self.train_thread.started.connect(self.train_worker.train_network)
-        self.train_worker.finished.connect(self.train_thread.quit)
-        self.train_worker.finished.connect(self.train_worker.deleteLater)
-        self.train_thread.finished.connect(self.train_thread.deleteLater)
+        self.train_worker.finished.connect(self.clean_up)
+
 
         self.ok_button.setEnabled(False)
         self.stop_button.setEnabled(True)
-
+        self.training_in_progress = True  # 设置标志
         self.train_thread.start()
+
+    def clean_up(self):
+        self.training_in_progress = False  # 重置标志
+        self.train_thread.quit()
+        self.train_thread.wait()
+        self.train_worker.deleteLater()
+        self.train_thread.deleteLater()
+        self.ok_button.setEnabled(True)
+        self.stop_button.setEnabled(False)
 
     def stop_training(self):
         self.train_worker.stop()
@@ -407,6 +429,7 @@ class TrainNetwork(DefaultTab):
     def on_training_stopped(self):
         self.stop_button.setEnabled(False)
         self.ok_button.setEnabled(True)
+        self.clean_up()
         self.show_message("Training was stopped.")
 
     def show_message(self, text):

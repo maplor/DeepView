@@ -186,6 +186,7 @@ class SelectParametersWidget(QWidget):
         # 设置按钮宽度
         self.save_model_button.setFixedWidth(160)
         self.save_model_button.setStyleSheet(styles.button_style)
+        
 
         # TODO 连接按钮点击事件到保存模型的方法
         # self.save_model_button.clicked.connect(self.save_model)

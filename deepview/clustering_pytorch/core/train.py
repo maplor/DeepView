@@ -64,7 +64,8 @@ def train(
     batch_size,
     num_epochs,
     data_len,
-    data_column
+    data_column,
+    stop_callback
 ):
     # data_column_list = json.loads(data_column.replace('\'', '"'))
     start_path = os.getcwd()
@@ -91,6 +92,8 @@ def train(
         augment = True
     else:
         augment = False
+    if not stop_callback():
+        return
     train_dataloader, num_channel = prepare_all_data(data_path,
                                                      select_filenames,
                                                      data_len,
@@ -99,6 +102,8 @@ def train(
                                                      augment,
                                                      device)
 
+    if not stop_callback():
+        return
     # print(optimizer)
     # -------------------------核心的模型训练部分，计算loss----------------------------
 
@@ -130,6 +135,8 @@ def train(
     # i = 1  # 应该一只鸟一个trainloader，暂时全拼接到一起
     # print('Starting %s-th bird data' % str(i))
     for epoch in range(start_epoch, num_epochs):
+        if not stop_callback():
+            break
         progress_update.emit(int((epoch+1)/num_epochs * 100))
         # Adjust lr
         lr = adjust_learning_rate(lr, optimizer, epoch, p_scheduler='cosine', p_epochs=num_epochs)
@@ -146,7 +153,8 @@ def train(
             losses = simclr_train_time_series(train_dataloader, model, criterion, optimizer, epoch, device)
         print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
         QCoreApplication.processEvents()
-
+    if not stop_callback():
+        return
     sensor_str = ''
     for i in data_column:
         for sensor, sensor_axis in sensor_dict.items():

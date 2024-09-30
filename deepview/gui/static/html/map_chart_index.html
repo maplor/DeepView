@@ -155,11 +155,16 @@
 
             if (marker) {
                 // 如果标记已存在，则直接高亮
+                // marker.setStyle({
+                //     color: 'blue',
+                //     fillColor: '#03f',
+                //     radius: 10 // 增加半径以更明显地高亮
+                // }).bindTooltip("Highlighted Marker").openTooltip();
                 marker.setStyle({
                     color: 'blue',
                     fillColor: '#03f',
                     radius: 10 // 增加半径以更明显地高亮
-                }).bindTooltip("Highlighted Marker").openTooltip();
+                });
                 highlightedMarker = marker;
                 map.fitBounds(markers.getBounds());
                 map.setView(marker.getLatLng());
