@@ -509,7 +509,7 @@ class MainWindow(QMainWindow):
             parent=None,
             h1_description="Step 3. Label with Interaction Plot",
         )
-        self.supervised_contrastive_learning = SupervisedCLTab(
+        self.supervised_contrastive_learning = LabelWithInteractivePlotTab(
             root=self,
             parent=None,
             h1_description="Step 4. Apply Supervised Contrastive Learning",
@@ -517,13 +517,13 @@ class MainWindow(QMainWindow):
         self.supervised_learning_gui = SupervisedLearningNewLabels(
             root=self,
             parent=None,
-            h1_description="Step 5. Supervised learning",
+            h1_description="Step 6. Label with Interaction Plot",
         )
-        # self.supervised_cl = SupervisedCLTab(
-        #     root=self,
-        #     parent=None,
-        #     h1_description="Step 7. SupervisedCL",
-        # )
+        self.supervised_cl = SupervisedCLTab(
+            root=self,
+            parent=None,
+            h1_description="Step 7. SupervisedCL",
+        )
 
         # self.tab_widget.addTab(self.manage_project, "Manage project")
         # self.tab_widget.addTab(self.extract_frames, "Extract frames")
@@ -536,9 +536,8 @@ class MainWindow(QMainWindow):
         # self.tab_widget.addTab(self.show_gps, "Display GPS on the map")
         # self.tab_widget.addTab(self.imu_gps_interact, "IMU GPS interaction")
         self.tab_widget.addTab(self.label_with_interactive_plot, "Label with interactive plot")
-        self.tab_widget.addTab(self.supervised_contrastive_learning, "SupervisedCL")
-        # self.tab_widget.addTab(self.supervised_learning_gui, "Supervised learning with new labels")
-
+        self.tab_widget.addTab(self.supervised_learning_gui, "Supervised learning with new labels")
+        self.tab_widget.addTab(self.supervised_cl, "SupervisedCL")
         # self.tab_widget.addTab(self.analyze_videos, "Analyze videos")
         # self.tab_widget.addTab(
         #     self.unsupervised_id_tracking, "Unsupervised ID Tracking (*)"

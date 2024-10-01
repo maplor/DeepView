@@ -563,7 +563,9 @@
                     var height = box.clientHeight;
 
                     // 配置图表
-                    var chart = echarts.init(div);
+                    var chart = echarts.init(div, null, {
+                        locale: 'EN'
+                    });
                     charts.push(chart);
 
                     if (chartsTheme === 'light') {
