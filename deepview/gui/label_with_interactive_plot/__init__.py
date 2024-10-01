@@ -479,7 +479,8 @@ class Backend(QObject):
         # 显示确认对话框
         msg_box = QMessageBox()
         msg_box.setIcon(QMessageBox.Question)
-        msg_box.setText("是否删除选中的标记区域？")
+        msg_box.setText("Do you want to delete the label?")
+        # msg_box.setText("是否删除选中的标记区域？")
         msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
         result = msg_box.exec() == QMessageBox.Yes
         # print(result)
