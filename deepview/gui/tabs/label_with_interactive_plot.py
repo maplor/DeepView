@@ -52,10 +52,7 @@ class LabelWithInteractivePlotTab(DefaultWebTab):
             # 设置前景颜色为白色
             self.label_with_interactive_plot.viewC.setBackground('w')
 
-    def update_model_combobox(self):
-        if not self.is_initialized:
-            return
-        self.label_with_interactive_plot.update_model_combobox()
+
 
     # 在第一次渲染 tab 时才构造内容
     def firstShowEvent(self, event: QShowEvent) -> None:
