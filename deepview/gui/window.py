@@ -469,9 +469,6 @@ class MainWindow(QMainWindow):
 
         tab_label = self.tab_widget.tabText(self.tab_widget.currentIndex())
 
-        # 当活动页是 LabelWithInteractivePlotTab
-        if isinstance(active_tab, LabelWithInteractivePlotTab):
-            active_tab.update_model_combobox()
 
         widget_to_attribute_map = {
             QtWidgets.QSpinBox: "setValue",
