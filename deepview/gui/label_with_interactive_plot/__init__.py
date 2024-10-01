@@ -8,6 +8,7 @@ import os
 import pickle
 from functools import partial
 from pathlib import Path
+from ruamel.yaml import YAML
 
 import cv2
 
@@ -54,6 +55,9 @@ from deepview.gui.label_with_interactive_plot.utils import (
     featureExtraction,
     find_data_columns
 )
+
+from deepview.gui.label_with_interactive_plot.styles import combobox_style
+
 
 # 创建一个蓝色的pg.mkPen对象，宽度为2
 clickedPen = pg.mkPen('b', width=2)
@@ -538,6 +542,12 @@ class Backend(QObject):
         # print(json_data)
         self.view.page().runJavaScript(f"displayData('{json_data}')")
 
+    # 更新labelColors
+    @Slot()
+    def updateLabelColors(self, label_colors):
+        label_colors = json.dumps(label_colors)
+        self.view.page().runJavaScript(f"handleLabelColorChange('{label_colors}')")
+
     # combox选择事件
     @Slot()
     def handleComboxSelection(self, charts_data):
@@ -614,6 +624,7 @@ class LabelWithInteractivePlot(QWidget):
         self.logger = logging.getLogger("GUI")
         self.backend = Backend()
         self.backend_map = BackendMap()
+        self.yaml = YAML()
 
         self.save_csv_thread_pool = QThreadPool()
 
@@ -747,6 +758,7 @@ class LabelWithInteractivePlot(QWidget):
         self.update_data_combobox()
 
     def init_label_colors(self):
+        self.label_colors = {}
         for i, label in enumerate(self.label_dict.keys()):
             # 使用取余运算符来循环使用颜色
             color_index = i % len(self.colorPalette)
@@ -755,6 +767,7 @@ class LabelWithInteractivePlot(QWidget):
         # self.logger.debug(
         #     "Attempting..."
         # )
+
 
     # 初始化布局的方法
     def initLayout(self):
@@ -855,7 +868,7 @@ class LabelWithInteractivePlot(QWidget):
         # 第三行label选项框
         self.left_label_layout = QHBoxLayout()
         self.label_combobox = QComboBox()
-        self.label_combobox.setStyleSheet(self.remove_button_style) 
+        self.label_combobox.setStyleSheet(combobox_style) 
         self.label_combobox.setModel(QStandardItemModel(self.label_combobox))
 
         # self.comboBoxHandler = ReComboBox(self.label_combobox, self.label_dict)
@@ -882,11 +895,17 @@ class LabelWithInteractivePlot(QWidget):
         self.left_label_layout.addWidget(QLabel("Label:     "))
         self.left_label_layout.addWidget(self.label_combobox, alignment=Qt.AlignLeft)
 
-        # 添加label按钮
-        add_label_btn = QPushButton('Add label')
+        # 创建label按钮
+        add_label_btn = QPushButton('Create label')
         add_label_btn.clicked.connect(self.add_item)
         add_label_btn.setStyleSheet(self.button_style)
         self.left_label_layout.addWidget(add_label_btn)
+
+        self.save_label_btn = QPushButton('Save label')
+        self.save_label_btn.clicked.connect(self.save_label)
+        self.save_label_btn.setStyleSheet(self.button_style)
+        self.left_label_layout.addWidget(self.save_label_btn)
+
 
         # 保存csv按钮
         self.save_csv_btn = QPushButton('Save csv')
@@ -895,6 +914,9 @@ class LabelWithInteractivePlot(QWidget):
         self.left_label_layout.addWidget(self.save_csv_btn)
         self.left_label_layout.addStretch()
         self.left_row2_layout.addLayout(self.left_label_layout)
+
+
+    
 
         # 第四行三个按钮
         self.left_button_layout = QHBoxLayout()
@@ -966,23 +988,48 @@ class LabelWithInteractivePlot(QWidget):
                 # Remove the item from the dictionary
                 if i in self.label_dict:
                     del self.label_dict[i]
+                # Update the label colors
+                self.init_label_colors()
+                self.backend.updateLabelColors(self.label_colors)
+                # self.clear_color_layout()
+                # self.display_colors(self.label_colors)
+                self.clear_color_layout_and_display(self.label_colors)
+
 
     def add_item(self):
         key, ok = QInputDialog.getText(self, 'Add Label', 'Enter the Label:')
         if ok and key:
             if key not in self.label_dict:
-                value = f"{self.label_combobox.count() + 1}"
+                # value = f"{self.label_combobox.count() + 1}"
+                value = self.label_combobox.count() + 1
                 self.label_dict[key] = value
                 self.addItem(key)
-                # self.comboBoxHandler.addItem(key)
+                # self.comboBoxHandler.addItem(key) updateLabelColors
                 print(self.label_dict)
+                self.init_label_colors()
+                self.backend.updateLabelColors(self.label_colors)
+                # self.clear_color_layout()
+                # self.display_colors(self.label_colors)
+                self.clear_color_layout_and_display(self.label_colors)
+
             else:
                 QMessageBox.warning(self, 'Error', 'Label already exists.')
 
 
 
 
+    def save_label(self):
+        # 保存标签字典
+        # save_label_dict(self.root, self.label_dict)
+        config_path = os.path.join(self.cfg["project_path"], "config.yaml")
+        with open(config_path, 'r') as f:
+            config = self.yaml.load(f)
+        config['label_dict'] = self.label_dict
+        with open(config_path, 'w') as f:
+            self.yaml.dump(config, f)
+        print("Saving label Successfully")
 
+    
 
 
     def setStartEndTime(self, start_time, end_time):
@@ -1221,6 +1268,34 @@ class LabelWithInteractivePlot(QWidget):
                     if widget:
                         widget.deleteLater()
                 item.layout().deleteLater()
+    
+    def clear_color_layout_and_display(self, colors):
+        # 移除并删除所有布局项
+        while self.color_layout.count() > 0:  # 改为0以清除所有
+            item = self.color_layout.takeAt(0)
+            if item.layout():
+                while item.layout().count():
+                    widget = item.layout().takeAt(0).widget()
+                    if widget:
+                        widget.deleteLater()
+                item.layout().deleteLater()
+                # 创建水平布局并添加标签和颜色框
+
+        for color_name, color_value in colors.items():
+            layout = QHBoxLayout()
+
+            label = QLabel(color_name + ":")
+            layout.addWidget(label)
+
+            color_frame = QFrame()
+            color_frame.setFixedSize(20, 20)
+            color_frame.setStyleSheet(f"background-color: {color_value};")
+            layout.addWidget(color_frame)
+
+            self.color_layout.addLayout(layout)
+        self.color_layout.addStretch()
+
+
 
     '''
     ==================================================
