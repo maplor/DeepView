@@ -1238,6 +1238,10 @@
             // initialize()
         }
 
+        function handleLabelColorChange(data) {
+            labelColors = JSON.parse(data);
+        }
+
         // 使用回调函数或 Promise 来确保 clearBoxes 完成后再调用 initialize
         function clearBoxes() {
             return new Promise((resolve) => {
