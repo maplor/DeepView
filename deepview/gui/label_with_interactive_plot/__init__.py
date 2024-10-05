@@ -9,7 +9,7 @@ import pickle
 from functools import partial
 from pathlib import Path
 from ruamel.yaml import YAML
-
+from PySide6 import QtGui
 import cv2
 
 import matplotlib
@@ -69,6 +69,155 @@ class ClickableLabel(QLabel):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.clicked.emit()
+
+
+
+class VideoProcessor(QThread):
+    finished = Signal(list, str)
+
+    def __init__(self, video_paths, start_times, output_folder):
+        super().__init__()
+        self.video_paths = video_paths
+        self.start_times = self.parse_times(start_times)
+        # self.start_times = start_times
+        self.output_folder = output_folder
+
+    def parse_times(self, time_strings):
+        times_in_seconds = []
+        for time_str in time_strings:
+            parts = list(map(int, time_str.split(':')))
+            if len(parts) == 2:  # MM:SS
+                seconds = parts[0] * 60 + parts[1]
+            elif len(parts) == 3:  # HH:MM:SS
+                seconds = parts[0] * 3600 + parts[1] * 60 + parts[2]
+            else:
+                raise ValueError("时间格式必须为 MM:SS 或 HH:MM:SS")
+            times_in_seconds.append(seconds)
+        return times_in_seconds
+    
+    def run(self):
+        output_frames = []
+        output_fps = None
+        time_series = []
+
+        for i, video_path in enumerate(self.video_paths):
+            cap = cv2.VideoCapture(video_path)
+            video_fps = cap.get(cv2.CAP_PROP_FPS)
+            if output_fps is None:
+                output_fps = video_fps
+
+            frames_to_fill = int((self.start_times[i] - (len(output_frames) / output_fps)) * output_fps)
+
+            if frames_to_fill > 0:
+                ret, frame = cap.read()
+                if not ret:
+                    print(f"Cannot read video {video_path}")
+                    return
+                blank_frame = np.zeros_like(frame)
+                output_frames.extend([blank_frame] * frames_to_fill)
+                time_series.append((len(output_frames) / output_fps, frames_to_fill / output_fps, 'Blank'))
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+            video_start = len(output_frames) / output_fps
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                output_frames.append(frame)
+            video_end = len(output_frames) / output_fps
+            time_series.append((video_start, video_end - video_start, 'Video'))
+            cap.release()
+
+        if not output_frames:
+            print("No available output frames")
+            return
+
+        height, width, _ = output_frames[0].shape
+        output_path = os.path.join(self.output_folder, 'output.mp4')
+        output_video = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'mp4v'), output_fps, (width, height))
+        # output_video = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), output_fps, (width, height))
+
+        for frame in output_frames:
+            output_video.write(frame)
+
+        output_video.release()
+        # print("视频处理完成，已保存为 output.mp4")
+
+        # self.finished.emit(time_series)
+        self.finished.emit(time_series, output_path)
+
+class VideoEditor(QDialog):
+    def __init__(self, main_widget):
+        super().__init__()
+        self.setWindowTitle("Select Video Folder")
+        self.setGeometry(100, 100, 600, 400)
+        self.main_widget = main_widget
+
+        self.layout = QVBoxLayout()
+
+        self.video_paths = []
+        self.start_times = []
+        self.output_folder = None
+
+        self.add_folder_button = QPushButton("Select Folder")
+        self.add_folder_button.clicked.connect(self.add_folder)
+
+        self.start_time_input = QLineEdit()
+        self.start_time_input.setPlaceholderText("Enter start times, separated by commas (HH:MM or HH:MM:SS)")
+
+        self.process_button = QPushButton("Start Processing")
+        self.process_button.clicked.connect(self.process_videos)
+
+        self.layout.addWidget(self.add_folder_button)
+        self.layout.addWidget(QLabel("Start Times:"))
+        self.layout.addWidget(self.start_time_input)
+        self.layout.addWidget(self.process_button)
+
+        self.setLayout(self.layout)
+        self.plot_window = None
+
+    def add_folder(self):
+        folder_path = QFileDialog.getExistingDirectory(self, "Select Folder")
+        if folder_path:
+            self.video_paths = [
+                os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.avi')
+            ]
+            self.output_folder = folder_path
+            for path in self.video_paths:
+                file_name = os.path.basename(path)
+                self.layout.addWidget(QLabel(file_name))
+                # self.layout.addWidget(QLabel(path))
+
+    def process_videos(self):
+        # 弹出窗口提示，正在处理视频
+        self.plot_window = QMessageBox(self)
+        self.plot_window.setWindowTitle("Processing Videos")
+        self.plot_window.setText("Please wait while the videos are being processed...")
+        self.plot_window.show()
+        
+        # start_times = list(map(int, self.start_time_input.text().split(',')))
+        # if len(start_times) != len(self.video_paths):
+        #     print("Number of start times does not match the number of videos")
+        #     return
+
+    def process_videos(self):
+        start_times = self.start_time_input.text().split(',')
+        if len(start_times) != len(self.video_paths):
+            print("Number of start times does not match the number of videos")
+            return
+        
+        if not self.output_folder:
+            return
+
+        self.processor_thread = VideoProcessor(self.video_paths, start_times, self.output_folder)
+        self.processor_thread.finished.connect(self.on_processing_finished)
+        self.processor_thread.start()
+
+    def on_processing_finished(self,time_series, video_path):
+        self.main_widget.handle_finished(time_series, video_path)
+        self.close()
+
+
 
 # 带删除的选择框
 class ReComboBox:
@@ -627,6 +776,9 @@ class LabelWithInteractivePlot(QWidget):
         self.backend_map = BackendMap()
         self.yaml = YAML()
 
+        self.select_video_widget = None
+        self.plot_window = None
+
         self.save_csv_thread_pool = QThreadPool()
 
         # self.data改变时同步数据到backend
@@ -905,7 +1057,7 @@ class LabelWithInteractivePlot(QWidget):
         self.save_label_btn = QPushButton('Save label')
         self.save_label_btn.clicked.connect(self.save_label)
         self.save_label_btn.setStyleSheet(self.button_style)
-        self.left_label_layout.addWidget(self.save_label_btn)
+        # self.left_label_layout.addWidget(self.save_label_btn)
 
 
         # 保存csv按钮
@@ -1103,12 +1255,15 @@ class LabelWithInteractivePlot(QWidget):
     def createVideoArea(self):
         # 手动校准视频时间
         self.video_time_layout = QHBoxLayout()
-        self.video_time_layout.addWidget(QLabel("Offset(s):"))
+        # self.video_time_label = QLabel("当前时间 / 总时间", self)
+        self.video_time_label = QLabel("Current Time / Total Time", self)
+        self.video_time_layout.addWidget(self.video_time_label, alignment=Qt.AlignLeft)
+        self.video_time_layout.addWidget(QLabel("Offset(s):"), alignment=Qt.AlignRight)
         self.timestamp_input = QDoubleSpinBox()
         self.timestamp_input.setRange(-10000.0, 10000.0)  # Set desired range
         self.timestamp_input.setSingleStep(0.1)  # Set step size for increment/decrement
         self.timestamp_input.setValue(0.0)  # Default value
-        self.video_time_layout.addWidget(self.timestamp_input)
+        self.video_time_layout.addWidget(self.timestamp_input, alignment=Qt.AlignRight)
         
         # 视频标签
         # self.video_label = QLabel(self)
@@ -1130,15 +1285,86 @@ class LabelWithInteractivePlot(QWidget):
         self.video_label.setScaledContents(True)
 
 
+
+    # def open_file_dialog(self):
+    #     file_path, _ = QFileDialog.getOpenFileName(self, "Select Video File", "", "Video Files (*.mp4 *.avi *.mov)")
+    #     if file_path:
+    #         self.update_video(file_path)
+
+    def plot_time_series(self, time_series):
+        if self.plot_window is not None:
+            self.plot_window.close()
+        self.plot_window = QWidget()
+        self.plot_window.setWindowTitle("Time Series Plot")
+        plot_layout = QVBoxLayout()
+        plot_widget = pg.PlotWidget()
+        plot_layout.addWidget(plot_widget)
+        self.plot_window.setLayout(plot_layout)
+
+        for start, duration, label in time_series:
+            color = QtGui.QColor(0, 0, 255) if label == 'Video' else QtGui.QColor(128, 128, 128)
+            bar_graph = pg.BarGraphItem(x=[start + duration / 2],
+                                        height=[1],
+                                        width=[duration],
+                                        brush=color)
+            plot_widget.addItem(bar_graph)
+
+        plot_widget.setYRange(-0.5, 1.5)
+        # plot_widget.setLabel('bottom', 'Time (s)')
+        plot_widget.setLabel('bottom', 'Time (HH:MM:SS)')
+        plot_widget.setTitle('Video and Blank Periods')
+
+        # Convert time in seconds to HH:MM:SS format for x-axis
+        def format_time(seconds):
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            seconds = int(seconds % 60)
+            return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+        tick_values = [start for start, _, _ in time_series]
+        tick_strings = [format_time(tick) for tick in tick_values]
+        plot_widget.getAxis('bottom').setTicks([list(zip(tick_values, tick_strings))])
+        
+        self.plot_window.show()
+
+    def open_video_editor(self):
+        self.video_editor = VideoEditor(self)
+        self.video_editor.exec()
+
+    def handle_finished(self,time_series, video_path):
+        self.plot_time_series(time_series)
+        self.update_video(video_path)
+        # print("处理完成:", video_path)
+
+
+    # 新建一个窗口，选择视频文件夹
     def open_file_dialog(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select Video File", "", "Video Files (*.mp4 *.avi *.mov)")
-        if file_path:
-            self.update_video(file_path)
+        self.open_video_editor()
+
+
 
     def update_video(self, video_path):
         if self.cap:
             self.cap.release()
         self.cap = cv2.VideoCapture(video_path)
+
+        fps = self.cap.get(cv2.CAP_PROP_FPS)
+        frame_number = 0
+
+        # Get total frame count
+        total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        # Calculate total duration
+        total_duration = total_frames / fps
+
+        # Get current time in seconds
+        current_time = frame_number / fps
+
+        # Format the times
+        current_time_str = self.format_time(current_time)
+        total_duration_str = self.format_time(total_duration)
+
+        self.video_time_label.setText(f"当前时间: {current_time_str} / 总时间: {total_duration_str}")
         self.display_frame(0)
     # def update_video(self, video_path):
     #     # self.cap = cv2.VideoCapture(r'C:\Users\user\Videos\test_hardware_encoder.mp4')
@@ -1146,6 +1372,15 @@ class LabelWithInteractivePlot(QWidget):
     #     self.cap = cv2.VideoCapture(r'G:\素材\9月30日.mp4')
     #     self.display_frame(0)
 
+
+    def format_time(self, seconds):
+        if seconds >= 3600:
+            # Format as HH:MM:SS
+            return f"{int(seconds // 3600):02}:{int((seconds % 3600) // 60):02}:{int(seconds % 60):02}"
+        else:
+            # Format as MM:SS
+            return f"{int(seconds // 60):02}:{int(seconds % 60):02}"
+        
     def display_frame(self, frame_number):
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
         ret, frame = self.cap.read()
@@ -1165,6 +1400,8 @@ class LabelWithInteractivePlot(QWidget):
 
     def jump_to_timestamp(self, index):
         try:
+            if self.cap is None:
+                return
             # self.offset = float(self.timestamp_input.text())
             self.offset = self.timestamp_input.value()
             unixtime = self.data.loc[index, 'unixtime']
@@ -1172,6 +1409,24 @@ class LabelWithInteractivePlot(QWidget):
             # timestamp = float(self.timestamp_input.text())
             fps = self.cap.get(cv2.CAP_PROP_FPS)
             frame_number = int(fps * (timestamp + self.offset))
+
+            # Get total frame count
+            total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+            # Calculate total duration
+            total_duration = total_frames / fps
+
+            # Get current time in seconds
+            current_time = frame_number / fps
+
+            # Format the times
+            current_time_str = self.format_time(current_time)
+            total_duration_str = self.format_time(total_duration)
+
+            self.video_time_label.setText(f"{current_time_str} / {total_duration_str}")
+            # # Print current and total time
+            # print(f"当前时间: {current_time:.2f} 秒 / 总时间: {total_duration:.2f} 秒")
+            
             self.display_frame(frame_number)
         except ValueError:
             print("Please enter a valid timestamp.")       
@@ -1968,6 +2223,8 @@ class LabelWithInteractivePlot(QWidget):
         # 创建一个用于显示中央绘图区域的PlotWidget
         viewC = pg.PlotWidget()
         self.viewC = viewC
+        # 禁用右键菜单
+        self.viewC.setMenuEnabled(False)
         # 将该PlotWidget添加到底部布局中
         self.row3_layout.addWidget(viewC, 2)
 
