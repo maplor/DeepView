@@ -201,23 +201,43 @@ class VideoEditor(QDialog):
         #     return
 
     def process_videos(self):
-        # 弹出窗口提示，正在处理视频
-        self.plot_window = QMessageBox(self)
-        self.plot_window.setWindowTitle("Processing Videos")
-        self.plot_window.setText("Please wait while the videos are being processed...")
-        self.plot_window.show()
+
+
 
         start_times = self.start_time_input.text().split(',')
+        self.test_times(start_times)
         if len(start_times) != len(self.video_paths):
             print("Number of start times does not match the number of videos")
             return
         
         if not self.output_folder:
             return
+        
+        # 弹出窗口提示，正在处理视频
+        self.plot_window = QMessageBox(self)
+        self.plot_window.setWindowTitle("Processing Videos")
+        self.plot_window.setText("Please wait while the videos are being processed...")
+        self.plot_window.show()
 
         self.processor_thread = VideoProcessor(self.video_paths, start_times, self.output_folder)
         self.processor_thread.finished.connect(self.on_processing_finished)
         self.processor_thread.start()
+
+    def test_times(self, time_strings):
+        times_in_seconds = []
+        for time_str in time_strings:
+            parts = list(map(int, time_str.split(':')))
+            if len(parts) == 2:  # MM:SS
+                seconds = parts[0] * 60 + parts[1]
+            elif len(parts) == 3:  # HH:MM:SS
+                seconds = parts[0] * 3600 + parts[1] * 60 + parts[2]
+            else:
+                error_message_box = QMessageBox()
+                error_message_box.setWindowTitle("Error")
+                error_message_box.setText("Time format must be MM:SS or HH:MM:SS")
+                error_message_box.exec()
+                raise ValueError("时间格式必须为 MM:SS 或 HH:MM:SS")
+        
 
     def on_processing_finished(self,time_series, video_path):
         self.main_widget.handle_finished(time_series, video_path)
@@ -784,6 +804,7 @@ class LabelWithInteractivePlot(QWidget):
 
         self.select_video_widget = None
         self.plot_window = None
+        self.time_series = None
 
         self.save_csv_thread_pool = QThreadPool()
 
@@ -1262,8 +1283,9 @@ class LabelWithInteractivePlot(QWidget):
         # 手动校准视频时间
         self.video_time_layout = QHBoxLayout()
         # self.video_time_label = QLabel("当前时间 / 总时间", self)
-        self.video_time_label = QLabel("Current Time / Total Time", self)
-        # self.video_time_label = ClickableLabel("Current Time / Total Time",self)
+        # self.video_time_label = QLabel("Current Time / Total Time", self)
+        self.video_time_label = ClickableLabel("Current Time / Total Time",self)
+        
         self.video_time_layout.addWidget(self.video_time_label, alignment=Qt.AlignLeft)
         self.video_time_layout.addWidget(QLabel("Offset(s):"), alignment=Qt.AlignRight)
         self.timestamp_input = QDoubleSpinBox()
@@ -1280,6 +1302,7 @@ class LabelWithInteractivePlot(QWidget):
         self.left_row1_video_layout.addLayout(self.video_time_layout)
 
         self.video_label.clicked.connect(self.open_file_dialog)
+        self.video_time_label.clicked.connect(self.open_detial_dialog)
 
         # self.update_video('')
         self.init_video()
@@ -1291,7 +1314,44 @@ class LabelWithInteractivePlot(QWidget):
         self.video_label.setPixmap(QPixmap.fromImage(self.qt_image))
         self.video_label.setScaledContents(True)
 
+    def open_detial_dialog(self):
+        if self.plot_window is not None:
+            self.plot_window.close()
+        self.plot_window = QWidget()
+        self.plot_window.setWindowTitle("Time Series Plot")
+        plot_layout = QVBoxLayout()
+        plot_widget = pg.PlotWidget()
+        plot_layout.addWidget(plot_widget)
+        self.plot_window.setLayout(plot_layout)
 
+        if self.time_series is None:
+            return
+
+        for start, duration, label in self.time_series:
+            color = QtGui.QColor(0, 0, 255) if label == 'Video' else QtGui.QColor(128, 128, 128)
+            bar_graph = pg.BarGraphItem(x=[start + duration / 2],
+                                        height=[1],
+                                        width=[duration],
+                                        brush=color)
+            plot_widget.addItem(bar_graph)
+
+        plot_widget.setYRange(-0.5, 1.5)
+        # plot_widget.setLabel('bottom', 'Time (s)')
+        plot_widget.setLabel('bottom', 'Time (HH:MM:SS)')
+        plot_widget.setTitle('Video and Blank Periods')
+
+        # Convert time in seconds to HH:MM:SS format for x-axis
+        def format_time(seconds):
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            seconds = int(seconds % 60)
+            return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+        tick_values = [start for start, _, _ in self.time_series]
+        tick_strings = [format_time(tick) for tick in tick_values]
+        plot_widget.getAxis('bottom').setTicks([list(zip(tick_values, tick_strings))])
+        
+        self.plot_window.show()
 
     # def open_file_dialog(self):
     #     file_path, _ = QFileDialog.getOpenFileName(self, "Select Video File", "", "Video Files (*.mp4 *.avi *.mov)")
@@ -1299,6 +1359,7 @@ class LabelWithInteractivePlot(QWidget):
     #         self.update_video(file_path)
 
     def plot_time_series(self, time_series):
+        self.time_series = time_series
         if self.plot_window is not None:
             self.plot_window.close()
         self.plot_window = QWidget()
