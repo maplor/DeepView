@@ -20,6 +20,7 @@
             height: 100%;
             margin: 0;
             background-color: #19232d;
+            overflow-x: hidden;
         }
 
         body.dark-mode {
@@ -34,7 +35,8 @@
 
         #container {
             width: 100%;
-            height: 100%;
+            /* height: 100%; */
+            height: 600px;
             display: flex;
             flex-wrap: wrap;
             justify-content: center;
@@ -53,7 +55,7 @@
 
         .chart-box:first-child {
             /* height: 150px; */
-            height: 100px;
+            height: 80px;
             min-height: 50px;
             /* 设置最小高度 */
             /* 固定高度 */
@@ -437,6 +439,7 @@
 
         };
 
+        let test_data = '{"metadata": [{"name": "gps", "xAxisName": "timestamp", "yAxisName": "Y Axis 1", "series": ["GPS_velocity", "GPS_bearing"]}, {"name": "acceleration", "xAxisName": "timestamp", "yAxisName": "Y Axis 1", "series": ["acc_x", "acc_y", "acc_z"]}], "data": [{"timestamp": "2018-09-10T20:13:05.000Z", "unixtime": 1536610385.0, "index": 0, "latitude": 38.67688, "longitude": 139.408737, "GPS_velocity": 5.807178554133101, "GPS_bearing": 0.5172438512223761, "acc_x": -0.107422, "acc_y": -0.061035, "acc_z": 1.956055}, {"timestamp": "2018-09-10T20:13:05.038Z", "unixtime": 1536610385.0384, "index": 1, "latitude": 38.67688, "longitude": 139.408737, "GPS_velocity": 5.807178554133101, "GPS_bearing": 0.5172438512223761, "acc_x": 0.32007848000000005, "acc_y": -0.18197292, "acc_z": 1.7338668400000001}, {"timestamp": "2018-09-10T20:13:05.076Z", "unixtime": 1536610385.0767999, "index": 2, "latitude": 38.67688, "longitude": 139.408737, "GPS_velocity": 5.807178554133101, "GPS_bearing": 0.5172438512223761, "acc_x": 0.012207319999999966, "acc_y": -0.43542948000000004, "acc_z": 0.19456987999999975}, {"timestamp": "2018-09-10T20:13:05.115Z", "unixtime": 1536610385.1151998, "index": 3, "latitude": 38.67688, "longitude": 139.408737, "GPS_velocity": 5.807178554133101, "GPS_bearing": 0.5172438512223761, "acc_x": 0.035448839999999995, "acc_y": 0.10886707999999995, "acc_z": 1.40343764}, {"timestamp": "2018-09-10T20:13:05.153Z", "unixtime": 1536610385.1536, "index": 4, "latitude": 38.67688, "longitude": 139.408737, "GPS_velocity": 5.807178554133101, "GPS_bearing": 0.5172438512223761, "acc_x": 0.15240240000000002, "acc_y": -0.3635744800000002, "acc_z": 1.48101608}], "labelColors": {"stationary": "#91cc75", "preening": "#5470c6", "bathing": "#fac858", "flight_take_off": "#ee6666", "flight_cruising": "#73c0de", "foraging_dive": "#3ba272", "surface_seizing": "#fc8452", "unknown": "#9a60b4"}}';
         // let org_data = [
         //     { index: 0, timestamp: '2024-07-20T12:00:00Z', _timestamp: 1626787200, acc_x: 0.1, acc_y: 0.2, acc_z: 0.3, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
         //     { index: 1, timestamp: '2024-07-20T12:01:00Z', _timestamp: 1626787260, acc_x: 0.2, acc_y: 0.3, acc_z: 0.4, gyro_x: 13, gyro_y: 14, gyro_z: 15 },
@@ -631,7 +634,7 @@
                             data: chartData.series,
                             orient: 'vertical',
                             right: '5%',
-                            top: '5%',
+                            top: '10%',
                             animation: false
                         },
                         xAxis: {
@@ -658,22 +661,22 @@
                         ]
                     };
 
-                    // 如果是加速度图表，添加 dataZoom 配置
-                    if (chartData.name === 'acceleration') {
-                        // option.dataZoom.push({
-                        //     type: 'inside',
-                        //     yAxisIndex: [0],
-                        //     start: 0,
-                        //     end: 100
-                        // });
-                        option.dataZoom.push({
-                                type: 'slider',
-                                show: true,
-                                yAxisIndex: [0],
-                                start: 0,
-                                end: 100
-                            });
-                    }
+                    // // 如果是加速度图表，添加 dataZoom 配置
+                    // if (chartData.name === 'acceleration') {
+                    //     // option.dataZoom.push({
+                    //     //     type: 'inside',
+                    //     //     yAxisIndex: [0],
+                    //     //     start: 0,
+                    //     //     end: 100
+                    //     // });
+                    //     option.dataZoom.push({
+                    //             type: 'slider',
+                    //             show: true,
+                    //             yAxisIndex: [0],
+                    //             start: 0,
+                    //             end: 100
+                    //         });
+                    // }
 
                     // 如果是第一个图表，添加特殊的配置
                     if (index === 0) {
@@ -703,15 +706,15 @@
                                 end: 100
                             }
                         ];
-                        if (chartData.name === 'acceleration') {
-                            option.dataZoom.push({
-                                type: 'slider',
-                                show: true,
-                                yAxisIndex: [0],
-                                start: 0,
-                                end: 100
-                            });
-                        }
+                        // if (chartData.name === 'acceleration') {
+                        //     option.dataZoom.push({
+                        //         type: 'slider',
+                        //         show: true,
+                        //         yAxisIndex: [0],
+                        //         start: 0,
+                        //         end: 100
+                        //     });
+                        // }
                     }
                     chart.setOption(option);
 
@@ -1160,6 +1163,7 @@
             // console.log("Filtered Data:", filteredData);
 
             initialize();
+
         }
 
         // 点击图表高亮地图对应的标记
@@ -1349,6 +1353,10 @@
                     }
                 });
             }
+            // var chartCount = document.querySelectorAll('.chart-box').length;
+            // var totalHeight = (chartCount - 2)* 30;
+            // // document.documentElement.style.height = totalHeight + '%';
+            // document.body.style.height = totalHeight + '%';
         }
 
 
@@ -1385,8 +1393,8 @@
             }
         }
 
-
-
+        
+        // displayData(test_data);        
         window.addEventListener('resize', resizeCharts);
 
 
@@ -1398,7 +1406,7 @@
             // console.log(channel.objects.backend)
             window.backend = channel.objects.backend;
         });
-        document.documentElement.style.overflow = "hidden";
+        // document.documentElement.style.overflow = "hidden";
     </script>
 </body>
 
