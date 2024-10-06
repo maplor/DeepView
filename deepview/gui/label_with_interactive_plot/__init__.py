@@ -188,12 +188,12 @@ class VideoEditor(QDialog):
                 self.layout.addWidget(QLabel(file_name))
                 # self.layout.addWidget(QLabel(path))
 
-    def process_videos(self):
-        # 弹出窗口提示，正在处理视频
-        self.plot_window = QMessageBox(self)
-        self.plot_window.setWindowTitle("Processing Videos")
-        self.plot_window.setText("Please wait while the videos are being processed...")
-        self.plot_window.show()
+    # def process_videos(self):
+    #     # 弹出窗口提示，正在处理视频
+    #     self.plot_window = QMessageBox(self)
+    #     self.plot_window.setWindowTitle("Processing Videos")
+    #     self.plot_window.setText("Please wait while the videos are being processed...")
+    #     self.plot_window.show()
         
         # start_times = list(map(int, self.start_time_input.text().split(',')))
         # if len(start_times) != len(self.video_paths):
@@ -201,6 +201,12 @@ class VideoEditor(QDialog):
         #     return
 
     def process_videos(self):
+        # 弹出窗口提示，正在处理视频
+        self.plot_window = QMessageBox(self)
+        self.plot_window.setWindowTitle("Processing Videos")
+        self.plot_window.setText("Please wait while the videos are being processed...")
+        self.plot_window.show()
+
         start_times = self.start_time_input.text().split(',')
         if len(start_times) != len(self.video_paths):
             print("Number of start times does not match the number of videos")
@@ -1257,6 +1263,7 @@ class LabelWithInteractivePlot(QWidget):
         self.video_time_layout = QHBoxLayout()
         # self.video_time_label = QLabel("当前时间 / 总时间", self)
         self.video_time_label = QLabel("Current Time / Total Time", self)
+        # self.video_time_label = ClickableLabel("Current Time / Total Time",self)
         self.video_time_layout.addWidget(self.video_time_label, alignment=Qt.AlignLeft)
         self.video_time_layout.addWidget(QLabel("Offset(s):"), alignment=Qt.AlignRight)
         self.timestamp_input = QDoubleSpinBox()
