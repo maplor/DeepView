@@ -264,6 +264,11 @@ def read_process_csv(root, file, sample_rate=25):
     # 因为角度是一段距离内的角度累计，需要除以时间
     gps_sampling_rate = (gps_len * float(sample_rate)) / len(newdf)
     newdf['GPS_bearing'] = newdf['GPS_bearing'] * (gps_sampling_rate)
+
+    # process timestamp
+    newdf['timestamp'] = pd.to_datetime(newdf['unixtime'],
+                                        unit='s'.dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ'))
+    newdf['index'] = newdf.index
     return newdf
 
 def preprocess_datasets(root, progress_update, cfg, allsetfolder, sample_rate):
