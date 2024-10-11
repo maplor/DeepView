@@ -162,7 +162,7 @@ def z_score_normalization(df):
 def format_timestamp(df):
     # if 'datetime' not in df.columns:
     s = df['timestamp'].str.replace('T', ' ').str.replace('Z', '')
-    df = df.drop('timestamp', axis=1)
+    # df = df.drop('timestamp', axis=1)
     s_datetime = pd.to_datetime(s)  # to datetime64[ns]
     df.insert(loc=0, column='datetime', value=s_datetime)
     # round at 1 millisecond
@@ -265,9 +265,9 @@ def read_process_csv(root, file, sample_rate=25):
     gps_sampling_rate = (gps_len * float(sample_rate)) / len(newdf)
     newdf['GPS_bearing'] = newdf['GPS_bearing'] * (gps_sampling_rate)
 
-    # process timestamp
-    newdf['timestamp'] = pd.to_datetime(newdf['unixtime'],
-                                        unit='s'.dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ'))
+    # # process timestamp
+    # newdf['timestamp'] = pd.to_datetime(newdf['unixtime'],
+    #                                     unit='s'.dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ'))
     newdf['index'] = newdf.index
     return newdf
 
