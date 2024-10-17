@@ -448,6 +448,7 @@
 
         // 新的pkl文件里datetime对应毫秒级别时间,转换一下就得到isotime。unixtime对应_timestamp
         let org_data = [];
+        let div_chart_name = {};
         let chartsData = [
             {
                 name: 'acceleration',
@@ -559,7 +560,9 @@
                     var div = document.createElement('div');
                     div.className = 'chart-container';
                     div.id = 'chart' + (index + 1);
+                    boxid = 'chart-box-' + (index + 1)
                     box.appendChild(div);
+                    div_chart_name[boxid] = chartData.name;
 
                     // 获取 box 的宽高
                     var width = box.clientWidth;
@@ -1148,6 +1151,7 @@
             oldFrame = null;
             delectState = false;
             lineOption = null;
+            div_chart_name = {};
 
             // Replace NaN with null手动替换空值
             data = data.replace(/NaN/g, 'null');
@@ -1237,12 +1241,39 @@
             delectState = false;
             lineOption = null;
             chartsData = JSON.parse(data)
+            chart_list = chartsData.map(item => item.name);
+
+            // // 如果div_chart_name中有chart_list中没有的chart，将对应div_chart_name中的key对应的div隐藏，有的不隐藏
+            // for (const key in div_chart_name) {
+            //     if (!chart_list.includes(div_chart_name[key])) {
+            //         document.getElementById(key).style.display = 'none';
+            //     }
+            //     else {
+            //         document.getElementById(key).style.display = 'block';
+            //     }
+            // }
+
+            // // 如果chart_list中有div_chart_name中没有的chart，就初始化
+            // for (const item of chartsData) {
+            //     if (!Object.values(div_chart_name).includes(item.name)) {
+            //         initialize();
+            //     }
+            // }
+       
+
             clearBoxes().then(() => {
                 initialize();
             });
             // clearBoxes()
             // initialize()
         }
+
+        // 仅隐藏div
+        function hideDiv() {
+            var container = document.getElementById('container');
+            container.style.display = 'none';
+        }
+
 
         function handleLabelColorChange(data) {
             labelColors = JSON.parse(data);
