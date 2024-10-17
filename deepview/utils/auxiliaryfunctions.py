@@ -208,6 +208,13 @@ def get_unsupervised_set_folder():
         os.path.join("unsupervised-datasets", "allDataSet")
     )
 
+def get_db_folder():
+    """get folder for all sensor data used for unsupervised learning"""
+    # iterate = "iteration-" + str(cfg["iteration"])
+    return Path(
+        os.path.join("db")
+    )
+
 def get_raw_data_folder():
     """get folder for all sensor data used for unsupervised learning"""
     # iterate = "iteration-" + str(cfg["iteration"])
