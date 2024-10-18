@@ -11,6 +11,7 @@ from pathlib import Path
 from ruamel.yaml import YAML
 from PySide6 import QtGui
 import cv2
+import time
 
 import matplotlib
 import numpy as np
@@ -18,7 +19,7 @@ import pandas as pd
 import pyqtgraph as pg
 import torch
 from PySide6.QtCore import (
-    QObject, Signal, Slot, QTimer, Qt
+    QObject, Signal, Slot, QTime, QTimer, Qt
 )
 # 从PySide6.QtCore导入QTimer, QRectF, Qt
 from PySide6.QtCore import QRectF
@@ -32,10 +33,10 @@ from PySide6.QtWidgets import (
     QFrame,
     QWidget, QHBoxLayout, QVBoxLayout, QLabel,
     QComboBox, QPushButton, QSpacerItem, QSizePolicy, QLineEdit,
-    QMessageBox, QDoubleSpinBox, QFileDialog
+    QMessageBox, QDoubleSpinBox, QFileDialog, QCalendarWidget
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QStandardItemModel, QStandardItem, QColor
+from PySide6.QtGui import QMouseEvent, QStandardItemModel, QStandardItem, QColor, QPainter
 from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QComboBox, QHBoxLayout, QPushButton, QMessageBox, QInputDialog
 
 from PySide6.QtGui import QImage, QPixmap
@@ -47,7 +48,8 @@ from deepview.utils.auxiliaryfunctions import (
     get_unsupervised_set_folder,
     get_raw_data_folder,
     get_unsup_model_folder,
-    grab_files_in_folder_deep
+    grab_files_in_folder_deep,
+    get_db_folder
 )
 
 from deepview.gui.label_with_interactive_plot.utils import (
@@ -70,6 +72,105 @@ class ClickableLabel(QLabel):
         if event.button() == Qt.LeftButton:
             self.clicked.emit()
 
+
+
+
+# TODO 时间选择窗口
+class TimeSelectorWidget(QLabel):
+    def __init__(self):
+        super().__init__()
+        self.setText("Select a time range")
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setFixedSize(200, 100)  # Adjust height to accommodate two rows
+        self.start_time = None
+        self.end_time = None
+        self.setStyleSheet("background-color: lightgray;")  # Set background color
+        self.selected_rects = []
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setPen(Qt.black)
+        width = self.size().width()
+        height = self.size().height()
+        
+        # Draw vertical lines
+        for i in range(1, 12):
+            x = i * (width / 12)
+            painter.drawLine(x, 0, x, height / 2)
+            painter.drawLine(x, height / 2, x, height)
+        
+        # Draw middle line
+        painter.drawLine(0, height / 2, width, height / 2)
+
+        # Draw selected rectangles in semi-transparent blue
+        painter.setBrush(QColor(0, 0, 255, 128))  # RGBA for semi-transparent blue
+        painter.setPen(Qt.NoPen)  # No outline for rectangles
+        for rect in self.selected_rects:
+            painter.drawRect(rect)
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.start_time = self.map_time(event.pos())
+            self.setText(f"Start: {self.start_time.toString()}")
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton and self.start_time:
+            self.end_time = self.map_time(event.pos())
+            self.setText(f"From {self.start_time.toString()} to {self.end_time.toString()}")
+            self.update_selected_rects()
+            self.update()
+
+    def map_time(self, pos):
+        width = self.size().width()
+        height = self.size().height()
+        hours = 24
+        total_minutes = hours * 60
+        if pos.y() < height / 2:
+            minute = (pos.x() / width) * (total_minutes / 2)
+        else:
+            minute = (pos.x() / width) * (total_minutes / 2) + (total_minutes / 2)
+        return QTime(int(minute // 60), int(minute % 60))
+
+    def update_selected_rects(self):
+        width = self.size().width()
+        height = self.size().height()
+        hours = 24
+        total_minutes = hours * 60
+        start_minute = self.start_time.hour() * 60 + self.start_time.minute()
+        end_minute = self.end_time.hour() * 60 + self.end_time.minute()
+        self.selected_rects.clear()
+
+        for minute in range(start_minute, end_minute + 1):
+            x = (minute % (total_minutes / 2)) / (total_minutes / 2) * width
+            y = 0 if minute < (total_minutes / 2) else height / 2
+            rect = QRectF(x, y, width / (total_minutes / 2), height / 2)
+            self.selected_rects.append(rect)
+
+
+class DateTimeSelector(QWidget):
+    def __init__(self, main_widget):
+        super().__init__()
+
+        self.setWindowTitle("Date and Time Selector")
+        self.setGeometry(100, 100, 400, 300)
+
+        layout = QVBoxLayout(self)
+
+        self.calendar = QCalendarWidget(self)
+        self.calendar.selectionChanged.connect(self.date_changed)
+
+        self.date_label = QLabel("Selected Date: None", self)
+
+        self.time_selector = TimeSelectorWidget()
+
+        layout.addWidget(self.calendar)
+        layout.addWidget(self.date_label)
+        layout.addWidget(self.time_selector)
+
+    def date_changed(self):
+        date = self.calendar.selectedDate()
+        self.date_label.setText(f"Selected Date: {date.toString()}")
 
 
 class VideoProcessor(QThread):
@@ -718,6 +819,159 @@ class Backend(QObject):
         # print(json_data)
         self.view.page().runJavaScript(f"displayData('{json_data}')")
 
+    # @Slot()
+    # def displayData(self, data, metadata=None, label_colors=None):
+    #     start_time = time.time()
+    #     if isinstance(data, pd.DataFrame):
+    #         # 指定要排除的列,Python 的 json 模块不能直接序列化某些自定义对象或非基本数据类型（如 datetime、Timestamp 等
+    #         # columns_to_drop = ['datetime', 'logger_id', 'animal_tag', 'gps_status',
+    #         #                    'activity_class', 'label']
+    #         #
+    #         # # 删除指定列
+    #         # data = data.drop(columns=columns_to_drop, errors='ignore')
+    #         step_time = time.time()
+
+    #         # 根据传入信号选择需要的列
+    #         series_combined = ["timestamp", "unixtime", "index", "latitude", "longitude"] + [item for data in metadata
+    #                                                                                          for item in
+    #                                                                                          data["series"]]
+    #         print(f"Time for selecting columns: {time.time() - step_time:.6f} seconds")
+
+    #         step_time = time.time()
+    #         data = data[series_combined]
+
+    #         print(f"Time for da: {time.time() - step_time:.6f} seconds")
+
+    #         step_time = time.time()
+
+    #         # 将空字符串替换为 None
+    #         data = data.replace('', None)
+    #         print(f"Time for replace: {time.time() - step_time:.6f} seconds")
+
+    #         step_time = time.time()
+
+    #         # 将 NaN 值替换为 None,避免转换为json出错
+    #         data = data.where(pd.notnull(data), None)
+
+    #         print(f"Time for where: {time.time() - step_time:.6f} seconds")
+
+    #         step_time = time.time()
+
+    #         # 将 DataFrame 转换为字典列表
+    #         data_records = data.to_dict(orient='records')
+
+    #         print(f"Time for dict: {time.time() - step_time:.6f} seconds")
+
+    #         step_time = time.time()
+
+    #         if metadata is None:
+    #             # 创建元数据信息
+    #             metadata = [
+    #                 {
+    #                     "name": "acceleration",
+    #                     "xAxisName": "timestamp",
+    #                     "yAxisName": "Y Axis 1",
+    #                     "series": ["acc_x", "acc_y", "acc_z"]
+    #                 }
+    #                 # {
+    #                 #     "name": "gyroscope",
+    #                 #     "xAxisName": "timestamp",
+    #                 #     "yAxisName": "Y Axis 2",
+    #                 #     "series": ["gyro_x", "gyro_y", "gyro_z"]
+    #                 # }
+    #             ]
+
+    #         # 将元数据和数据打包到一个字典中
+    #         result = {
+    #             "metadata": metadata,
+    #             "data": data_records,
+    #             "labelColors": label_colors
+    #         }
+    #     else:
+    #         # 如果数据不是 DataFrame，则直接使用传入的数据
+    #         result = data
+    #     # 将结果转换为 JSON 格式
+    #     json_data = json.dumps(result)
+    #     print(f"Time for converting to JSON: {time.time() - step_time:.6f} seconds")
+
+    #     # print(json_data)
+    #     self.view.page().runJavaScript(f"displayData('{json_data}')")
+
+    # def displayData(self, data, metadata=None, label_colors=None):
+    #     timings = {}
+    #     start_time = time.time()
+
+    #     if isinstance(data, pd.DataFrame):
+    #         step_time = time.time()
+
+    #         # 根据传入信号选择需要的列
+    #         series_combined = ["timestamp", "unixtime", "index", "latitude", "longitude"] + [
+    #             item for data in metadata for item in data["series"]
+    #         ]
+    #         data = data[series_combined]
+    #         timings['select_columns'] = time.time() - step_time
+
+    #         step_time = time.time()
+    #         # 将空字符串替换为 None
+    #         data = data.replace('', None)
+    #         timings['replace_empty_strings'] = time.time() - step_time
+
+    #         step_time = time.time()
+    #         # 将 NaN 值替换为 None,避免转换为json出错
+    #         data = data.where(pd.notnull(data), None)
+    #         timings['replace_nan'] = time.time() - step_time
+
+    #         step_time = time.time()
+    #         # 将 DataFrame 转换为字典列表
+    #         data_records = data.to_dict(orient='records')
+    #         timings['convert_to_dict'] = time.time() - step_time
+
+    #         step_time = time.time()
+    #         if metadata is None:
+    #             # 创建元数据信息
+    #             metadata = [
+    #                 {
+    #                     "name": "acceleration",
+    #                     "xAxisName": "timestamp",
+    #                     "yAxisName": "Y Axis 1",
+    #                     "series": ["acc_x", "acc_y", "acc_z"]
+    #                 }
+    #             ]
+    #         timings['handle_metadata'] = time.time() - step_time
+
+    #         step_time = time.time()
+    #         # 将元数据和数据打包到一个字典中
+    #         result = {
+    #             "metadata": metadata,
+    #             "data": data_records,
+    #             "labelColors": label_colors
+    #         }
+    #         timings['create_result'] = time.time() - step_time
+    #     else:
+    #         step_time = time.time()
+    #         # 如果数据不是 DataFrame，则直接使用传入的数据
+    #         result = data
+    #         timings['handle_non_dataframe'] = time.time() - step_time
+
+    #     step_time = time.time()
+    #     # 将结果转换为 JSON 格式
+    #     json_data = json.dumps(result)
+    #     timings['convert_to_json'] = time.time() - step_time
+
+    #     step_time = time.time()
+    #     # 执行 JavaScript
+    #     self.view.page().runJavaScript(f"displayData('{json_data}')")
+    #     timings['run_javascript'] = time.time() - step_time
+
+    #     timings['total'] = time.time() - start_time
+
+    #     print_str = set()
+    #     # 打印所有耗时信息
+    #     for step, duration in timings.items():
+    #         print_str.add(f"{step}: {duration:.6f} seconds")
+    #         print("\n".join(print_str))
+    #         # print(f"{step}: {duration:.6f} seconds")
+
     # 更新labelColors
     @Slot()
     def updateLabelColors(self, label_colors):
@@ -949,8 +1203,80 @@ class LabelWithInteractivePlot(QWidget):
         # )
 
 
-    # 初始化布局的方法
     def initLayout(self):
+        self.main_layout = QVBoxLayout()
+        self.setLayout(self.main_layout)
+
+
+        # 创建第一行三个按钮布局
+        self.first_row_layout = QHBoxLayout()
+
+
+        # 创建第二行选择框和颜色布局
+        self.second_row_layout = QVBoxLayout()
+
+
+        # 创建第三行（包含三个图和按钮）布局
+        self.third_row_layout = QHBoxLayout()
+        # 地图布局
+        self.left_row1_layout = QHBoxLayout()
+        # 视频布局
+        self.left_row1_video_layout = QVBoxLayout()
+        # 散点图布局
+        self.row3_layout = QHBoxLayout()
+        # 按钮布局,放入垂直的多个按钮
+        self.charts_show_button_layout = QVBoxLayout()
+
+        self.third_row_layout.addLayout(self.left_row1_layout, 1)
+        self.third_row_layout.addLayout(self.left_row1_video_layout, 1)
+        self.third_row_layout.addLayout(self.row3_layout, 1)
+        self.third_row_layout.addLayout(self.charts_show_button_layout, 0)
+
+
+        # 创建第四行布局，一个折线图，一个聚合按钮输入框图表占最大，按钮占最小
+        self.fourth_row_layout = QHBoxLayout()
+
+        # 折线图布局
+        self.left_row3_layout = QHBoxLayout()
+
+        # 按键聚合布局
+        self.nestend_button_layout = QVBoxLayout()
+        self.label_edit_button_layout = QVBoxLayout()
+        # 放两个时间输入框
+        self.st_end_time_layout = QVBoxLayout()
+        self.first_edit_button_layout = QHBoxLayout()
+        self.second_edit_button_layout = QHBoxLayout()
+        self.third_edit_button_layout = QHBoxLayout()
+
+        self.label_edit_button_layout.addLayout(self.first_edit_button_layout)
+        self.label_edit_button_layout.addLayout(self.second_edit_button_layout)
+        self.label_edit_button_layout.addLayout(self.third_edit_button_layout)
+
+        self.nestend_button_layout.addStretch()
+        self.nestend_button_layout.addLayout(self.st_end_time_layout)
+        self.nestend_button_layout.addLayout(self.label_edit_button_layout)
+        self.nestend_button_layout.addStretch()
+
+        self.fourth_row_layout.addLayout(self.left_row3_layout,1)
+        self.fourth_row_layout.addLayout(self.nestend_button_layout,0)
+
+
+        self.main_layout.addLayout(self.first_row_layout,0)
+        self.main_layout.addLayout(self.second_row_layout,0)
+        self.main_layout.addLayout(self.third_row_layout,1)
+        self.main_layout.addLayout(self.fourth_row_layout,1)
+        # 创建中心图表
+        self.createCenterPlot()
+
+
+
+
+
+
+        
+
+    # 初始化布局的方法
+    def initLayout_old(self):
 
         # 创建主水平布局
         self.main_layout = QHBoxLayout()
@@ -966,7 +1292,7 @@ class LabelWithInteractivePlot(QWidget):
         # 创建左侧row1布局
         self.left_row1_layout_all = QHBoxLayout()
         self.left_row1_layout = QHBoxLayout()
-        self.left_row1_video_layout = QVBoxLayout()
+        self.left_row1_layout = QHBoxLayout()
         self.left_row1_layout_all.addLayout(self.left_row1_layout)
         self.left_row1_layout_all.addLayout(self.left_row1_video_layout)
         self.left_layout.addLayout(self.left_row1_layout_all)
@@ -1034,7 +1360,9 @@ class LabelWithInteractivePlot(QWidget):
         self.left_start_time_layout.addWidget(QLabel("Start time:"))
         self.left_start_time_layout.addWidget(self.start_input_box)
         self.left_start_time_layout.addStretch()
-        self.left_row2_layout.addLayout(self.left_start_time_layout)
+        self.st_end_time_layout.addLayout(self.left_start_time_layout)
+
+        # self.left_row2_layout.addLayout(self.left_start_time_layout)
 
         # 第二行end time显示框
         self.left_end_time_layout = QHBoxLayout()
@@ -1043,10 +1371,12 @@ class LabelWithInteractivePlot(QWidget):
         self.left_end_time_layout.addWidget(QLabel("End time: "))
         self.left_end_time_layout.addWidget(self.end_input_box)
         self.left_end_time_layout.addStretch()
-        self.left_row2_layout.addLayout(self.left_end_time_layout)
+        self.st_end_time_layout.addLayout(self.left_end_time_layout)
+        # self.left_row2_layout.addLayout(self.left_end_time_layout)
 
         # 第三行label选项框
-        self.left_label_layout = QHBoxLayout()
+        # self.left_label_layout = QHBoxLayout()
+
         self.label_combobox = QComboBox()
         self.label_combobox.setStyleSheet(combobox_style) 
         self.label_combobox.setModel(QStandardItemModel(self.label_combobox))
@@ -1072,34 +1402,39 @@ class LabelWithInteractivePlot(QWidget):
         # self.label_combobox.currentTextChanged.connect(
         #     self.backend.handle_label_change
         # )
-        self.left_label_layout.addWidget(QLabel("Label:     "))
-        self.left_label_layout.addWidget(self.label_combobox, alignment=Qt.AlignLeft)
+
+        # self.left_label_layout.addWidget(QLabel("Label:     "))
+        # self.left_label_layout.addWidget(self.label_combobox, alignment=Qt.AlignLeft)
+        self.first_edit_button_layout.addWidget(QLabel("Label:     "))
+        self.first_edit_button_layout.addWidget(self.label_combobox, alignment=Qt.AlignLeft)
 
         # 创建label按钮
         add_label_btn = QPushButton('Create label')
         add_label_btn.clicked.connect(self.add_item)
         add_label_btn.setStyleSheet(self.button_style)
-        self.left_label_layout.addWidget(add_label_btn)
+        # self.left_label_layout.addWidget(add_label_btn)
+        self.first_edit_button_layout.addWidget(add_label_btn)
 
+        # 暂时不用
         self.save_label_btn = QPushButton('Save label')
         self.save_label_btn.clicked.connect(self.save_label)
         self.save_label_btn.setStyleSheet(self.button_style)
         # self.left_label_layout.addWidget(self.save_label_btn)
 
 
-        # 保存csv按钮
+        # 保存csv按钮 TODO 问一下这个还要不
         self.save_csv_btn = QPushButton('Save csv')
         self.save_csv_btn.clicked.connect(lambda: self.backend.getSelectedAreaToSave(0))
         self.save_csv_btn.setStyleSheet(self.button_style)
-        self.left_label_layout.addWidget(self.save_csv_btn)
-        self.left_label_layout.addStretch()
-        self.left_row2_layout.addLayout(self.left_label_layout)
+        # self.left_label_layout.addWidget(self.save_csv_btn)
+        # self.left_label_layout.addStretch()
+        # self.left_row2_layout.addLayout(self.left_label_layout)
 
 
     
 
         # 第四行三个按钮
-        self.left_button_layout = QHBoxLayout()
+        # self.left_button_layout = QHBoxLayout()
         # add label按钮
         add_label_btn = QPushButton('Add label')
         add_label_btn.clicked.connect(lambda: self.backend.handleAddLabel(self.label_combobox.currentText()))
@@ -1120,15 +1455,23 @@ class LabelWithInteractivePlot(QWidget):
         # 设置按钮样式
         reflect_to_latent_btn.setStyleSheet(self.button_style)
 
-        # 将按钮添加到布局中
-        self.left_button_layout.addWidget(add_label_btn)
-        self.left_button_layout.addStretch(1)
-        self.left_button_layout.addWidget(delete_label_btn)
-        self.left_button_layout.addStretch(1)
-        self.left_button_layout.addWidget(reflect_to_latent_btn)
-        self.left_button_layout.addStretch(10)
 
-        self.left_row2_layout.addLayout(self.left_button_layout)
+        self.second_edit_button_layout.addWidget(add_label_btn)
+        self.second_edit_button_layout.addWidget(delete_label_btn)
+        self.second_edit_button_layout.addWidget(self.save_csv_btn)
+
+        self.third_edit_button_layout.addWidget(reflect_to_latent_btn)
+        
+
+        # # 将按钮添加到布局中
+        # self.left_button_layout.addWidget(add_label_btn)
+        # self.left_button_layout.addStretch(1)
+        # self.left_button_layout.addWidget(delete_label_btn)
+        # self.left_button_layout.addStretch(1)
+        # self.left_button_layout.addWidget(reflect_to_latent_btn)
+        # self.left_button_layout.addStretch(10)
+
+        # self.left_row2_layout.addLayout(self.left_button_layout)
 
     def addItem(self, itemTxt):
         QS_item = QStandardItem(itemTxt)
@@ -1517,25 +1860,42 @@ class LabelWithInteractivePlot(QWidget):
 
     # 创建右上角的选择模型和数据复选框
     def createModelSelectLabelArea(self):
+
+        # 日历按钮
+        self.calendar_btn = QPushButton('Calendar')
+        self.calendar_btn.setStyleSheet(self.button_style)
+        self.calendar_btn.clicked.connect(self.open_calendar)
+        self.first_row_layout.addWidget(self.calendar_btn, alignment=Qt.AlignLeft)
+        
         # 第一行布局,包含Select model标签和选择框，, alignment=Qt.AlignLeft
         # 创建模型组合框和标签
         modelComboBoxLabel, modelComboBox = self.createModelComboBox()
-        self.first_row1_layout = QHBoxLayout()
-        self.first_row1_layout.addWidget(modelComboBoxLabel, alignment=Qt.AlignLeft)
-        self.first_row1_layout.addWidget(modelComboBox, alignment=Qt.AlignLeft)
+        # self.first_row1_layout = QHBoxLayout()
+        # self.first_row1_layout.addWidget(modelComboBoxLabel, alignment=Qt.AlignLeft)
+        # self.first_row1_layout.addWidget(modelComboBox, alignment=Qt.AlignLeft)
+        self.first_row_layout.addWidget(modelComboBoxLabel, alignment=Qt.AlignLeft)
+        self.first_row_layout.addWidget(modelComboBox, alignment=Qt.AlignLeft)
         self.refresh_btn = QPushButton('Refresh')
         self.refresh_btn.setStyleSheet(self.button_style)
         self.refresh_btn.clicked.connect(self.handleRefresh)
-        self.first_row1_layout.addWidget(self.refresh_btn, alignment=Qt.AlignLeft)
-        self.first_row1_layout.addStretch()  # 添加一个伸缩因子来填充剩余空间
+
+        # self.first_row1_layout.addWidget(self.refresh_btn, alignment=Qt.AlignLeft)
+        # self.first_row1_layout.addStretch()  # 添加一个伸缩因子来填充剩余空间
 
         # 第二行布局
         # 创建原始数据组合框和标签
         RawDataComboBoxLabel, RawDatacomboBox = self.createRawDataComboBox()
-        self.second_row1_layout = QHBoxLayout()
-        self.second_row1_layout.addWidget(RawDataComboBoxLabel, alignment=Qt.AlignLeft)
-        self.second_row1_layout.addWidget(RawDatacomboBox, alignment=Qt.AlignLeft)
-        self.second_row1_layout.addStretch()  # 添加一个伸缩因子来填充剩余空间
+        # self.first_row_layout.addLayout(RawDataComboBoxLabel, alignment=Qt.AlignLeft)
+        self.first_row_layout.addWidget(RawDataComboBoxLabel, alignment=Qt.AlignLeft)
+        self.first_row_layout.addWidget(RawDatacomboBox, alignment=Qt.AlignLeft)
+
+        featureExtractBtn = self.createFeatureExtractButton()
+        self.first_row_layout.addWidget(featureExtractBtn, alignment=Qt.AlignRight)
+        # self.second_row1_layout = QHBoxLayout()
+        # self.first_row_layout.addLayout(self.second_row1_layout)
+        # self.second_row1_layout.addWidget(RawDataComboBoxLabel, alignment=Qt.AlignLeft)
+        # self.second_row1_layout.addWidget(RawDatacomboBox, alignment=Qt.AlignLeft)
+        # self.second_row1_layout.addStretch()  # 添加一个伸缩因子来填充剩余空间
 
         # check_box布局
         self.checkbox_layout = QHBoxLayout()
@@ -1543,19 +1903,24 @@ class LabelWithInteractivePlot(QWidget):
         # 颜色展示
         self.color_layout = QHBoxLayout()
 
+        self.second_row_layout.addLayout(self.checkbox_layout)
+        self.second_row_layout.addLayout(self.color_layout)
+
+
+        # TODO: 将一部分功能改到日历中
         # 第三行布局 Display data 按钮
-        self.third_row1_layout = QHBoxLayout()
-        featureExtractBtn = self.createFeatureExtractButton()
-        labelColorBtn = self.createToggleLabelColor()  # 单击可以让右下散点图显示已有标签
+        # self.third_row1_layout = QHBoxLayout()
+        # featureExtractBtn = self.createFeatureExtractButton()
+        # self.labelColorBtn = self.createToggleLabelColor()  # 单击可以让右下散点图显示已有标签
 
-        self.third_row1_layout.addWidget(featureExtractBtn, alignment=Qt.AlignRight)
-        self.third_row1_layout.addWidget(labelColorBtn, alignment=Qt.AlignRight)
+        # self.third_row1_layout.addWidget(featureExtractBtn, alignment=Qt.AlignRight)
+        # self.third_row1_layout.addWidget(labelColorBtn, alignment=Qt.AlignRight)
 
-        self.nestend_layout.addLayout(self.first_row1_layout)
-        self.nestend_layout.addLayout(self.second_row1_layout)
-        self.nestend_layout.addLayout(self.checkbox_layout)
-        self.nestend_layout.addLayout(self.color_layout)
-        self.nestend_layout.addLayout(self.third_row1_layout)
+        # self.nestend_layout.addLayout(self.first_row1_layout)
+        # self.nestend_layout.addLayout(self.second_row1_layout)
+        # self.nestend_layout.addLayout(self.checkbox_layout)
+        # self.nestend_layout.addLayout(self.color_layout)
+        # self.nestend_layout.addLayout(self.third_row1_layout)
 
         self.renderColumnList()
         # self.clear_color_layout()
@@ -1564,6 +1929,10 @@ class LabelWithInteractivePlot(QWidget):
     def handleRefresh(self):
         self.update_model_combobox()
         self.update_data_combobox()
+
+    def open_calendar(self):
+        self.calendar = DateTimeSelector(self)
+        self.calendar.show()
 
 
     def display_colors(self, colors):
@@ -1628,31 +1997,36 @@ class LabelWithInteractivePlot(QWidget):
     '''
 
     def createSettingArea(self):
+        self.charts_show_button_layout.addStretch()
+        self.labelColorBtn = self.createToggleLabelColor()
+        self.charts_show_button_layout.addWidget(self.labelColorBtn)
         # 第一行生成选框按钮
-        self.first_row2_layout = QHBoxLayout()
+        # self.first_row2_layout = QHBoxLayout()
         addRegionBtn = QPushButton('Generate area')
         # 设置按钮样式
         addRegionBtn.setStyleSheet(self.button_style)
         # 设置按钮最小宽度
         # addRegionBtn.setFixedWidth(160)
         addRegionBtn.clicked.connect(self.handleAddRegion)
-        self.first_row2_layout.addWidget(addRegionBtn, alignment=Qt.AlignLeft)
-        self.first_row2_layout.addStretch()
+        self.charts_show_button_layout.addWidget(addRegionBtn)
+        # self.first_row2_layout.addWidget(addRegionBtn, alignment=Qt.AlignLeft)
+        # self.first_row2_layout.addStretch()
 
         # 第二行Threshold输入框
-        self.second_row2_layout = QHBoxLayout()
+        # self.second_row2_layout = QHBoxLayout()
 
         self.input_box = QLineEdit(self)
-        self.input_box.setPlaceholderText("Enter threshold")
+        self.input_box.setPlaceholderText("Input threshold")
+        self.charts_show_button_layout.addWidget(self.input_box)
 
-        self.second_row2_layout.addWidget(QLabel("Threshold:"))
-        self.second_row2_layout.addWidget(self.input_box)
+        # self.second_row2_layout.addWidget(QLabel("Threshold:"))
+        # self.second_row2_layout.addWidget(self.input_box)
 
         # cache select region 缓存选定区域
         self.rightRegionRect = QRectF(0, 0, 1, 1)
 
         # 第三行两个按钮
-        self.third_row2_layout = QHBoxLayout()
+        # self.third_row2_layout = QHBoxLayout()
         toLabelBtn = QPushButton('Find data')  # Save to label
         # 设置按钮样式
         toLabelBtn.setStyleSheet(self.button_style)
@@ -1663,16 +2037,21 @@ class LabelWithInteractivePlot(QWidget):
         clearEmptyRegionBtn.setStyleSheet(self.button_style)
         clearEmptyRegionBtn.clicked.connect(self.handleClearEmptyRegion)
 
-        # 添加一个伸缩因子来创建间距
-        # self.third_row2_layout.addStretch(1)
-        self.third_row2_layout.addWidget(toLabelBtn, alignment=Qt.AlignLeft)
-        self.third_row2_layout.addStretch(1)  # Increase the stretch factor to create more space
-        self.third_row2_layout.addWidget(clearEmptyRegionBtn, alignment=Qt.AlignLeft)
-        self.third_row2_layout.addStretch(10)
+        self.charts_show_button_layout.addWidget(toLabelBtn)
+        self.charts_show_button_layout.addWidget(clearEmptyRegionBtn)
+        self.charts_show_button_layout.addStretch()
 
-        self.row2_layout.addLayout(self.first_row2_layout)
-        self.row2_layout.addLayout(self.second_row2_layout)
-        self.row2_layout.addLayout(self.third_row2_layout)
+
+        # # 添加一个伸缩因子来创建间距
+        # # self.third_row2_layout.addStretch(1)
+        # self.third_row2_layout.addWidget(toLabelBtn, alignment=Qt.AlignLeft)
+        # self.third_row2_layout.addStretch(1)  # Increase the stretch factor to create more space
+        # self.third_row2_layout.addWidget(clearEmptyRegionBtn, alignment=Qt.AlignLeft)
+        # self.third_row2_layout.addStretch(10)
+
+        # self.row2_layout.addLayout(self.first_row2_layout)
+        # self.row2_layout.addLayout(self.second_row2_layout)
+        # self.row2_layout.addLayout(self.third_row2_layout)
 
     '''
     ==================================================
