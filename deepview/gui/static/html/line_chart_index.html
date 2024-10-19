@@ -81,7 +81,7 @@
     </style>
 </head>
 
-<body>
+<body class="light-mode">
     <div id="container"></div>
 
     <script type="text/javascript">
@@ -92,7 +92,7 @@
         markData = [];
         otherMarkData = [];
         selectedDataList = null;
-        chartsTheme = 'dark';
+        chartsTheme = 'light';
         oldFrame = null;
         delectState = false;
         currentIndex = -1;
@@ -1173,6 +1173,8 @@
         // 点击图表高亮地图对应的标记
         // handleHighlightDotByIndex
         function HighlightDotByIndex(index) {
+            highlightLineChartDotByIndex(index)
+
             backend.handleHighlightDotByIndex(index);
 
             // 右边图中的对应时间的点也高亮显示

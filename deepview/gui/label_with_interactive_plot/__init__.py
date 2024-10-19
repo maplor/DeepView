@@ -58,7 +58,7 @@ from deepview.gui.label_with_interactive_plot.utils import (
     find_data_columns
 )
 
-from deepview.gui.label_with_interactive_plot.styles import combobox_style
+from deepview.gui.label_with_interactive_plot.styles import combobox_style_light, combobox_style_dark
 
 
 # 创建一个蓝色的pg.mkPen对象，宽度为2
@@ -1071,6 +1071,8 @@ class LabelWithInteractivePlot(QWidget):
         self.backend.highlightScatterDotByindexSign.connect(self.handle_highlight_scatter_dot_by_index)
         # 点击地图散点高亮折线图散点
         self.backend_map.highlightLineChartDotByindex.connect(self.backend.triggeLineChartHighlightDotByIndex)
+        # 点击地图散点高亮散点图散点
+        self.backend_map.highlightLineChartDotByindex.connect(self.handle_highlight_scatter_dot_by_index)
         self.backend.getSelectedAreaByHtml.connect(self.handleReflectToLatent)
         self.backend.setStartEndTime.connect(self.setStartEndTime)
         self.backend.setStartAndEndDataSign.connect(self.backend_map.highlightLineChartTwoDots)
@@ -1378,7 +1380,7 @@ class LabelWithInteractivePlot(QWidget):
         # self.left_label_layout = QHBoxLayout()
 
         self.label_combobox = QComboBox()
-        self.label_combobox.setStyleSheet(combobox_style) 
+        self.label_combobox.setStyleSheet(combobox_style_light)
         self.label_combobox.setModel(QStandardItemModel(self.label_combobox))
 
         # self.comboBoxHandler = ReComboBox(self.label_combobox, self.label_dict)
@@ -2420,7 +2422,28 @@ class LabelWithInteractivePlot(QWidget):
         # 在散点图中绘制点
         scatterItem.addPoints(spots)
         self.scatterItem = scatterItem
+        scatterItem.sigClicked.connect(self.handleScatterItemClick)
         self.viewC.addItem(scatterItem)
+        return
+
+    def handleScatterItemClick(self, scatterItem, points):
+        if len(points) >= 1:
+            index, start, end = points[0].data()
+
+            # start为latent space的切片索引，index为原始索引（对应切片的开始索引）
+            lat, lon = self.data.loc[start, 'latitude'], self.data.loc[start, 'longitude']
+
+            if pd.isna(lat) or pd.isna(lon):
+                print("Latitude or longitude is missing.")
+                return
+
+            # 点击散点图高亮地图散点
+            self.backend_map.triggeLineMapHighlightDotByIndex(start, lat, lon)
+            # 点击散点图高亮折线图散点
+            self.backend.triggeLineChartHighlightDotByIndex(start)
+            # 点击散点图高亮自己
+            self.handle_highlight_scatter_dot_by_index(index, True)
+
         return
 
     # 更新按钮状态的方法
@@ -2672,6 +2695,7 @@ class LabelWithInteractivePlot(QWidget):
         self.viewC = viewC
         # 禁用右键菜单
         self.viewC.setMenuEnabled(False)
+        self.viewC.setBackground('w')
         # 将该PlotWidget添加到底部布局中
         self.row3_layout.addWidget(viewC, 2)
 
@@ -2761,14 +2785,21 @@ class LabelWithInteractivePlot(QWidget):
         return
 
     def find_i_by_indice(self, indice, start_indice, end_indice):
+        '''
+        map和sensor data都用原始索引，latent space用切片索引，这里从原始索引查找切片
+        indice为原始索引
+        start indice为切片索引
+        '''
         for i in range(len(start_indice)):
             if start_indice[i] <= indice < end_indice[i]:
                 return i
         return None  # 如果没有找到合适的范围
 
-    def handle_highlight_scatter_dot_by_index(self, index):
+    def handle_highlight_scatter_dot_by_index(self, index, useRawIndex = False):
         self.jump_to_timestamp(index)
-        indice = self.find_i_by_indice(index, self.start_indice, self.end_indice)
+        indice = index
+        if not useRawIndex:
+            indice = self.find_i_by_indice(index, self.start_indice, self.end_indice)
         for p, original_size, original_brush in self.last_modified_points:
             p.setSize(original_size)
             p.setBrush(original_brush)
