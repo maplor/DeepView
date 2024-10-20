@@ -13,6 +13,7 @@
 
 import os
 import shutil
+import sqlite3
 import warnings
 from pathlib import Path
 from datetime import datetime as dt
@@ -21,6 +22,7 @@ from deepview.utils import auxiliaryfunctions
 
 from deepview import DEBUG
 from deepview.utils.auxfun_files import fileReader
+from deepview.utils.auxiliaryfunctions import get_db_folder
 
 
 def create_new_project(
@@ -295,6 +297,74 @@ def create_new_project(
     projconfigfile = os.path.join(str(project_path), "config.yaml")
     # Write dictionary to yaml  config file
     auxiliaryfunctions.write_config(projconfigfile, cfg_file)
+
+    db_dir = os.path.join(str(project_path), "db")
+    db_path = os.path.join(db_dir, "database.db")
+    # 确保数据库目录存在
+    os.makedirs(db_dir, exist_ok=True)
+    conn = sqlite3.connect(db_path)
+
+    cursor = conn.cursor()
+
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS animals (
+                    animal_tag TEXT
+                    )''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS labels (
+                label_id INTEGER PRIMARY KEY,
+                    animal_tag TEXT,
+                stt_timestamp TEXT,
+                    stp_timestamp TEXT,
+                activity TEXT,
+                    location TEXT,
+                    notes TEXT
+                    )''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS videos (
+                    animal_tag TEXT,
+                video_stt DATETIME, 
+                    video_stp DATETIME,
+                framerate INTEGER,
+                frame_count INTEGER,
+                video_id INTEGER
+                    )''')
+
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS raw_data (
+                logger_id TEXT,
+                    animal_tag TEXT,
+                datetime DATETIME,
+                timestamp TEXT,
+                    unixtime INTEGER,
+                    latitude REAL,
+                    longitude REAL,
+                    acc_x REAL,
+                    acc_y REAL,
+                    acc_z REAL,
+                    gyro_x REAL,
+                    gyro_y REAL,
+                    gyro_z REAL,
+                    mag_x REAL,
+                    mag_y REAL,
+                    mag_z REAL,
+                illumination REAL,
+                pressure REAL,
+                GPS_velocity REAL,
+                GPS_bearing REAL,
+                temperature REAL,
+                label_id TEXT,
+                label TEXT,
+                label_flag INTEGER
+                    )''')
+
+    # 创建索引
+    cursor.execute('''CREATE INDEX IF NOT EXISTS raw_data_index ON raw_data (logger_id, timestamp)''')
+    cursor.execute('''CREATE INDEX IF NOT EXISTS videos_index ON videos (animal_tag, video_stt, video_stp)''')
+
+
+    conn.commit()
+    conn.close()
 
     print('Generated "{}"'.format(project_path / "config.yaml"))
     print(

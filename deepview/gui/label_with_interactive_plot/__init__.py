@@ -1402,6 +1402,8 @@ class LabelWithInteractivePlot(QWidget):
         self.select_video_widget = None
         self.plot_window = None
         self.time_series = None
+        self.modelComboBox = None
+        self.RawDatacomboBox = None
 
         self.save_csv_thread_pool = QThreadPool()
 
@@ -2612,6 +2614,8 @@ class LabelWithInteractivePlot(QWidget):
         return
 
     def update_model_combobox(self):
+        if self.modelComboBox is None:
+            return
         # 清空原有的选项
         self.modelComboBox.clear()
 
@@ -2642,6 +2646,8 @@ class LabelWithInteractivePlot(QWidget):
     
 
     def update_data_combobox(self):
+        if self.RawDatacomboBox is None:
+            return
         # 清空原有的选项
         self.RawDatacomboBox.clear()
 
