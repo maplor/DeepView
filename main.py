@@ -43,8 +43,12 @@ def launch_dview():
     with open(stylefile, "r") as f:
         app.setStyleSheet(f.read())
     # https://qdarkstylesheet.readthedocs.io/en/latest/reference/qdarkstyle.html
-    dark_stylesheet = qdarkstyle.load_stylesheet_pyside2()
-    app.setStyleSheet(dark_stylesheet)
+    # dark_stylesheet = qdarkstyle.load_stylesheet_pyside2()
+    from qdarkstyle.light.palette import LightPalette
+    style = qdarkstyle.load_stylesheet(palette=LightPalette)
+
+    app.setStyleSheet(style)
+
 
     # Set up a logger and add an stdout handler.
     # A single logger can have many handlers:

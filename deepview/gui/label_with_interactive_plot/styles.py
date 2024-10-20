@@ -1,4 +1,159 @@
-combobox_style = """
+combobox_style_light = """
+QWidget {
+    background-color: none;
+    color: #19232D;
+}
+
+/*QComboBox {*/
+/*    background-color: #19232D;*/
+/*}*/
+
+QComboBox QAbstractItemView {
+  border: 1px solid #C9CDD0;
+  border-radius: 0;
+  background-color: #FAFAFA;
+  selection-background-color: #9FCBFF;
+}
+
+QComboBox QAbstractItemView:hover {
+  background-color: #FAFAFA;
+  color: #19232D;
+}
+
+QComboBox QAbstractItemView:selected {
+  background: #9FCBFF;
+  color: #C9CDD0;
+}
+
+QComboBox QAbstractItemView:alternate {
+  background: #FAFAFA;
+}
+
+QComboBox:disabled {
+  background-color: #FAFAFA;
+  color: #788D9C;
+}
+
+QComboBox:hover {
+  border: 1px solid #9FCBFF;
+}
+
+QComboBox:focus {
+  border: 1px solid #73C7FF;
+}
+
+QComboBox:on {
+  selection-background-color: #9FCBFF;
+}
+
+QComboBox::indicator {
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  selection-background-color: transparent;
+  color: transparent;
+  selection-color: transparent;
+  /* Needed to remove indicator - fix #132 */
+}
+
+QComboBox::indicator:alternate {
+  background: #FAFAFA;
+}
+
+QComboBox::item {
+  /* Remove to fix #282, #285 and MR #288*/
+  /*&:checked {
+            font-weight: bold;
+        }
+
+        &:selected {
+            border: 0px solid transparent;
+        }
+        */
+}
+
+QComboBox::item:alternate {
+  background: #FAFAFA;
+}
+
+QComboBox::drop-down {
+  subcontrol-origin: padding;
+  subcontrol-position: top right;
+  width: 12px;
+  border-left: 1px solid #C9CDD0;
+}
+
+QComboBox::down-arrow {
+  image: url(":/qss_icons/light/rc/arrow_down_disabled.png");
+  height: 8px;
+  width: 8px;
+}
+
+QComboBox::down-arrow:on, QComboBox::down-arrow:hover, QComboBox::down-arrow:focus {
+  image: url(":/qss_icons/light/rc/arrow_down.png");
+}
+
+
+QPushButton {
+    border: none;
+    color: #19232D;
+    font-size: 15px
+}
+
+QPushButton:disabled {
+  background-color: #C9CDD0;
+  color: #788D9C;
+  border-radius: 4px;
+  padding: 2px;
+}
+
+QPushButton:checked {
+  background-color: #ACB1B6;
+  border-radius: 4px;
+  padding: 2px;
+  outline: none;
+}
+
+QPushButton:checked:disabled {
+  background-color: #ACB1B6;
+  color: #788D9C;
+  border-radius: 4px;
+  padding: 2px;
+  outline: none;
+}
+
+QPushButton:checked:selected {
+  background: #ACB1B6;
+}
+
+QPushButton:hover {
+  background-color: #B9BDC1;
+  color: #19232D;
+}
+
+QPushButton:pressed {
+  background-color: #ACB1B6;
+}
+
+QPushButton:selected {
+  background: #ACB1B6;
+  color: #19232D;
+}
+
+QPushButton::menu-indicator {
+  subcontrol-origin: padding;
+  subcontrol-position: bottom right;
+  bottom: 4px;
+}
+
+QDialogButtonBox QPushButton {
+  /* Issue #194 #248 - Special case of QPushButton inside dialogs, for better UI */
+  min-width: 80px;
+}                                  
+
+"""
+
+combobox_style_dark = """
 QWidget {
   background-color: none;
    color: #DFE1E2;
@@ -152,13 +307,13 @@ QDialogButtonBox QPushButton {
 
 """
 
-"""
-QPushButton {
-  background-color: #455364;
-  color: #DFE1E2;
-  border-radius: 4px;
-  padding: 2px;
-  outline: none;
-  border: none;
-}
-"""
+# """
+# QPushButton {
+#   background-color: #455364;
+#   color: #DFE1E2;
+#   border-radius: 4px;
+#   padding: 2px;
+#   outline: none;
+#   border: none;
+# }
+# """
