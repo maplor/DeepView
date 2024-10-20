@@ -1825,8 +1825,10 @@ class LabelWithInteractivePlot(QWidget):
 
     def addItem(self, itemTxt):
         QS_item = QStandardItem(itemTxt)
-        QS_item.setBackground(QColor('#19232d'))
-        QS_item.setForeground(QColor('#ffffff'))
+        # QS_item.setBackground(QColor('#19232d'))
+        # QS_item.setForeground(QColor('#ffffff'))
+        QS_item.setBackground(QColor('#ffffff'))
+        QS_item.setForeground(QColor('#19232d'))
         QS_item.setText(itemTxt)
         self.label_combobox.model().appendRow(QS_item)
         index = self.label_combobox.count() - 1
