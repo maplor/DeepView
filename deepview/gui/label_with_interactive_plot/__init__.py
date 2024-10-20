@@ -40,6 +40,16 @@ from PySide6.QtGui import QMouseEvent, QStandardItemModel, QStandardItem, QColor
 from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QComboBox, QHBoxLayout, QPushButton, QMessageBox, QInputDialog
 
 from PySide6.QtGui import QImage, QPixmap
+from datetime import datetime, timedelta
+import sys
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QCalendarWidget, QLabel
+from PySide6.QtCore import QTime, Qt, QRectF
+from PySide6.QtGui import QMouseEvent, QPainter, QColor
+import sqlite3
+from PySide6.QtCore import QDate
+from PySide6.QtGui import QTextCharFormat
+from PySide6.QtWidgets import QTextEdit, QTimeEdit, QPushButton
+
 
 # 从deepview.utils.auxiliaryfunctions导入多个函数
 from deepview.utils.auxiliaryfunctions import (
@@ -55,7 +65,8 @@ from deepview.utils.auxiliaryfunctions import (
 from deepview.gui.label_with_interactive_plot.utils import (
     get_data_from_pkl,
     featureExtraction,
-    find_data_columns
+    find_data_columns,
+    generate_filename
 )
 
 from deepview.gui.label_with_interactive_plot.styles import combobox_style
@@ -63,6 +74,7 @@ from deepview.gui.label_with_interactive_plot.styles import combobox_style
 
 # 创建一个蓝色的pg.mkPen对象，宽度为2
 clickedPen = pg.mkPen('b', width=2)
+
 
 
 class ClickableLabel(QLabel):
@@ -75,16 +87,20 @@ class ClickableLabel(QLabel):
 
 
 
-# TODO 时间选择窗口
+
 class TimeSelectorWidget(QLabel):
-    def __init__(self):
+    def __init__(self, begin_time_edit, end_time_edit, video_time_list):
         super().__init__()
         self.setText("Select a time range")
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setFixedSize(200, 100)  # Adjust height to accommodate two rows
+        self.start_time_edit = begin_time_edit
+        self.end_time_edit = end_time_edit
+        self.video_time_list = video_time_list
+        self.hourly_data = {}
         self.start_time = None
         self.end_time = None
-        self.setStyleSheet("background-color: lightgray;")  # Set background color
+        self.setStyleSheet("background-color: lightgray;")
         self.selected_rects = []
 
     def paintEvent(self, event):
@@ -93,39 +109,90 @@ class TimeSelectorWidget(QLabel):
         painter.setPen(Qt.black)
         width = self.size().width()
         height = self.size().height()
-        
+
         # Draw vertical lines
         for i in range(1, 12):
             x = i * (width / 12)
             painter.drawLine(x, 0, x, height / 2)
             painter.drawLine(x, height / 2, x, height)
-        
+
         # Draw middle line
         painter.drawLine(0, height / 2, width, height / 2)
 
+        # Draw hourly data with different colors
+        total_minutes = 24 * 60
+        for hour in range(24):
+            if hour in self.hourly_data:
+                start_minute = hour * 60
+                end_minute = start_minute + 60
+
+                # Determine presence of data types
+                acc_present = self.hourly_data[hour]['acc']
+                gyro_present = self.hourly_data[hour]['gyro']
+                mag_present = self.hourly_data[hour]['mag']
+
+                for minute in range(start_minute, end_minute):
+                    x = (minute % (total_minutes / 2)) / (total_minutes / 2) * width
+                    y = 0 if minute < (total_minutes / 2) else height / 2
+                    rect = QRectF(x, y, width / (total_minutes / 2), height / 2)
+
+                    # Draw rectangles with different colors
+                    if acc_present:
+                        painter.setBrush(QColor(255, 255, 0, 128))  # Semi-transparent yellow
+                        painter.setPen(Qt.NoPen)
+                        acc_rect = QRectF(rect.x(), rect.y(), rect.width(), rect.height() * 0.3)
+                        painter.drawRect(acc_rect)
+                    if gyro_present:
+                        painter.setBrush(QColor(255, 0, 0, 128))  # Semi-transparent red
+                        painter.setPen(Qt.NoPen)
+                        gyro_rect = QRectF(rect.x(), rect.y() + rect.height() * 0.35, rect.width(), rect.height() * 0.3)
+                        painter.drawRect(gyro_rect)
+                    if mag_present:
+                        painter.setBrush(QColor(0, 0, 255, 128))  # Semi-transparent blue
+                        painter.setPen(Qt.NoPen)
+                        mag_rect = QRectF(rect.x(), rect.y() + rect.height() * 0.7, rect.width(), rect.height() * 0.3)
+                        painter.drawRect(mag_rect)
+
+        # Draw predefined time segments
+        segments = self.parse_time_segments()
+        painter.setBrush(QColor(0, 255, 0, 128))  # Semi-transparent green
+        painter.setPen(Qt.NoPen)
+        for start, end in segments:
+            start_minute = start.hour() * 60 + start.minute()
+            end_minute = end.hour() * 60 + end.minute()
+            for minute in range(start_minute, end_minute):
+                x = (minute % (1440 / 2)) / (1440 / 2) * width
+                # 计算矩形的 y 坐标和高度
+                rect_height = height * 0.7 / 2
+                y_offset = (height / 2 - rect_height) / 2
+                y = y_offset if minute < (1440 / 2) else height / 2 + y_offset
+                rect = QRectF(x, y, width / (1440 / 2), rect_height)
+                painter.drawRect(rect)
+
         # Draw selected rectangles in semi-transparent blue
-        painter.setBrush(QColor(0, 0, 255, 128))  # RGBA for semi-transparent blue
-        painter.setPen(Qt.NoPen)  # No outline for rectangles
+        painter.setBrush(QColor(0, 0, 255, 128))
+        painter.setPen(Qt.NoPen)
         for rect in self.selected_rects:
             painter.drawRect(rect)
 
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.start_time = self.map_time(event.pos())
-            self.setText(f"Start: {self.start_time.toString()}")
+            self.start_time = self.map_time(event.position())
+            # self.setText(f"Start: {self.start_time.toString()}")
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton and self.start_time:
-            self.end_time = self.map_time(event.pos())
-            self.setText(f"From {self.start_time.toString()} to {self.end_time.toString()}")
+            self.end_time = self.map_time(event.position())
+            self.start_time_edit.setTime(self.start_time)
+            self.end_time_edit.setTime(self.end_time)
+
             self.update_selected_rects()
             self.update()
 
     def map_time(self, pos):
         width = self.size().width()
         height = self.size().height()
-        hours = 24
-        total_minutes = hours * 60
+        total_minutes = 24 * 60
         if pos.y() < height / 2:
             minute = (pos.x() / width) * (total_minutes / 2)
         else:
@@ -135,8 +202,7 @@ class TimeSelectorWidget(QLabel):
     def update_selected_rects(self):
         width = self.size().width()
         height = self.size().height()
-        hours = 24
-        total_minutes = hours * 60
+        total_minutes = 24 * 60
         start_minute = self.start_time.hour() * 60 + self.start_time.minute()
         end_minute = self.end_time.hour() * 60 + self.end_time.minute()
         self.selected_rects.clear()
@@ -147,30 +213,304 @@ class TimeSelectorWidget(QLabel):
             rect = QRectF(x, y, width / (total_minutes / 2), height / 2)
             self.selected_rects.append(rect)
 
+    def reset_green_blocks(self, video_time_list, hourly_data):
+        self.video_time_list = video_time_list #[('2024-05-28 06:20:29', '2024-05-28 06:21:29'), ('2024-05-28 06:27:33', '2024-05-28 06:28:33'), ('2024-05-28 07:41:39', '2024-05-28 07:42:39'), ('2024-05-28 07:55:24', '2024-05-28 07:56:24')]
+        self.hourly_data = hourly_data
+        # print(self.hourly_data)
+        # 重新设置预定义的时间段
+        self.update()
+
+    def parse_time_segments(self):
+        segments = []
+        for start_str, end_str in self.video_time_list: # PySide6.QtCore.QTime(7, 55, 24, 0) PySide6.QtCore.QTime(7, 56, 24, 0)
+            start_str = start_str.split()[1] 
+            end_str = end_str.split()[1]
+            start_time = QTime.fromString(start_str, "HH:mm:ss")
+            end_time = QTime.fromString(end_str, "HH:mm:ss")
+            # print(start_time, end_time)
+            if start_time.isValid() and end_time.isValid():
+                segments.append((start_time, end_time))
+        return segments
+
 
 class DateTimeSelector(QWidget):
-    def __init__(self, main_widget):
+    def __init__(self, main_window):
         super().__init__()
-
+        self.main_window = main_window
         self.setWindowTitle("Date and Time Selector")
         self.setGeometry(100, 100, 400, 300)
+
+        # conn = sqlite3.connect('database.db')
+        conn = sqlite3.connect(self.main_window.db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT DATE(datetime) FROM raw_data")
+        dates = cursor.fetchall()
+        conn.close()
+
+        date_list = [QDate.fromString(date[0], 'yyyy-MM-dd') for date in dates]
+
+        self.video_time_list = []
 
         layout = QVBoxLayout(self)
 
         self.calendar = QCalendarWidget(self)
         self.calendar.selectionChanged.connect(self.date_changed)
 
+        format = QTextCharFormat()
+        format.setBackground(QColor('yellow'))
+
+        for single_date in date_list:
+            self.calendar.setDateTextFormat(single_date, format)
+
+        if date_list:
+            self.center_calendar_on_dates(date_list)
+
         self.date_label = QLabel("Selected Date: None", self)
 
-        self.time_selector = TimeSelectorWidget()
+        self.text_edit = QTextEdit(self)
+        self.text_edit.setPlaceholderText("Enter text here...")
+
+        # self.text_edit.append("04:37:27-05:37:34 others")
+        # self.text_edit.append("05:37:34-06:37:35 others")
+        # self.text_edit.append("06:37:35-07:37:36 others")
+        # self.text_edit.append("08:37:36-15:37:37 others")
+
+        self.begin_label = QLabel("Begin Time:", self)
+        self.begin_input = QTimeEdit(self)
+        self.begin_input.setDisplayFormat("HH:mm:ss")
+        self.begin_input.setTime(QTime.currentTime())
+
+        self.end_label = QLabel("End Time:", self)
+        self.end_input = QTimeEdit(self)
+        self.end_input.setDisplayFormat("HH:mm:ss")
+        self.end_input.setTime(QTime.currentTime())
+
+        self.ok_button = QPushButton("OK", self)
+
+        self.time_selector = TimeSelectorWidget(self.begin_input, self.end_input, self.video_time_list)
 
         layout.addWidget(self.calendar)
         layout.addWidget(self.date_label)
         layout.addWidget(self.time_selector)
+        layout.addWidget(self.text_edit)
+        layout.addWidget(self.begin_label)
+        layout.addWidget(self.begin_input)
+        layout.addWidget(self.end_label)
+        layout.addWidget(self.end_input)
+        layout.addWidget(self.ok_button)
+        self.ok_button.clicked.connect(self.ok_button_clicked)
+
+    def ok_button_clicked(self):
+        # 使用选择的日期和时间来查询数据库
+        start_time = self.begin_input.time()
+        end_time = self.end_input.time()
+        date = self.calendar.selectedDate().toString('yyyy-MM-dd')
+        start_datetime = datetime.strptime(f"{date} {start_time.toString()}", "%Y-%m-%d %H:%M:%S")
+        end_datetime = datetime.strptime(f"{date} {end_time.toString()}", "%Y-%m-%d %H:%M:%S")
+
+        # conn = sqlite3.connect('database.db')
+        conn = sqlite3.connect(self.main_window.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+        SELECT *
+        FROM raw_data
+        WHERE datetime >= ? AND datetime <= ?
+        ''', (start_datetime, end_datetime))
+
+        rows = cursor.fetchall()
+        df = pd.DataFrame(rows, columns=[desc[0] for desc in cursor.description])
+        df['index'] = df.index
+
+        self.main_window.handel_calendar_data(df)
+
+
 
     def date_changed(self):
+
         date = self.calendar.selectedDate()
+        # conn = sqlite3.connect('database.db')
+        conn = sqlite3.connect(self.main_window.db_path)
+        cursor = conn.cursor()
+        start_of_day = datetime.strptime(date.toString('yyyy-MM-dd'), '%Y-%m-%d')
+        end_of_day = start_of_day + timedelta(days=1)
+
+        # print(start_of_day) # 2024-05-28 00:00:00
+        # print(end_of_day) # 2024-05-29 00:00:00
+
+        # 查询特定日期的数据
+        cursor.execute('''
+        SELECT video_stt, video_stp FROM videos
+        WHERE video_stt >= ? AND video_stt < ?
+        ''', (start_of_day, end_of_day))
+
+        # 获取查询结果
+        results = cursor.fetchall()
+        # print(results)
+
+        # 将结果转换为包含开始和结束时间的列表
+        self.video_time_list = [(row[0], row[1]) for row in results]
+        # 创建一个字典来存储每小时的标记
+        hourly_data = {hour: {'acc': False, 'gyro': False, 'mag': False} for hour in range(24)}
+        date_str = date.toString('yyyy-MM-dd')
+        # 查询特定日期的数据
+        cursor.execute('''
+            SELECT datetime, acc_x, gyro_x, mag_x
+            FROM raw_data 
+            WHERE date(datetime) = ?
+        ''', (date_str,))
+
+        rows = cursor.fetchall()
+
+        for row in rows:
+            dt, acc_x, gyro_x, mag_x = row
+            hour = datetime.fromisoformat(dt).hour
+
+            # 标记对应的传感器数据存在
+            if acc_x is not None:
+                hourly_data[hour]['acc'] = True
+            if gyro_x is not None:
+                hourly_data[hour]['gyro'] = True
+            if mag_x is not None:
+                hourly_data[hour]['mag'] = True
+
+
+
+
+        self.time_selector.reset_green_blocks(self.video_time_list, hourly_data)
+        # 查询指定日期的labels表数据，数据有开始结束时间，标签名(stt_timestamp TEXT, stp_timestamp TEXT,label_name TEXT,)
+        cursor.execute('''
+        SELECT stt_timestamp, stp_timestamp, label_name FROM labels
+        WHERE stt_timestamp >= ? AND stt_timestamp < ?
+        ''', (start_of_day, end_of_day))
+        results = cursor.fetchall()
+
+        # 将结果转换为包含开始和结束时间的列表
+        time_list = [(row[0], row[1], row[2]) for row in results]
+
+        # 将结果添加到text_edit里
+        self.text_edit.clear()
+        # print(time_list)
+        for start_time, end_time, label in time_list:
+            start_time_str = start_time.split()[1]  # Extract time part
+            end_time_str = end_time.split()[1]  # Extract time part
+            self.text_edit.append(f"{start_time_str}-{end_time_str} {label}")
+
+        # 关闭连接
+        conn.close()
         self.date_label.setText(f"Selected Date: {date.toString()}")
+
+    def center_calendar_on_dates(self, dates):
+        min_date = min(dates)
+        max_date = max(dates)
+
+        mid_year = (min_date.year() + max_date.year()) // 2
+        mid_month = (min_date.month() + max_date.month()) // 2
+
+        self.calendar.setCurrentPage(mid_year, mid_month)
+
+
+# if __name__ == "__main__":
+#     app = QApplication(sys.argv)
+#     window = DateTimeSelector()
+#     window.show()
+#     sys.exit(app.exec())
+
+# # TODO 时间选择窗口
+# class TimeSelectorWidget(QLabel):
+#     def __init__(self):
+#         super().__init__()
+#         self.setText("Select a time range")
+#         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+#         self.setFixedSize(200, 100)  # Adjust height to accommodate two rows
+#         self.start_time = None
+#         self.end_time = None
+#         self.setStyleSheet("background-color: lightgray;")  # Set background color
+#         self.selected_rects = []
+
+#     def paintEvent(self, event):
+#         super().paintEvent(event)
+#         painter = QPainter(self)
+#         painter.setPen(Qt.black)
+#         width = self.size().width()
+#         height = self.size().height()
+        
+#         # Draw vertical lines
+#         for i in range(1, 12):
+#             x = i * (width / 12)
+#             painter.drawLine(x, 0, x, height / 2)
+#             painter.drawLine(x, height / 2, x, height)
+        
+#         # Draw middle line
+#         painter.drawLine(0, height / 2, width, height / 2)
+
+#         # Draw selected rectangles in semi-transparent blue
+#         painter.setBrush(QColor(0, 0, 255, 128))  # RGBA for semi-transparent blue
+#         painter.setPen(Qt.NoPen)  # No outline for rectangles
+#         for rect in self.selected_rects:
+#             painter.drawRect(rect)
+
+#     def mousePressEvent(self, event: QMouseEvent):
+#         if event.button() == Qt.MouseButton.LeftButton:
+#             self.start_time = self.map_time(event.pos())
+#             self.setText(f"Start: {self.start_time.toString()}")
+
+#     def mouseReleaseEvent(self, event: QMouseEvent):
+#         if event.button() == Qt.MouseButton.LeftButton and self.start_time:
+#             self.end_time = self.map_time(event.pos())
+#             self.setText(f"From {self.start_time.toString()} to {self.end_time.toString()}")
+#             self.update_selected_rects()
+#             self.update()
+
+#     def map_time(self, pos):
+#         width = self.size().width()
+#         height = self.size().height()
+#         hours = 24
+#         total_minutes = hours * 60
+#         if pos.y() < height / 2:
+#             minute = (pos.x() / width) * (total_minutes / 2)
+#         else:
+#             minute = (pos.x() / width) * (total_minutes / 2) + (total_minutes / 2)
+#         return QTime(int(minute // 60), int(minute % 60))
+
+#     def update_selected_rects(self):
+#         width = self.size().width()
+#         height = self.size().height()
+#         hours = 24
+#         total_minutes = hours * 60
+#         start_minute = self.start_time.hour() * 60 + self.start_time.minute()
+#         end_minute = self.end_time.hour() * 60 + self.end_time.minute()
+#         self.selected_rects.clear()
+
+#         for minute in range(start_minute, end_minute + 1):
+#             x = (minute % (total_minutes / 2)) / (total_minutes / 2) * width
+#             y = 0 if minute < (total_minutes / 2) else height / 2
+#             rect = QRectF(x, y, width / (total_minutes / 2), height / 2)
+#             self.selected_rects.append(rect)
+
+
+# class DateTimeSelector(QWidget):
+#     def __init__(self, main_widget):
+#         super().__init__()
+
+#         self.setWindowTitle("Date and Time Selector")
+#         self.setGeometry(100, 100, 400, 300)
+
+#         layout = QVBoxLayout(self)
+
+#         self.calendar = QCalendarWidget(self)
+#         self.calendar.selectionChanged.connect(self.date_changed)
+
+#         self.date_label = QLabel("Selected Date: None", self)
+
+#         self.time_selector = TimeSelectorWidget()
+
+#         layout.addWidget(self.calendar)
+#         layout.addWidget(self.date_label)
+#         layout.addWidget(self.time_selector)
+
+#     def date_changed(self):
+#         date = self.calendar.selectedDate()
+#         self.date_label.setText(f"Selected Date: {date.toString()}")
 
 
 class VideoProcessor(QThread):
@@ -509,9 +849,10 @@ class HandleComputeWorker(QObject):
     finished = Signal(object)
     stopped = Signal()
 
-    def __init__(self, root, RawDataName, cfg, dataChanged, sensor_dict, column_names, data_length, model_path, model_name):
+    def __init__(self, root, data, RawDataName, cfg, dataChanged, sensor_dict, column_names, data_length, model_path, model_name):
         super().__init__()
         self.root = root
+        self.data = data
         self.RawDataName = RawDataName
         self.cfg = cfg
         self.dataChanged = dataChanged
@@ -526,10 +867,12 @@ class HandleComputeWorker(QObject):
     def run(self):
 
         # 获取combobox的内容
-        self.data, self.dataChanged = get_data_from_pkl(self.RawDataName, self.cfg, self.dataChanged)
-        self.dataChangedSignal.emit(self.data)
+        # self.data, self.dataChanged = get_data_from_pkl(self.RawDataName, self.cfg, self.dataChanged)
+        # self.dataChangedSignal.emit(self.data)
 
         new_column_names = find_data_columns(self.sensor_dict, self.column_names)
+        
+        self.data['datetime'] = pd.to_datetime(self.data['datetime'])
 
         # 将数据切割成片段以获取潜在特征和索引
         start_indice, end_indice, pos = featureExtraction(self.root,
@@ -1112,6 +1455,8 @@ class LabelWithInteractivePlot(QWidget):
         root_cfg = read_config(root.config)
         # 保存标签字典
         self.label_dict = root_cfg['label_dict']
+
+
         # 初始化最后修改的点
         self.last_modified_points = []
         # 预定义颜色数组
@@ -1137,6 +1482,9 @@ class LabelWithInteractivePlot(QWidget):
         self.data = pd.DataFrame()
         # 配置
         self.cfg = cfg
+
+        self.db_path = os.path.join(self.cfg["project_path"], get_db_folder(), "database.db")
+        self.video_path = os.path.join(self.cfg["project_path"], "videos")
 
         # 模型参数
         self.model_path_list = None
@@ -1809,17 +2157,59 @@ class LabelWithInteractivePlot(QWidget):
             self.video_label.setPixmap(scaled_pixmap)
             self.video_label.setScaledContents(True)
 
+
+
     def jump_to_timestamp(self, index):
         try:
-            if self.cap is None:
-                return
-            # self.offset = float(self.timestamp_input.text())
+            if self.cap is not None:
+                self.cap.release()
+                self.cap = None
+
             self.offset = self.timestamp_input.value()
-            unixtime = self.data.loc[index, 'unixtime']
-            timestamp = unixtime - self.min_time
-            # timestamp = float(self.timestamp_input.text())
+            datetime_org = self.data.loc[index, 'datetime'] # 2018-08-27 21:19:23.880000
+            # print(type(unixtime))
+            datetime_str = datetime_org.strftime('%Y-%m-%d %H:%M:%S.%f')
+            
+            
+            # Connect to the database
+            # conn = sqlite3.connect('database.db')
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            # Query the database for the video information
+            cursor.execute('''
+                SELECT animal_tag, video_stt, video_stp, framerate, frame_count, video_id
+                FROM videos
+                WHERE ? BETWEEN video_stt AND video_stp
+            ''', (datetime_str,))
+            video_info = cursor.fetchone()
+
+            if video_info is None:
+                print("No video found for the specified timestamp.")
+                return
+
+            animal_tag, video_stt, video_stp, framerate, frame_count, video_id = video_info
+
+            video_name = generate_filename(video_id)
+            # Construct the video file path
+            # video_path = f"{animal_tag}/{video_name}"
+            animal_tag = animal_tag.replace('.csv', '')
+
+            video_path = os.path.join(self.video_path, animal_tag, video_name)
+
+
+            # Open the video
+            self.cap = cv2.VideoCapture(video_path)
+
+            # Convert video_stt to datetime object
+            video_stt = datetime.strptime(video_stt, '%Y-%m-%d %H:%M:%S')
+            
+            # Calculate the timestamp offset from the video start time
+            timestamp_offset = (datetime_org - video_stt).total_seconds()
+
+            # Calculate the frame number to jump to
             fps = self.cap.get(cv2.CAP_PROP_FPS)
-            frame_number = int(fps * (timestamp + self.offset))
+            frame_number = int(fps * (timestamp_offset + self.offset))
 
             # Get total frame count
             total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -1835,12 +2225,51 @@ class LabelWithInteractivePlot(QWidget):
             total_duration_str = self.format_time(total_duration)
 
             self.video_time_label.setText(f"{current_time_str} / {total_duration_str}")
-            # # Print current and total time
-            # print(f"当前时间: {current_time:.2f} 秒 / 总时间: {total_duration:.2f} 秒")
-            
+
+            # Display the frame
             self.display_frame(frame_number)
+
+            conn.close()
         except ValueError:
-            print("Please enter a valid timestamp.")       
+            print("Please enter a valid timestamp.")
+        except Exception as e:
+            print(f"An error occurred: {e}")
+
+    # def jump_to_timestamp(self, index):
+    #     try:
+    #         if self.cap is None:
+    #             return
+    #         # self.offset = float(self.timestamp_input.text())
+    #         self.offset = self.timestamp_input.value()
+    #         unixtime = self.data.loc[index, 'unixtime']
+            
+    #         # TODO 用指定时间戳去查数据库，得到对应视频名，然后打开视频根据时间戳减去视频开始时间，然后跳转到对应帧
+
+    #         timestamp = unixtime - self.min_time
+    #         # timestamp = float(self.timestamp_input.text())
+    #         fps = self.cap.get(cv2.CAP_PROP_FPS)
+    #         frame_number = int(fps * (timestamp + self.offset))
+
+    #         # Get total frame count
+    #         total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    #         # Calculate total duration
+    #         total_duration = total_frames / fps
+
+    #         # Get current time in seconds
+    #         current_time = frame_number / fps
+
+    #         # Format the times
+    #         current_time_str = self.format_time(current_time)
+    #         total_duration_str = self.format_time(total_duration)
+
+    #         self.video_time_label.setText(f"{current_time_str} / {total_duration_str}")
+    #         # # Print current and total time
+    #         # print(f"当前时间: {current_time:.2f} 秒 / 总时间: {total_duration:.2f} 秒")
+            
+    #         self.display_frame(frame_number)
+    #     except ValueError:
+    #         print("Please enter a valid timestamp.")       
 
 
     # def update_video(self, video_path):
@@ -1886,11 +2315,11 @@ class LabelWithInteractivePlot(QWidget):
         # 创建原始数据组合框和标签
         RawDataComboBoxLabel, RawDatacomboBox = self.createRawDataComboBox()
         # self.first_row_layout.addLayout(RawDataComboBoxLabel, alignment=Qt.AlignLeft)
-        self.first_row_layout.addWidget(RawDataComboBoxLabel, alignment=Qt.AlignLeft)
-        self.first_row_layout.addWidget(RawDatacomboBox, alignment=Qt.AlignLeft)
+        # self.first_row_layout.addWidget(RawDataComboBoxLabel, alignment=Qt.AlignLeft)
+        # self.first_row_layout.addWidget(RawDatacomboBox, alignment=Qt.AlignLeft)
 
         featureExtractBtn = self.createFeatureExtractButton()
-        self.first_row_layout.addWidget(featureExtractBtn, alignment=Qt.AlignRight)
+        # self.first_row_layout.addWidget(featureExtractBtn, alignment=Qt.AlignRight)
         # self.second_row1_layout = QHBoxLayout()
         # self.first_row_layout.addLayout(self.second_row1_layout)
         # self.second_row1_layout.addWidget(RawDataComboBoxLabel, alignment=Qt.AlignLeft)
@@ -2365,6 +2794,15 @@ class LabelWithInteractivePlot(QWidget):
 
         self.updateBtn()
 
+
+    def handel_calendar_data(self, data):
+        self.data = data
+        self.dataChanged.emit(self.data)
+        metadatas = find_charts_data_columns(self.sensor_dict, self.column_names)
+        self.backend.displayData(self.data, metadatas, self.label_colors)
+        self.backend_map.displayMapData(self.data)
+        self.start_handle_compute()
+
     def start_handle_compute(self):
         # 打印开始训练
         print('start training...')
@@ -2377,7 +2815,7 @@ class LabelWithInteractivePlot(QWidget):
         self.renderColumnList()
 
         self.handle_compute_thread = QThread()
-        self.handle_compute_worker = HandleComputeWorker(self.root, self.RawDatacomboBox.currentText(), self.cfg, self.dataChanged, self.sensor_dict, self.column_names, self.data_length, self.model_path, self.model_name)
+        self.handle_compute_worker = HandleComputeWorker(self.root, self.data, self.RawDatacomboBox.currentText(), self.cfg, self.dataChanged, self.sensor_dict, self.column_names, self.data_length, self.model_path, self.model_name)
         self.handle_compute_worker.moveToThread(self.handle_compute_thread)
         self.handle_compute_thread.started.connect(self.handle_compute_worker.run)
         self.handle_compute_worker.finished.connect(self.handle_compute_finished)
@@ -2766,12 +3204,14 @@ class LabelWithInteractivePlot(QWidget):
                 return i
         return None  # 如果没有找到合适的范围
 
+    # TODO 点击过快可能报错    self._plot.updateSpots(self._data.reshape(1)) AttributeError: 'NoneType' object has no attribute 'updateSpots'
     def handle_highlight_scatter_dot_by_index(self, index):
         self.jump_to_timestamp(index)
         indice = self.find_i_by_indice(index, self.start_indice, self.end_indice)
-        for p, original_size, original_brush in self.last_modified_points:
-            p.setSize(original_size)
-            p.setBrush(original_brush)
+        if self.last_modified_points:
+            for p, original_size, original_brush in self.last_modified_points:
+                p.setSize(original_size)
+                p.setBrush(original_brush)
             
         self.last_modified_points = []  # Clear the list
         if indice is not None:

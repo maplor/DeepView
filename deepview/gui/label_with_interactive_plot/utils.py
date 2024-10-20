@@ -37,7 +37,12 @@ def get_data_from_pkl(filename, cfg, dataChanged=[]):
         dataChanged.emit(data)
     return data, dataChanged
 
-
+def generate_filename(number):
+    # 将数字转换为字符串，并填充到四位数，不足的补零
+    number_str = str(number).zfill(4)
+    # 组合成所需的格式
+    filename = f"PBOT{number_str}.avi"
+    return filename
 
 def featureExtraction(root, data, data_length, column_names, model_path, model_name):
     # 特征提取：找到数据帧中的列名
