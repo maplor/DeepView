@@ -15,7 +15,7 @@ import yaml
 import glob
 import pickle
 from datetime import datetime
-
+import sqlite3
 from deepview.clustering_pytorch import training
 # from deeplabcut.utils import (
 #     auxiliaryfunctions,
@@ -300,6 +300,66 @@ def preprocess_datasets(root, progress_update, cfg, allsetfolder, sample_rate):
                 #     data = pickle.load(f)
             else:
                 data = read_process_csv(root, file, sample_rate)  # return dataframe
+                db_path = os.path.join(cfg["project_path"], "db", "database.db")
+                conn = sqlite3.connect(db_path)
+                cursor = conn.cursor()
+                conn.execute('BEGIN TRANSACTION')
+                try:
+                    # 选择需要的列
+                    columns = [
+                        'logger_id', 'animal_tag', 'datetime', 'timestamp', 'unixtime', 'latitude', 'longitude',
+                        'acc_x', 'acc_y', 'acc_z', 'gyro_x', 'gyro_y', 'gyro_z', 
+                        'mag_x', 'mag_y', 'mag_z', 'illumination', 'pressure', 'GPS_velocity', 
+                        'GPS_bearing', 'temperature', 'label_id', 'label', 'label_flag'
+                    ]
+                    data = data[columns]
+                    # 填充缺失值
+                    data.fillna({
+                        'logger_id': 'default_logger_id',
+                        'animal_tag': 'default_animal_tag',
+                        'datetime': '1970-01-01 00:00:00.000',
+                        'timestamp': 'default_timestamp',
+                        'unixtime': 0,
+                        'latitude': 0.0,
+                        'longitude': 0.0,
+                        'acc_x': 0.0,
+                        'acc_y': 0.0,
+                        'acc_z': 0.0,
+                        'gyro_x': 0.0,
+                        'gyro_y': 0.0,
+                        'gyro_z': 0.0,
+                        'mag_x': 0.0,
+                        'mag_y': 0.0,
+                        'mag_z': 0.0,
+                        'illumination': 0.0,
+                        'pressure': 0.0,
+                        'GPS_velocity': 0.0,
+                        'GPS_bearing': 0.0,
+                        'temperature': 0.0,
+                        'label_id': 0,
+                        'label': 'default_label',
+                        'label_flag': 0
+                    }, inplace=True)
+
+                    # 格式化 datetime 列
+                    data['datetime'] = pd.to_datetime(data['datetime']).dt.strftime('%Y-%m-%d %H:%M:%S.%f').str[:-3]
+                    # 转换为数组
+                    data = data.to_records(index=False)
+                    cursor.executemany('''
+                    INSERT INTO raw_data (
+                        logger_id, animal_tag, datetime, timestamp, unixtime, latitude, longitude,
+                        acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z, mag_x, mag_y, mag_z,
+                        illumination, pressure, GPS_velocity, GPS_bearing, temperature,
+                        label_id, label, label_flag
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', data)
+                    # 提交事务
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    print(f"错误: {e}")
+                conn.close()
+
                 with open(file_path, 'wb') as f:
                     pickle.dump(data, f)
             # conversioncode.guarantee_multiindex_rows(data)
