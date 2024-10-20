@@ -39,11 +39,16 @@ class LabelWithInteractivePlotTab(DefaultWebTab):
     def update_theme(self, theme):
         if not self.is_initialized:
             return
+
+        from deepview.gui.label_with_interactive_plot.styles import combobox_style_light, combobox_style_dark
+
         if theme == 'dark':
             self.web_view.page().runJavaScript("updateTheme('dark');")
             self.web_view_map.page().runJavaScript("updateMapTheme('dark');")
             # 设置前景颜色为黑色
             self.label_with_interactive_plot.viewC.setBackground('k')
+            self.label_with_interactive_plot.label_combobox.setStyleSheet(combobox_style_dark)
+
 
         else:
             self.web_view.page().runJavaScript("updateTheme('light');")
@@ -51,6 +56,7 @@ class LabelWithInteractivePlotTab(DefaultWebTab):
 
             # 设置前景颜色为白色
             self.label_with_interactive_plot.viewC.setBackground('w')
+            self.label_with_interactive_plot.label_combobox.setStyleSheet(combobox_style_light)
 
 
 
