@@ -2,6 +2,7 @@
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
+from datetime import datetime
 
 label_str2num = {}
 # label_str2num['stationary'] = 100
@@ -137,6 +138,11 @@ def run_resampling_and_concat_df(df_list,
     if acc_sampling_rate != INTERMEDIATE_SAMPLING_RATE:
         if len(df_list) > 1:
             for i in range(0, len(df_list)):
+                # 先把timestamp保存下来
+                save_t = df_list[i].timestamp.values
+                # delete timestamp
+                df_list[i] = df_list[i].drop('timestamp', axis=1)
+
                 # If the data frame contains more than one minute of recordings,
                 # use the data frame, otherwise, discard it.
                 if len(df_list[i]) > (acc_sampling_rate * 60):
@@ -150,6 +156,14 @@ def run_resampling_and_concat_df(df_list,
                         intermediate_sampling_rate=INTERMEDIATE_SAMPLING_RATE,
                         output_sampling_rate=OUTPUT_SAMPLIGN_RATE
                     )
+
+                    # 如果采样频率没变化，用之前的timestamp，有变化就重新datetime转一次
+                    if len(df_resampled) == len(save_t):
+                        df_resampled['timestamp'] = save_t
+                    else:
+                        df_resampled['timestamp'] = df_resampled['datetime'].apply(
+                    lambda x:datetime.utcfromtimestamp(float(x/1000000000.0)).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]+'Z')
+
                     df_concat = pd.concat([df_concat, df_resampled])
                     if check_df == True:
                         print("Length of current df: ", len(df_resampled))
@@ -161,12 +175,26 @@ def run_resampling_and_concat_df(df_list,
             # remove the first several seconds (remove_sec)
             df_list[0] = df_list[0][start_index:]
             df_list[0].reset_index(inplace=True)
+
+            # 先把timestamp保存下来
+            save_t = df_list[0].timestamp.values
+            # delete timestamp
+            df_list[0] = df_list[0].drop('timestamp', axis=1)
+
             # if check_df == True:
             #     display(df_list[0].head(5))
             df_resampled = resampling(
                 df=df_list[0],
                 intermediate_sampling_rate=INTERMEDIATE_SAMPLING_RATE,
                 output_sampling_rate=OUTPUT_SAMPLIGN_RATE)
+
+            # 如果采样频率没变化，用之前的timestamp，有变化就重新datetime转一次
+            if len(df_resampled) == len(save_t):
+                df_resampled['timestamp'] = save_t
+            else:
+                # 原始数据时间戳19位，转为秒级浮点数
+                df_resampled['timestamp'] = df_resampled['datetime'].apply(
+                    lambda x:datetime.utcfromtimestamp(float(x/1000000000.0)).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]+'Z')
             df_concat = pd.concat([df_concat, df_resampled])
 
     elif acc_sampling_rate == INTERMEDIATE_SAMPLING_RATE:

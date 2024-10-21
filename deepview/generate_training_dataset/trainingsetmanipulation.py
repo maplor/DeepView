@@ -240,7 +240,9 @@ def read_process_csv(root, file, sample_rate=25):
     # fulfill nan values
     df = df.bfill().ffill()
 
-    df = format_timestamp(df)
+    df = format_timestamp(df)  # 在这里timestamp字符串生成datetime和unixtime
+
+
     # calculate sampling rate, the input is timestamp
     INTERMEDIATE_SAMPLING_RATE = int(1/np.mean(np.diff(df['unixtime'].values)))
     if INTERMEDIATE_SAMPLING_RATE == 0:  # if the sampling rate is the same, should be 1
