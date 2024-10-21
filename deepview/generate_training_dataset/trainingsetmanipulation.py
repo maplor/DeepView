@@ -285,21 +285,24 @@ def preprocess_datasets(root, progress_update, cfg, allsetfolder, sample_rate):
     # read data
     # AnnotationData = []
     for idx, file in enumerate(sorted_filenames):
-        progress_update.emit(int((idx +1 ) /filenum * 100))
+        progress_update.emit(int((idx+1) / filenum * 100))
 
         parent, filename, _ = _robust_path_split(file)
         file_path = os.path.join(
-            allsetfolder, filename + f'_%sHz.pkl ' %sample_rate
+            allsetfolder, filename + f'_%sHz.pkl ' % sample_rate
             # allsetfolder, filename+f'_{cfg["scorer"]}.pkl'
         )
         # reading raw data here...
+        # TODO 这里有个bug，当sampling rate变化时，不会触发重新处理数据的bug
         try:
             if os.path.isfile(file_path):
-                print('Raw sensor data already exists at %s ' %file_path)
+                print('Raw sensor data already exists at %s ' % file_path)
                 # with open(file_path, 'rb') as f:
                 #     data = pickle.load(f)
             else:
                 data = read_process_csv(root, file, sample_rate)  # return dataframe
+                with open(file_path, 'wb') as f:
+                    pickle.dump(data, f)
                 db_path = os.path.join(cfg["project_path"], "db", "database.db")
                 conn = sqlite3.connect(db_path)
                 cursor = conn.cursor()
@@ -341,8 +344,13 @@ def preprocess_datasets(root, progress_update, cfg, allsetfolder, sample_rate):
                         'label_flag': 0
                     }, inplace=True)
 
+                    # # 填充timestamp列
+                    # data.loc[data['timestamp'] == 'default_timestamp', 'timestamp'] = data['datetime'].apply(
+                    #     lambda x: x.replace(' ', 'T') + 'Z')
+
                     # 格式化 datetime 列
                     data['datetime'] = pd.to_datetime(data['datetime']).dt.strftime('%Y-%m-%d %H:%M:%S.%f').str[:-3]
+
                     # 转换为数组
                     data = data.to_records(index=False)
                     cursor.executemany('''
@@ -360,8 +368,8 @@ def preprocess_datasets(root, progress_update, cfg, allsetfolder, sample_rate):
                     print(f"错误: {e}")
                 conn.close()
 
-                with open(file_path, 'wb') as f:
-                    pickle.dump(data, f)
+                # with open(file_path, 'wb') as f:
+                #     pickle.dump(data, f)
             # conversioncode.guarantee_multiindex_rows(data)
             # AnnotationData.append(data)
         except FileNotFoundError:
