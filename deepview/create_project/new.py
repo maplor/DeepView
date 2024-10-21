@@ -318,7 +318,8 @@ def create_new_project(
                     stp_timestamp TEXT,
                 activity TEXT,
                     location TEXT,
-                    notes TEXT
+                    notes TEXT,
+                    label_name TEXT
                     )''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS videos (

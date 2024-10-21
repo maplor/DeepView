@@ -51,7 +51,7 @@ def featureExtraction(root, data, data_length, column_names, model_path, model_n
     # new_column_names = find_data_columns(sensor_dict, column_names)
 
     segments, start_indices = split_dataframe(data, data_length)
-    end_indices = [i + data_length for i in start_indices]
+    end_indices = [i + data_length - 1 for i in start_indices]  # last index = len - 1
 
 
     train_loader = prepare_unsup_dataset(segments, column_names)
