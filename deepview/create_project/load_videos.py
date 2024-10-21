@@ -5,11 +5,11 @@ from datetime import datetime
 
 # Load the CSV file to inspect its contents
 # file_path = "/Users/cassie/Downloads/LB11.csv"
-file_path = r"C:\Users\dell\Desktop\xia-umineko-2024-10-21\videos\LB10.csv"
+file_path = r"C:\Users\dell\Desktop\a-aa-2024-10-22\videos\LB10.csv"
 # file_path = r"C:\Users\dell\Desktop\xia-video-2024-10-21\videos\LB12.csv"
 # file_path = r"C:\Users\user\Documents\WeChat Files\wxid_mi05poeuk7a022\FileStorage\File\2024-09\xia-san-video-sample\umineko\LB12.csv"
 
-sqlite3_path = r"C:\Users\dell\Desktop\xia-umineko-2024-10-21\db\database.db"
+sqlite3_path = r"C:\Users\dell\Desktop\a-aa-2024-10-22\db\database.db"
 conn = sqlite3.connect(sqlite3_path)
 # conn = sqlite3.connect('database.db')
 cursor = conn.cursor()
