@@ -117,6 +117,10 @@ class LabelWithInteractivePlotTab(DefaultWebTab):
         # 在这里调用init文件
         self.main_layout.addWidget(self.label_with_interactive_plot)
 
+    def closeEvent(self, event):
+        if self.label_with_interactive_plot and self.label_with_interactive_plot.calendar:
+            self.label_with_interactive_plot.calendar.close()
+        super().closeEvent(event)
 
 def get_plot_data(config):
     """

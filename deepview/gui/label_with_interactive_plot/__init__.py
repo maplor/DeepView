@@ -319,6 +319,9 @@ class DateTimeSelector(QWidget):
 
         rows = cursor.fetchall()
         df = pd.DataFrame(rows, columns=[desc[0] for desc in cursor.description])
+        # Convert label_flag to integer if it exists
+        if 'label_flag' in df.columns:
+            df['label_flag'] = df['label_flag'].fillna(0).astype(int)
         df['index'] = df.index
 
         self.main_window.handel_calendar_data(df)
@@ -408,109 +411,9 @@ class DateTimeSelector(QWidget):
 
         self.calendar.setCurrentPage(mid_year, mid_month)
 
-
-# if __name__ == "__main__":
-#     app = QApplication(sys.argv)
-#     window = DateTimeSelector()
-#     window.show()
-#     sys.exit(app.exec())
-
-# # TODO 时间选择窗口
-# class TimeSelectorWidget(QLabel):
-#     def __init__(self):
-#         super().__init__()
-#         self.setText("Select a time range")
-#         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-#         self.setFixedSize(200, 100)  # Adjust height to accommodate two rows
-#         self.start_time = None
-#         self.end_time = None
-#         self.setStyleSheet("background-color: lightgray;")  # Set background color
-#         self.selected_rects = []
-
-#     def paintEvent(self, event):
-#         super().paintEvent(event)
-#         painter = QPainter(self)
-#         painter.setPen(Qt.black)
-#         width = self.size().width()
-#         height = self.size().height()
-        
-#         # Draw vertical lines
-#         for i in range(1, 12):
-#             x = i * (width / 12)
-#             painter.drawLine(x, 0, x, height / 2)
-#             painter.drawLine(x, height / 2, x, height)
-        
-#         # Draw middle line
-#         painter.drawLine(0, height / 2, width, height / 2)
-
-#         # Draw selected rectangles in semi-transparent blue
-#         painter.setBrush(QColor(0, 0, 255, 128))  # RGBA for semi-transparent blue
-#         painter.setPen(Qt.NoPen)  # No outline for rectangles
-#         for rect in self.selected_rects:
-#             painter.drawRect(rect)
-
-#     def mousePressEvent(self, event: QMouseEvent):
-#         if event.button() == Qt.MouseButton.LeftButton:
-#             self.start_time = self.map_time(event.pos())
-#             self.setText(f"Start: {self.start_time.toString()}")
-
-#     def mouseReleaseEvent(self, event: QMouseEvent):
-#         if event.button() == Qt.MouseButton.LeftButton and self.start_time:
-#             self.end_time = self.map_time(event.pos())
-#             self.setText(f"From {self.start_time.toString()} to {self.end_time.toString()}")
-#             self.update_selected_rects()
-#             self.update()
-
-#     def map_time(self, pos):
-#         width = self.size().width()
-#         height = self.size().height()
-#         hours = 24
-#         total_minutes = hours * 60
-#         if pos.y() < height / 2:
-#             minute = (pos.x() / width) * (total_minutes / 2)
-#         else:
-#             minute = (pos.x() / width) * (total_minutes / 2) + (total_minutes / 2)
-#         return QTime(int(minute // 60), int(minute % 60))
-
-#     def update_selected_rects(self):
-#         width = self.size().width()
-#         height = self.size().height()
-#         hours = 24
-#         total_minutes = hours * 60
-#         start_minute = self.start_time.hour() * 60 + self.start_time.minute()
-#         end_minute = self.end_time.hour() * 60 + self.end_time.minute()
-#         self.selected_rects.clear()
-
-#         for minute in range(start_minute, end_minute + 1):
-#             x = (minute % (total_minutes / 2)) / (total_minutes / 2) * width
-#             y = 0 if minute < (total_minutes / 2) else height / 2
-#             rect = QRectF(x, y, width / (total_minutes / 2), height / 2)
-#             self.selected_rects.append(rect)
-
-
-# class DateTimeSelector(QWidget):
-#     def __init__(self, main_widget):
-#         super().__init__()
-
-#         self.setWindowTitle("Date and Time Selector")
-#         self.setGeometry(100, 100, 400, 300)
-
-#         layout = QVBoxLayout(self)
-
-#         self.calendar = QCalendarWidget(self)
-#         self.calendar.selectionChanged.connect(self.date_changed)
-
-#         self.date_label = QLabel("Selected Date: None", self)
-
-#         self.time_selector = TimeSelectorWidget()
-
-#         layout.addWidget(self.calendar)
-#         layout.addWidget(self.date_label)
-#         layout.addWidget(self.time_selector)
-
-#     def date_changed(self):
-#         date = self.calendar.selectedDate()
-#         self.date_label.setText(f"Selected Date: {date.toString()}")
+    def closeEvent(self, event):
+        # 在关闭前执行任何清理操作
+        super().closeEvent(event)
 
 
 class VideoProcessor(QThread):
@@ -2368,6 +2271,13 @@ class LabelWithInteractivePlot(QWidget):
     def open_calendar(self):
         self.calendar = DateTimeSelector(self)
         self.calendar.show()
+
+
+    # TODO 全部的closeEvent都没生效，需要找这个项目的closeEvent方法
+    def closeEvent(self, event):
+        if self.calendar:
+            self.calendar.close()
+        super().closeEvent(event)
 
 
     def display_colors(self, colors):

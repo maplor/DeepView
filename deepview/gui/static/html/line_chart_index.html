@@ -54,12 +54,15 @@
         }
 
         .chart-box:first-child {
-            /* height: 150px; */
+            position: sticky;
+            top: 0px;
             height: 80px;
             min-height: 50px;
             /* 设置最小高度 */
             /* 固定高度 */
             flex: 0 0 auto;
+            /* 显示在第一位 */
+            z-index: 100;
             /* 固定大小，不参与均分 */
         }
 
@@ -653,6 +656,20 @@
                             animation: false
                         },
                         series: series,
+                        // 需要添加标签名字的话取消注释
+                        // markArea: {
+                        //     data: [],
+                        //     label: {
+                        //         show: true, // 显示标签
+                        //         position: 'inside', // 标签位置为区域内部
+                        //         // position: [10, 10], // 自定义位置（相对于区域左上角的偏移）
+                        //         color: '#000', // 标签颜色
+                        //         fontSize: 14, // 标签字体大小
+                        //         formatter: function (params) {
+                        //             return params.name; // 使用区域的名称作为标签内容
+                        //         }
+                        //     }
+                        // },
                         graphic: [],
                         dataZoom: [
                             {
@@ -690,7 +707,7 @@
 
                     // 如果是最后一个图表，添加 dataZoom 配置
                     if (index === chartsData.length - 1) {
-                        
+
                         option.grid = {
                             top: 10
                         };
@@ -894,8 +911,26 @@
                                     // selectedOption.series[0].markArea.data = markData;
                                     if (findDatastatus) {
                                         selectedOption.series[0].markArea.data = otherMarkData;
+                                        charts.forEach((chart) => {
+                                            chart.setOption({
+                                                series: [{
+                                                    markArea: {
+                                                        data: otherMarkData
+                                                    }
+                                                }]
+                                            });
+                                        });
                                     } else {
                                         selectedOption.series[0].markArea.data = markData;
+                                        charts.forEach((chart) => {
+                                            chart.setOption({
+                                                series: [{
+                                                    markArea: {
+                                                        data: markData
+                                                    }
+                                                }]
+                                            });
+                                        });
                                     }
 
                                     charts[0].setOption(selectedOption);
@@ -1095,6 +1130,28 @@
                                 selectedOption.series[0].markArea.data = markData;
                             }
                             charts[0].setOption(selectedOption);
+                            // 遍历charts，给每个图表添加markArea
+                            if (findDatastatus) {
+                                charts.forEach((chart) => {
+                                    chart.setOption({
+                                        series: [{
+                                            markArea: {
+                                                data: otherMarkData
+                                            }
+                                        }]
+                                    });
+                                });
+                            } else {
+                                charts.forEach((chart) => {
+                                    chart.setOption({
+                                        series: [{
+                                            markArea: {
+                                                data: markData
+                                            }
+                                        }]
+                                    });
+                                });
+                            }
                         }
                     });
                 } else {
@@ -1109,8 +1166,26 @@
 
                 if (findDatastatus) {
                     selectedOption.series[0].markArea.data = otherMarkData;
+                    charts.forEach((chart) => {
+                        chart.setOption({
+                            series: [{
+                                markArea: {
+                                    data: otherMarkData
+                                }
+                            }]
+                        });
+                    });
                 } else {
                     selectedOption.series[0].markArea.data = markData;
+                    charts.forEach((chart) => {
+                        chart.setOption({
+                            series: [{
+                                markArea: {
+                                    data: markData
+                                }
+                            }]
+                        });
+                    });
                 }
 
                 charts[0].setOption(selectedOption);
@@ -1261,7 +1336,7 @@
             //         initialize();
             //     }
             // }
-       
+
 
             clearBoxes().then(() => {
                 initialize();
@@ -1426,8 +1501,9 @@
             }
         }
 
-        
-        // displayData(test_data);        
+        // 快速调试使用
+        // displayData(test_data);    
+
         window.addEventListener('resize', resizeCharts);
 
 

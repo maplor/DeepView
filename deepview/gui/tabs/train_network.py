@@ -390,6 +390,9 @@ class TrainNetwork(DefaultTab):
         for i, cb in enumerate(self.display_column_cb_list):
             if cb.isChecked():
                 newSelectColumn.append(cb.text())
+        if len(newSelectColumn) == 0:
+            self.show_message("please select sensor data to train.")
+            return
         data_columns = transfer_sensor2columns(newSelectColumn, self.sensor_dict)
 
 
