@@ -2213,9 +2213,12 @@ class LabelWithInteractivePlot(QWidget):
         # self.first_row1_layout.addWidget(modelComboBox, alignment=Qt.AlignLeft)
         self.first_row_layout.addWidget(modelComboBoxLabel, alignment=Qt.AlignLeft)
         self.first_row_layout.addWidget(modelComboBox, alignment=Qt.AlignLeft)
+        self.first_row_layout.addStretch()  # 添加一个伸缩因子来填充剩余空间
         self.refresh_btn = QPushButton('Refresh')
         self.refresh_btn.setStyleSheet(self.button_style)
         self.refresh_btn.clicked.connect(self.handleRefresh)
+
+        self.first_row_layout.addWidget(self.refresh_btn, alignment=Qt.AlignLeft)
 
         # self.first_row1_layout.addWidget(self.refresh_btn, alignment=Qt.AlignLeft)
         # self.first_row1_layout.addStretch()  # 添加一个伸缩因子来填充剩余空间
