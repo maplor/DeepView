@@ -382,7 +382,12 @@ class DateTimeSelector(QWidget):
         self.add_video_thread = VideoDataHandlerThread(self)
         self.add_video_thread.error_signal.connect(self.handle_error)
         self.add_video_thread.success_signal.connect(self.handle_success)
+        self.add_video_thread.finished.connect(self.thread_finished)
         self.add_video_thread.start()
+
+    def thread_finished(self):
+        self.date_changed()
+        
 
     def handle_error(self, message):
         print(message)
