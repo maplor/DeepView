@@ -37,7 +37,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QMouseEvent, QStandardItemModel, QStandardItem, QColor, QPainter
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QComboBox, QHBoxLayout, QPushButton, QMessageBox, QInputDialog
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QComboBox, QHBoxLayout, QPushButton, QMessageBox, \
+    QInputDialog
 
 from PySide6.QtGui import QImage, QPixmap
 from datetime import datetime, timedelta
@@ -49,7 +50,7 @@ import sqlite3
 from PySide6.QtCore import QDate
 from PySide6.QtGui import QTextCharFormat
 from PySide6.QtWidgets import QTextEdit, QTimeEdit, QPushButton
-
+import re
 
 # 从deepview.utils.auxiliaryfunctions导入多个函数
 from deepview.utils.auxiliaryfunctions import (
@@ -70,11 +71,8 @@ from deepview.gui.label_with_interactive_plot.utils import (
 )
 
 from deepview.gui.label_with_interactive_plot.styles import combobox_style_light, combobox_style_dark
-
-
-# 创建一个蓝色的pg.mkPen对象，宽度为2
-clickedPen = pg.mkPen('b', width=2)
-
+import glob
+import shutil
 
 
 class ClickableLabel(QLabel):
@@ -83,9 +81,6 @@ class ClickableLabel(QLabel):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.clicked.emit()
-
-
-
 
 
 class TimeSelectorWidget(QLabel):
@@ -214,7 +209,7 @@ class TimeSelectorWidget(QLabel):
             self.selected_rects.append(rect)
 
     def reset_green_blocks(self, video_time_list, hourly_data):
-        self.video_time_list = video_time_list #[('2024-05-28 06:20:29', '2024-05-28 06:21:29'), ('2024-05-28 06:27:33', '2024-05-28 06:28:33'), ('2024-05-28 07:41:39', '2024-05-28 07:42:39'), ('2024-05-28 07:55:24', '2024-05-28 07:56:24')]
+        self.video_time_list = video_time_list  # [('2024-05-28 06:20:29', '2024-05-28 06:21:29'), ('2024-05-28 06:27:33', '2024-05-28 06:28:33'), ('2024-05-28 07:41:39', '2024-05-28 07:42:39'), ('2024-05-28 07:55:24', '2024-05-28 07:56:24')]
         self.hourly_data = hourly_data
         # print(self.hourly_data)
         # 重新设置预定义的时间段
@@ -222,8 +217,8 @@ class TimeSelectorWidget(QLabel):
 
     def parse_time_segments(self):
         segments = []
-        for start_str, end_str in self.video_time_list: # PySide6.QtCore.QTime(7, 55, 24, 0) PySide6.QtCore.QTime(7, 56, 24, 0)
-            start_str = start_str.split()[1] 
+        for start_str, end_str in self.video_time_list:  # PySide6.QtCore.QTime(7, 55, 24, 0) PySide6.QtCore.QTime(7, 56, 24, 0)
+            start_str = start_str.split()[1]
             end_str = end_str.split()[1]
             start_time = QTime.fromString(start_str, "HH:mm:ss")
             end_time = QTime.fromString(end_str, "HH:mm:ss")
@@ -233,10 +228,85 @@ class TimeSelectorWidget(QLabel):
         return segments
 
 
+class VideoDataHandlerThread(QThread):
+    error_signal = Signal(str)
+    success_signal = Signal(str)
+
+    def __init__(self, main_window):
+        super().__init__()
+        self.main_window = main_window
+
+    def run(self):
+        folder_path = QFileDialog.getExistingDirectory(None, "select videos folder")
+        destination_path = self.main_window.video_path
+        if folder_path and destination_path:
+            try:
+                shutil.copytree(folder_path, destination_path, dirs_exist_ok=True)
+            except Exception as e:
+                self.error_signal.emit(f"Error copying folder: {e}")
+        else:
+            self.error_signal.emit("No folder selected or destination path is not set.")
+
+
+        if folder_path:
+            sqlite3_path = self.main_window.db_path
+
+            conn = sqlite3.connect(sqlite3_path)
+            db_cursor = conn.cursor()
+            for root, dirs, files in os.walk(folder_path):
+                for filename in files:
+                    if filename.endswith('.csv'):
+                        file_path = os.path.join(root, filename)
+                        CSV_name = filename
+                        try:
+                            df = self.main_window.load_csv_to_dataframe(file_path)
+                            print(file_path)
+                            print(CSV_name)
+
+                            camera_count_unique_values_df = df['CameraCount'].unique()
+                            camera_count_unique_values = list(range(len(camera_count_unique_values_df) - 2))
+
+                            camera_count_segments = self.main_window.extract_segments_for_values(df,
+                                                                                                 values=camera_count_unique_values)
+
+                            for idx, cameradf in camera_count_segments.items():
+                                try:
+                                    cameraID, frame_rate, frame_count, start_time, end_time = self.main_window.extract_seg_information(
+                                        idx, cameradf)
+                                    if start_time is None or end_time is None:
+                                        self.error_signal.emit(f"摄像头 ID {cameraID} 的时间格式不正确，跳过该记录")
+                                        continue
+
+                                    print('成功获取摄像头信息')
+                                    print(cameraID, frame_rate, frame_count, start_time, end_time)
+                                    self.main_window.insert_camera_info(conn, db_cursor, CSV_name, cameraID, frame_rate, frame_count,
+                                                                        start_time, end_time)
+
+                                    try:
+                                        time_diff = pd.to_datetime(end_time) - pd.to_datetime(start_time)
+                                        print(time_diff)
+                                    except Exception as e:
+                                        self.error_signal.emit(f"计算时间差异时发生错误，错误：{e}")
+                                        continue
+                                except Exception as e:
+                                    self.error_signal.emit(f"处理摄像头 ID {cameraID} 时发生错误，跳过该摄像头的处理。错误：{e}")
+                                    continue
+                        except Exception as e:
+                            self.error_signal.emit(f"处理文件 {CSV_name} 时发生错误，跳过该文件。错误：{e}")
+                            continue
+
+            conn.close()
+            self.success_signal.emit("处理完成")
+        else:
+            self.error_signal.emit("未选择文件夹")
+
+
 class DateTimeSelector(QWidget):
     def __init__(self, main_window):
         super().__init__()
         self.main_window = main_window
+        self.db_path = self.main_window.db_path
+        self.video_path = self.main_window.video_path
         self.setWindowTitle("Date and Time Selector")
         self.setGeometry(100, 100, 400, 300)
 
@@ -269,11 +339,7 @@ class DateTimeSelector(QWidget):
 
         self.text_edit = QTextEdit(self)
         self.text_edit.setPlaceholderText("Enter text here...")
-
         # self.text_edit.append("04:37:27-05:37:34 others")
-        # self.text_edit.append("05:37:34-06:37:35 others")
-        # self.text_edit.append("06:37:35-07:37:36 others")
-        # self.text_edit.append("08:37:36-15:37:37 others")
 
         self.begin_label = QLabel("Begin Time:", self)
         self.begin_input = QTimeEdit(self)
@@ -286,6 +352,7 @@ class DateTimeSelector(QWidget):
         self.end_input.setTime(QTime.currentTime())
 
         self.ok_button = QPushButton("OK", self)
+        self.add_videos_button = QPushButton("Add Videos", self)
 
         self.time_selector = TimeSelectorWidget(self.begin_input, self.end_input, self.video_time_list)
 
@@ -297,8 +364,168 @@ class DateTimeSelector(QWidget):
         layout.addWidget(self.begin_input)
         layout.addWidget(self.end_label)
         layout.addWidget(self.end_input)
-        layout.addWidget(self.ok_button)
+        button_layout = QVBoxLayout()
+        # layout.addWidget(self.ok_button)
+        button_layout.addWidget(self.add_videos_button)
+        button_layout.addWidget(self.ok_button)
+        layout.addLayout(button_layout)
         self.ok_button.clicked.connect(self.ok_button_clicked)
+        self.add_videos_button.clicked.connect(self.handle_add_video_data)
+
+    def handle_add_video_data(self):
+        year, ok = QInputDialog.getInt(self, 'Input Year', 'Enter the year:', value=2024, minValue=1900, maxValue=2100)
+        if ok:
+            self.year = year
+        else:
+            QMessageBox.warning(self, 'Input Error', 'Please enter a valid year.')
+            return
+        self.add_video_thread = VideoDataHandlerThread(self)
+        self.add_video_thread.error_signal.connect(self.handle_error)
+        self.add_video_thread.success_signal.connect(self.handle_success)
+        self.add_video_thread.start()
+
+    def handle_error(self, message):
+        print(message)
+
+    def handle_success(self, message):
+        print(message)
+
+    def handle_add_video_data_remove(self):
+        folder_path = QFileDialog.getExistingDirectory(None, "select videos folder")
+
+        if folder_path:
+            sqlite3_path = self.main_window.db_path
+
+            self.conn = sqlite3.connect(sqlite3_path)
+            self.db_cursor = self.conn.cursor()
+            for root, dirs, files in os.walk(folder_path):
+                for filename in files:
+                    if filename.endswith('.csv'):
+                        file_path = os.path.join(root, filename)
+                        CSV_name = filename
+                        try:
+                            df = self.load_csv_to_dataframe(file_path)
+                            print(file_path)
+                            print(CSV_name)
+
+                            camera_count_unique_values_df = df['CameraCount'].unique()
+                            camera_count_unique_values = list(range(len(camera_count_unique_values_df) - 2))
+
+                            camera_count_segments = self.extract_segments_for_values(df,
+                                                                                     values=camera_count_unique_values)
+
+                            for idx, cameradf in camera_count_segments.items():
+                                try:
+                                    cameraID, frame_rate, frame_count, start_time, end_time = self.extract_seg_information(
+                                        idx, cameradf)
+                                    if start_time is None or end_time is None:
+                                        print(f"摄像头 ID {cameraID} 的时间格式不正确，跳过该记录")
+                                        continue
+
+                                    print('成功获取摄像头信息')
+                                    print(cameraID, frame_rate, frame_count, start_time, end_time)
+                                    self.insert_camera_info(CSV_name, cameraID, frame_rate, frame_count, start_time,
+                                                            end_time)
+
+                                    try:
+                                        time_diff = pd.to_datetime(end_time) - pd.to_datetime(start_time)
+                                        print(time_diff)
+                                    except Exception as e:
+                                        print(f"计算时间差异时发生错误，错误：{e}")
+                                        continue
+                                except Exception as e:
+                                    print(f"处理摄像头 ID {cameraID} 时发生错误，跳过该摄像头的处理。错误：{e}")
+                                    continue
+                        except Exception as e:
+                            print(f"处理文件 {CSV_name} 时发生错误，跳过该文件。错误：{e}")
+                            continue
+
+            self.conn.close()
+        else:
+            print("未选择文件夹")
+
+    def insert_camera_info(self, conn, db_cursor, CSV_name, cameraID, frame_rate, frame_count, start_time, end_time):
+        if not (self.is_valid_time_format(start_time) and self.is_valid_time_format(end_time)):
+            print(f"时间格式错误，跳过记录：{CSV_name}, {cameraID}, {start_time}, {end_time}")
+            return
+
+        try:
+            start_time_dt = datetime.strptime(start_time, "%Y%m%dT%H:%M:%S")
+            end_time_dt = datetime.strptime(end_time, "%Y%m%dT%H:%M:%S")
+
+            db_cursor.execute('''INSERT INTO videos (animal_tag, video_id, framerate, frame_count, video_stt, video_stp)
+                              VALUES (?, ?, ?, ?, ?, ?)''',
+                                (CSV_name, cameraID, frame_rate, frame_count, start_time_dt, end_time_dt))
+            conn.commit()
+        except Exception as e:
+            print(f"插入数据库时发生错误，跳过记录：{CSV_name}, {cameraID}，错误：{e}")
+            return
+
+    # def insert_camera_info(self, CSV_name, cameraID, frame_rate, frame_count, start_time, end_time):
+    #     if not (self.is_valid_time_format(start_time) and self.is_valid_time_format(end_time)):
+    #         print(f"时间格式错误，跳过记录：{CSV_name}, {cameraID}, {start_time}, {end_time}")
+    #         return
+
+    #     try:
+    #         start_time_dt = datetime.strptime(start_time, "%Y%m%dT%H:%M:%S")
+    #         end_time_dt = datetime.strptime(end_time, "%Y%m%dT%H:%M:%S")
+
+    #         self.db_cursor.execute('''INSERT INTO videos (animal_tag, video_id, framerate, frame_count, video_stt, video_stp)
+    #                           VALUES (?, ?, ?, ?, ?, ?)''',
+    #                             (CSV_name, cameraID, frame_rate, frame_count, start_time_dt, end_time_dt))
+    #         self.conn.commit()
+    #     except Exception as e:
+    #         print(f"插入数据库时发生错误，跳过记录：{CSV_name}, {cameraID}，错误：{e}")
+    #         return
+
+    def load_csv_to_dataframe(self, file_path):
+        df = pd.read_csv(file_path)
+        return df
+
+    def extract_segments_for_values(self, df, values):
+        segments = {}
+        for value in values:
+            first_index = df[df['CameraCount'] == value].index.min()
+            last_index = df[df['CameraCount'] == value].index.max()
+            segment = df.loc[first_index:last_index]
+            segments[value] = segment
+        return segments
+
+    def combine_time_columns(self, row):
+        try:
+            month = f"{int(row['Month']):02}"
+            day = f"{int(row['Day']):02}"
+            hour = f"{int(row['Hour']):02}"
+            minute = f"{int(row['Min']):02}"
+            second = f"{int(row['Sec']):02}"
+            # year = "2024"
+            year = self.year
+            time_str = f"{year}{month}{day}T{hour}:{minute}:{second}"
+            if not self.is_valid_time_format(time_str):
+                raise ValueError(f"生成的时间字符串格式不正确：{time_str}")
+            return time_str
+        except Exception as e:
+            print(f"合并时间字段失败，错误：{e}")
+            return None
+
+    def extract_seg_information(self, idx, cameradf):
+        cameraID = idx
+        frame_rate = 15
+        frame_count = len(cameradf)
+        first_row = cameradf.iloc[0]
+        last_row = cameradf.iloc[-1]
+        start_time = self.combine_time_columns(first_row)
+        end_time = self.combine_time_columns(last_row)
+        if start_time is None or end_time is None:
+            return cameraID, frame_rate, frame_count, None, None
+        return cameraID, frame_rate, frame_count, start_time, end_time
+
+    def is_valid_time_format(self, time_str):
+        try:
+            datetime.strptime(time_str, "%Y%m%dT%H:%M:%S")
+            return True
+        except ValueError:
+            return False
 
     def ok_button_clicked(self):
         # 使用选择的日期和时间来查询数据库
@@ -325,8 +552,6 @@ class DateTimeSelector(QWidget):
         df['index'] = df.index
 
         self.main_window.handel_calendar_data(df)
-
-
 
     def date_changed(self):
 
@@ -375,9 +600,6 @@ class DateTimeSelector(QWidget):
                 hourly_data[hour]['gyro'] = True
             if mag_x is not None:
                 hourly_data[hour]['mag'] = True
-
-
-
 
         self.time_selector.reset_green_blocks(self.video_time_list, hourly_data)
         # 查询指定日期的labels表数据，数据有开始结束时间，标签名(stt_timestamp TEXT, stp_timestamp TEXT,label_name TEXT,)
@@ -438,7 +660,7 @@ class VideoProcessor(QThread):
                 raise ValueError("时间格式必须为 MM:SS 或 HH:MM:SS")
             times_in_seconds.append(seconds)
         return times_in_seconds
-    
+
     def run(self):
         output_frames = []
         output_fps = None
@@ -490,6 +712,7 @@ class VideoProcessor(QThread):
         # self.finished.emit(time_series)
         self.finished.emit(time_series, output_path)
 
+
 class VideoEditor(QDialog):
     def __init__(self, main_widget):
         super().__init__()
@@ -538,25 +761,23 @@ class VideoEditor(QDialog):
     #     self.plot_window.setWindowTitle("Processing Videos")
     #     self.plot_window.setText("Please wait while the videos are being processed...")
     #     self.plot_window.show()
-        
-        # start_times = list(map(int, self.start_time_input.text().split(',')))
-        # if len(start_times) != len(self.video_paths):
-        #     print("Number of start times does not match the number of videos")
-        #     return
+
+    # start_times = list(map(int, self.start_time_input.text().split(',')))
+    # if len(start_times) != len(self.video_paths):
+    #     print("Number of start times does not match the number of videos")
+    #     return
 
     def process_videos(self):
-
-
 
         start_times = self.start_time_input.text().split(',')
         self.test_times(start_times)
         if len(start_times) != len(self.video_paths):
             print("Number of start times does not match the number of videos")
             return
-        
+
         if not self.output_folder:
             return
-        
+
         # 弹出窗口提示，正在处理视频
         self.plot_window = QMessageBox(self)
         self.plot_window.setWindowTitle("Processing Videos")
@@ -581,12 +802,10 @@ class VideoEditor(QDialog):
                 error_message_box.setText("Time format must be MM:SS or HH:MM:SS")
                 error_message_box.exec()
                 raise ValueError("时间格式必须为 MM:SS 或 HH:MM:SS")
-        
 
-    def on_processing_finished(self,time_series, video_path):
+    def on_processing_finished(self, time_series, video_path):
         self.main_widget.handle_finished(time_series, video_path)
         self.close()
-
 
 
 # 带删除的选择框
@@ -603,7 +822,7 @@ class ReComboBox:
         QS_item.setForeground(QColor('#ffffff'))
         QS_item.setText(itemTxt)
         self.comboBox.model().appendRow(QS_item)
-        index = self.comboBox.count()-1
+        index = self.comboBox.count() - 1
         self.comboBox.view().repaint()
         self.add_btn(index, itemTxt)
 
@@ -690,10 +909,12 @@ class LabelOption(QDialog):
         # 返回选中的选项
         return selected_option
 
+
 # 定义一个QObject来保存各种后台线程信号
 class TaskSignals(QObject):
     # 后台保存csv文件完成信号，SaveCsvTask
     save_csv_finished = Signal(str)
+
 
 # 后台保存csv文件类
 class SaveCsvTask(QRunnable):
@@ -744,7 +965,7 @@ class SaveCsvTask(QRunnable):
             print(f'File saved at {new_path}')
             if self.is_timer == 0:
                 self.signals.save_csv_finished.emit(new_path)
-                
+
 
 # 后台handleComputeData类
 class HandleComputeWorker(QObject):
@@ -752,7 +973,8 @@ class HandleComputeWorker(QObject):
     finished = Signal(object)
     stopped = Signal()
 
-    def __init__(self, root, data, RawDataName, cfg, dataChanged, sensor_dict, column_names, data_length, model_path, model_name):
+    def __init__(self, root, data, RawDataName, cfg, dataChanged, sensor_dict, column_names, data_length, model_path,
+                 model_name):
         super().__init__()
         self.root = root
         self.data = data
@@ -774,7 +996,7 @@ class HandleComputeWorker(QObject):
         # self.dataChangedSignal.emit(self.data)
 
         new_column_names = find_data_columns(self.sensor_dict, self.column_names)
-        
+
         self.data['datetime'] = pd.to_datetime(self.data['datetime'])
 
         # 将数据切割成片段以获取潜在特征和索引
@@ -791,7 +1013,7 @@ class HandleComputeWorker(QObject):
                   'data': (i, start_indice[i], end_indice[i]),
                   'brush': self.checkColor(self.data.loc[i * self.data_length, 'label'], first=True)}
                  for i in range(n)]
-        
+
         if not self._is_running:
             self.stopped.emit()
             return
@@ -801,7 +1023,7 @@ class HandleComputeWorker(QObject):
 
     def stop(self):
         self._is_running = False
-    
+
     def checkColor(self, label, first=False):
         if first:
             # 如果是第一次调用，返回默认的白色笔刷
@@ -830,8 +1052,6 @@ class HandleComputeWorker(QObject):
                 # 根据标签返回相应的颜色
                 return list_color[count % len(list_color)]
             count += 1
-
-
 
 
 # 创建一个函数来找到最近的有效索引
@@ -896,7 +1116,6 @@ class Backend(QObject):
     def handleHighlightScatterDotByIndex(self, index):
         print(f"Triggering highlight dot({index})...")
         self.highlightScatterDotByindexSign.emit(index)
-        
 
     # 通过索引高亮散点，点击折线图散点高亮地图散点
     @Slot(int)
@@ -1065,159 +1284,6 @@ class Backend(QObject):
         # print(json_data)
         self.view.page().runJavaScript(f"displayData('{json_data}')")
 
-    # @Slot()
-    # def displayData(self, data, metadata=None, label_colors=None):
-    #     start_time = time.time()
-    #     if isinstance(data, pd.DataFrame):
-    #         # 指定要排除的列,Python 的 json 模块不能直接序列化某些自定义对象或非基本数据类型（如 datetime、Timestamp 等
-    #         # columns_to_drop = ['datetime', 'logger_id', 'animal_tag', 'gps_status',
-    #         #                    'activity_class', 'label']
-    #         #
-    #         # # 删除指定列
-    #         # data = data.drop(columns=columns_to_drop, errors='ignore')
-    #         step_time = time.time()
-
-    #         # 根据传入信号选择需要的列
-    #         series_combined = ["timestamp", "unixtime", "index", "latitude", "longitude"] + [item for data in metadata
-    #                                                                                          for item in
-    #                                                                                          data["series"]]
-    #         print(f"Time for selecting columns: {time.time() - step_time:.6f} seconds")
-
-    #         step_time = time.time()
-    #         data = data[series_combined]
-
-    #         print(f"Time for da: {time.time() - step_time:.6f} seconds")
-
-    #         step_time = time.time()
-
-    #         # 将空字符串替换为 None
-    #         data = data.replace('', None)
-    #         print(f"Time for replace: {time.time() - step_time:.6f} seconds")
-
-    #         step_time = time.time()
-
-    #         # 将 NaN 值替换为 None,避免转换为json出错
-    #         data = data.where(pd.notnull(data), None)
-
-    #         print(f"Time for where: {time.time() - step_time:.6f} seconds")
-
-    #         step_time = time.time()
-
-    #         # 将 DataFrame 转换为字典列表
-    #         data_records = data.to_dict(orient='records')
-
-    #         print(f"Time for dict: {time.time() - step_time:.6f} seconds")
-
-    #         step_time = time.time()
-
-    #         if metadata is None:
-    #             # 创建元数据信息
-    #             metadata = [
-    #                 {
-    #                     "name": "acceleration",
-    #                     "xAxisName": "timestamp",
-    #                     "yAxisName": "Y Axis 1",
-    #                     "series": ["acc_x", "acc_y", "acc_z"]
-    #                 }
-    #                 # {
-    #                 #     "name": "gyroscope",
-    #                 #     "xAxisName": "timestamp",
-    #                 #     "yAxisName": "Y Axis 2",
-    #                 #     "series": ["gyro_x", "gyro_y", "gyro_z"]
-    #                 # }
-    #             ]
-
-    #         # 将元数据和数据打包到一个字典中
-    #         result = {
-    #             "metadata": metadata,
-    #             "data": data_records,
-    #             "labelColors": label_colors
-    #         }
-    #     else:
-    #         # 如果数据不是 DataFrame，则直接使用传入的数据
-    #         result = data
-    #     # 将结果转换为 JSON 格式
-    #     json_data = json.dumps(result)
-    #     print(f"Time for converting to JSON: {time.time() - step_time:.6f} seconds")
-
-    #     # print(json_data)
-    #     self.view.page().runJavaScript(f"displayData('{json_data}')")
-
-    # def displayData(self, data, metadata=None, label_colors=None):
-    #     timings = {}
-    #     start_time = time.time()
-
-    #     if isinstance(data, pd.DataFrame):
-    #         step_time = time.time()
-
-    #         # 根据传入信号选择需要的列
-    #         series_combined = ["timestamp", "unixtime", "index", "latitude", "longitude"] + [
-    #             item for data in metadata for item in data["series"]
-    #         ]
-    #         data = data[series_combined]
-    #         timings['select_columns'] = time.time() - step_time
-
-    #         step_time = time.time()
-    #         # 将空字符串替换为 None
-    #         data = data.replace('', None)
-    #         timings['replace_empty_strings'] = time.time() - step_time
-
-    #         step_time = time.time()
-    #         # 将 NaN 值替换为 None,避免转换为json出错
-    #         data = data.where(pd.notnull(data), None)
-    #         timings['replace_nan'] = time.time() - step_time
-
-    #         step_time = time.time()
-    #         # 将 DataFrame 转换为字典列表
-    #         data_records = data.to_dict(orient='records')
-    #         timings['convert_to_dict'] = time.time() - step_time
-
-    #         step_time = time.time()
-    #         if metadata is None:
-    #             # 创建元数据信息
-    #             metadata = [
-    #                 {
-    #                     "name": "acceleration",
-    #                     "xAxisName": "timestamp",
-    #                     "yAxisName": "Y Axis 1",
-    #                     "series": ["acc_x", "acc_y", "acc_z"]
-    #                 }
-    #             ]
-    #         timings['handle_metadata'] = time.time() - step_time
-
-    #         step_time = time.time()
-    #         # 将元数据和数据打包到一个字典中
-    #         result = {
-    #             "metadata": metadata,
-    #             "data": data_records,
-    #             "labelColors": label_colors
-    #         }
-    #         timings['create_result'] = time.time() - step_time
-    #     else:
-    #         step_time = time.time()
-    #         # 如果数据不是 DataFrame，则直接使用传入的数据
-    #         result = data
-    #         timings['handle_non_dataframe'] = time.time() - step_time
-
-    #     step_time = time.time()
-    #     # 将结果转换为 JSON 格式
-    #     json_data = json.dumps(result)
-    #     timings['convert_to_json'] = time.time() - step_time
-
-    #     step_time = time.time()
-    #     # 执行 JavaScript
-    #     self.view.page().runJavaScript(f"displayData('{json_data}')")
-    #     timings['run_javascript'] = time.time() - step_time
-
-    #     timings['total'] = time.time() - start_time
-
-    #     print_str = set()
-    #     # 打印所有耗时信息
-    #     for step, duration in timings.items():
-    #         print_str.add(f"{step}: {duration:.6f} seconds")
-    #         print("\n".join(print_str))
-    #         # print(f"{step}: {duration:.6f} seconds")
-
     # 更新labelColors
     @Slot()
     def updateLabelColors(self, label_colors):
@@ -1327,7 +1393,6 @@ class LabelWithInteractivePlot(QWidget):
         self.backend.getSelectedAreaToSaveSign.connect(self.getSelectedAreaToSave)
         self.backend.getSelectedAreaToSaveTimerSign.connect(self.getSelectedAreaToSaveTimer)
 
-
         self.button_style = """QPushButton {
             background-color: #1ea123; 
             border: none;
@@ -1362,7 +1427,6 @@ class LabelWithInteractivePlot(QWidget):
         root_cfg = read_config(root.config)
         # 保存标签字典
         self.label_dict = root_cfg['label_dict']
-
 
         # 初始化最后修改的点
         self.last_modified_points = []
@@ -1457,19 +1521,15 @@ class LabelWithInteractivePlot(QWidget):
         #     "Attempting..."
         # )
 
-
     def initLayout(self):
         self.main_layout = QVBoxLayout()
         self.setLayout(self.main_layout)
 
-
         # 创建第一行三个按钮布局
         self.first_row_layout = QHBoxLayout()
 
-
         # 创建第二行选择框和颜色布局
         self.second_row_layout = QVBoxLayout()
-
 
         # 创建第三行（包含三个图和按钮）布局
         self.third_row_layout = QHBoxLayout()
@@ -1486,7 +1546,6 @@ class LabelWithInteractivePlot(QWidget):
         self.third_row_layout.addLayout(self.left_row1_video_layout, 1)
         self.third_row_layout.addLayout(self.row3_layout, 1)
         self.third_row_layout.addLayout(self.charts_show_button_layout, 0)
-
 
         # 创建第四行布局，一个折线图，一个聚合按钮输入框图表占最大，按钮占最小
         self.fourth_row_layout = QHBoxLayout()
@@ -1512,23 +1571,15 @@ class LabelWithInteractivePlot(QWidget):
         self.nestend_button_layout.addLayout(self.label_edit_button_layout)
         self.nestend_button_layout.addStretch()
 
-        self.fourth_row_layout.addLayout(self.left_row3_layout,1)
-        self.fourth_row_layout.addLayout(self.nestend_button_layout,0)
+        self.fourth_row_layout.addLayout(self.left_row3_layout, 1)
+        self.fourth_row_layout.addLayout(self.nestend_button_layout, 0)
 
-
-        self.main_layout.addLayout(self.first_row_layout,0)
-        self.main_layout.addLayout(self.second_row_layout,0)
-        self.main_layout.addLayout(self.third_row_layout,1)
-        self.main_layout.addLayout(self.fourth_row_layout,1)
+        self.main_layout.addLayout(self.first_row_layout, 0)
+        self.main_layout.addLayout(self.second_row_layout, 0)
+        self.main_layout.addLayout(self.third_row_layout, 1)
+        self.main_layout.addLayout(self.fourth_row_layout, 1)
         # 创建中心图表
         self.createCenterPlot()
-
-
-
-
-
-
-        
 
     # 初始化布局的方法
     def initLayout_old(self):
@@ -1541,8 +1592,6 @@ class LabelWithInteractivePlot(QWidget):
 
         # 创建左侧布局
         self.left_layout = QVBoxLayout()
-
-
 
         # 创建左侧row1布局
         self.left_row1_layout_all = QHBoxLayout()
@@ -1640,17 +1689,16 @@ class LabelWithInteractivePlot(QWidget):
         # self.label_dict
         # self.label_combobox = ReComboBox()
 
-
         # for label in self.label_dict.keys():
         #     self.comboBoxHandler.addItem(label)
 
         for item in self.label_dict.keys():
             self.addItem(item)
-        
+
         self.label_combobox.currentTextChanged.connect(
             self.backend.handle_label_change
         )
-        
+
         # for label in self.label_dict.keys():
         #     self.label_combobox.addItem(label)
         # self.backend.handle_label_change(self.label_combobox.currentText())
@@ -1676,7 +1724,6 @@ class LabelWithInteractivePlot(QWidget):
         self.save_label_btn.setStyleSheet(self.button_style)
         # self.left_label_layout.addWidget(self.save_label_btn)
 
-
         # 保存csv按钮 TODO 问一下这个还要不
         self.save_csv_btn = QPushButton('Save csv')
         self.save_csv_btn.clicked.connect(lambda: self.backend.getSelectedAreaToSave(0))
@@ -1684,9 +1731,6 @@ class LabelWithInteractivePlot(QWidget):
         # self.left_label_layout.addWidget(self.save_csv_btn)
         # self.left_label_layout.addStretch()
         # self.left_row2_layout.addLayout(self.left_label_layout)
-
-
-    
 
         # 第四行三个按钮
         # self.left_button_layout = QHBoxLayout()
@@ -1710,13 +1754,11 @@ class LabelWithInteractivePlot(QWidget):
         # 设置按钮样式
         reflect_to_latent_btn.setStyleSheet(self.button_style)
 
-
         self.second_edit_button_layout.addWidget(add_label_btn)
         self.second_edit_button_layout.addWidget(delete_label_btn)
         self.second_edit_button_layout.addWidget(self.save_csv_btn)
 
         self.third_edit_button_layout.addWidget(reflect_to_latent_btn)
-        
 
         # # 将按钮添加到布局中
         # self.left_button_layout.addWidget(add_label_btn)
@@ -1775,7 +1817,6 @@ class LabelWithInteractivePlot(QWidget):
                 # self.display_colors(self.label_colors)
                 self.clear_color_layout_and_display(self.label_colors)
 
-
     def add_item(self):
         key, ok = QInputDialog.getText(self, 'Add Label', 'Enter the Label:')
         if ok and key:
@@ -1795,9 +1836,6 @@ class LabelWithInteractivePlot(QWidget):
             else:
                 QMessageBox.warning(self, 'Error', 'Label already exists.')
 
-
-
-
     def save_label(self):
         # 保存标签字典
         # save_label_dict(self.root, self.label_dict)
@@ -1808,9 +1846,6 @@ class LabelWithInteractivePlot(QWidget):
         with open(config_path, 'w') as f:
             self.yaml.dump(config, f)
         print("Saving label Successfully")
-
-    
-
 
     def setStartEndTime(self, start_time, end_time):
         self.start_input_box.setText(start_time)
@@ -1871,8 +1906,6 @@ class LabelWithInteractivePlot(QWidget):
     '''
     # 在外层定义
 
-
-
     '''
     ==================================================
     左上视频
@@ -1884,8 +1917,8 @@ class LabelWithInteractivePlot(QWidget):
         self.video_time_layout = QHBoxLayout()
         # self.video_time_label = QLabel("当前时间 / 总时间", self)
         # self.video_time_label = QLabel("Current Time / Total Time", self)
-        self.video_time_label = ClickableLabel("Current Time / Total Time",self)
-        
+        self.video_time_label = ClickableLabel("Current Time / Total Time", self)
+
         self.video_time_layout.addWidget(self.video_time_label, alignment=Qt.AlignLeft)
         self.video_time_layout.addWidget(QLabel("Offset(s):"), alignment=Qt.AlignRight)
         self.timestamp_input = QDoubleSpinBox()
@@ -1893,7 +1926,7 @@ class LabelWithInteractivePlot(QWidget):
         self.timestamp_input.setSingleStep(0.1)  # Set step size for increment/decrement
         self.timestamp_input.setValue(0.0)  # Default value
         self.video_time_layout.addWidget(self.timestamp_input, alignment=Qt.AlignRight)
-        
+
         # 视频标签
         # self.video_label = QLabel(self)
         self.video_label = ClickableLabel(self)
@@ -1950,7 +1983,7 @@ class LabelWithInteractivePlot(QWidget):
         tick_values = [start for start, _, _ in self.time_series]
         tick_strings = [format_time(tick) for tick in tick_values]
         plot_widget.getAxis('bottom').setTicks([list(zip(tick_values, tick_strings))])
-        
+
         self.plot_window.show()
 
     # def open_file_dialog(self):
@@ -1992,24 +2025,21 @@ class LabelWithInteractivePlot(QWidget):
         tick_values = [start for start, _, _ in time_series]
         tick_strings = [format_time(tick) for tick in tick_values]
         plot_widget.getAxis('bottom').setTicks([list(zip(tick_values, tick_strings))])
-        
+
         self.plot_window.show()
 
     def open_video_editor(self):
         self.video_editor = VideoEditor(self)
         self.video_editor.exec()
 
-    def handle_finished(self,time_series, video_path):
+    def handle_finished(self, time_series, video_path):
         self.plot_time_series(time_series)
         self.update_video(video_path)
         # print("处理完成:", video_path)
 
-
     # 新建一个窗口，选择视频文件夹
     def open_file_dialog(self):
         self.open_video_editor()
-
-
 
     def update_video(self, video_path):
         if self.cap:
@@ -2034,12 +2064,12 @@ class LabelWithInteractivePlot(QWidget):
 
         self.video_time_label.setText(f"当前时间: {current_time_str} / 总时间: {total_duration_str}")
         self.display_frame(0)
+
     # def update_video(self, video_path):
     #     # self.cap = cv2.VideoCapture(r'C:\Users\user\Videos\test_hardware_encoder.mp4')
     #     # self.cap = cv2.VideoCapture(r'C:\Users\user\Documents\WeChat Files\wxid_mi05poeuk7a022\FileStorage\File\2024-09\xia-san-video-sample\umineko\LB11\PBOT0001.avi')
     #     self.cap = cv2.VideoCapture(r'G:\素材\9月30日.mp4')
     #     self.display_frame(0)
-
 
     def format_time(self, seconds):
         if seconds >= 3600:
@@ -2048,7 +2078,7 @@ class LabelWithInteractivePlot(QWidget):
         else:
             # Format as MM:SS
             return f"{int(seconds // 60):02}:{int(seconds % 60):02}"
-        
+
     def display_frame(self, frame_number):
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
         ret, frame = self.cap.read()
@@ -2066,8 +2096,6 @@ class LabelWithInteractivePlot(QWidget):
             self.video_label.setPixmap(scaled_pixmap)
             self.video_label.setScaledContents(True)
 
-
-
     def jump_to_timestamp(self, index):
         try:
             if self.cap is not None:
@@ -2075,11 +2103,10 @@ class LabelWithInteractivePlot(QWidget):
                 self.cap = None
 
             self.offset = self.timestamp_input.value()
-            datetime_org = self.data.loc[index, 'datetime'] # 2018-08-27 21:19:23.880000
+            datetime_org = self.data.loc[index, 'datetime']  # 2018-08-27 21:19:23.880000
             # print(type(unixtime))
             datetime_str = datetime_org.strftime('%Y-%m-%d %H:%M:%S.%f')
-            
-            
+
             # Connect to the database
             # conn = sqlite3.connect('database.db')
             conn = sqlite3.connect(self.db_path)
@@ -2104,15 +2131,21 @@ class LabelWithInteractivePlot(QWidget):
             # video_path = f"{animal_tag}/{video_name}"
             animal_tag = animal_tag.replace('.csv', '')
 
-            video_path = os.path.join(self.video_path, animal_tag, video_name)
+            # Search for animal_tag directory within self.video_path
+            animal_tag_paths = glob.glob(os.path.join(self.video_path, '**', animal_tag), recursive=True)
+            if not animal_tag_paths:
+                print("Animal tag directory not found.")
+                return
 
+            animal_tag_path = animal_tag_paths[0]
+            video_path = os.path.join(animal_tag_path, video_name)
 
             # Open the video
             self.cap = cv2.VideoCapture(video_path)
 
             # Convert video_stt to datetime object
             video_stt = datetime.strptime(video_stt, '%Y-%m-%d %H:%M:%S')
-            
+
             # Calculate the timestamp offset from the video start time
             timestamp_offset = (datetime_org - video_stt).total_seconds()
 
@@ -2151,7 +2184,7 @@ class LabelWithInteractivePlot(QWidget):
     #         # self.offset = float(self.timestamp_input.text())
     #         self.offset = self.timestamp_input.value()
     #         unixtime = self.data.loc[index, 'unixtime']
-            
+
     #         # TODO 用指定时间戳去查数据库，得到对应视频名，然后打开视频根据时间戳减去视频开始时间，然后跳转到对应帧
 
     #         timestamp = unixtime - self.min_time
@@ -2175,19 +2208,16 @@ class LabelWithInteractivePlot(QWidget):
     #         self.video_time_label.setText(f"{current_time_str} / {total_duration_str}")
     #         # # Print current and total time
     #         # print(f"当前时间: {current_time:.2f} 秒 / 总时间: {total_duration:.2f} 秒")
-            
+
     #         self.display_frame(frame_number)
     #     except ValueError:
     #         print("Please enter a valid timestamp.")       
 
-
     # def update_video(self, video_path):
-        # print(video_path)
-        # self.video_label.setPixmap(QPixmap(video_path))
-        # self.video_label.setScaledContents(True)
-        # self.video_label.setFixedSize(600, 400)
-
-
+    # print(video_path)
+    # self.video_label.setPixmap(QPixmap(video_path))
+    # self.video_label.setScaledContents(True)
+    # self.video_label.setFixedSize(600, 400)
 
     '''
     ==================================================
@@ -2204,7 +2234,7 @@ class LabelWithInteractivePlot(QWidget):
         self.calendar_btn.setStyleSheet(self.button_style)
         self.calendar_btn.clicked.connect(self.open_calendar)
         self.first_row_layout.addWidget(self.calendar_btn, alignment=Qt.AlignLeft)
-        
+
         # 第一行布局,包含Select model标签和选择框，, alignment=Qt.AlignLeft
         # 创建模型组合框和标签
         modelComboBoxLabel, modelComboBox = self.createModelComboBox()
@@ -2247,7 +2277,6 @@ class LabelWithInteractivePlot(QWidget):
         self.second_row_layout.addLayout(self.checkbox_layout)
         self.second_row_layout.addLayout(self.color_layout)
 
-
         # TODO: 将一部分功能改到日历中
         # 第三行布局 Display data 按钮
         # self.third_row1_layout = QHBoxLayout()
@@ -2266,7 +2295,7 @@ class LabelWithInteractivePlot(QWidget):
         self.renderColumnList()
         # self.clear_color_layout()
         self.display_colors(self.label_colors)
-    
+
     def handleRefresh(self):
         self.update_model_combobox()
         self.update_data_combobox()
@@ -2275,13 +2304,11 @@ class LabelWithInteractivePlot(QWidget):
         self.calendar = DateTimeSelector(self)
         self.calendar.show()
 
-
     # TODO 全部的closeEvent都没生效，需要找这个项目的closeEvent方法
     def closeEvent(self, event):
         if self.calendar:
             self.calendar.close()
         super().closeEvent(event)
-
 
     def display_colors(self, colors):
         # 创建水平布局并添加标签和颜色框
@@ -2309,7 +2336,7 @@ class LabelWithInteractivePlot(QWidget):
                     if widget:
                         widget.deleteLater()
                 item.layout().deleteLater()
-    
+
     def clear_color_layout_and_display(self, colors):
         # 移除并删除所有布局项
         while self.color_layout.count() > 0:  # 改为0以清除所有
@@ -2335,8 +2362,6 @@ class LabelWithInteractivePlot(QWidget):
 
             self.color_layout.addLayout(layout)
         self.color_layout.addStretch()
-
-
 
     '''
     ==================================================
@@ -2388,7 +2413,6 @@ class LabelWithInteractivePlot(QWidget):
         self.charts_show_button_layout.addWidget(toLabelBtn)
         self.charts_show_button_layout.addWidget(clearEmptyRegionBtn)
         self.charts_show_button_layout.addStretch()
-
 
         # # 添加一个伸缩因子来创建间距
         # # self.third_row2_layout.addStretch(1)
@@ -2556,7 +2580,6 @@ class LabelWithInteractivePlot(QWidget):
         # 更新监控的目录
         self.model_watcher.removePaths(self.model_watcher.directories())
         self.model_watcher.addPath(full_path)
-    
 
     def update_data_combobox(self):
         if self.RawDatacomboBox is None:
@@ -2578,7 +2601,7 @@ class LabelWithInteractivePlot(QWidget):
         for path in rawdata_file_path_list:
             self.RawDatacomboBox.addItem(str(Path(path).name))
 
-         # 更新监控的目录
+        # 更新监控的目录
         self.data_watcher.removePaths(self.data_watcher.directories())
         self.data_watcher.addPath(full_path)
 
@@ -2717,7 +2740,6 @@ class LabelWithInteractivePlot(QWidget):
 
         self.updateBtn()
 
-
     def handel_calendar_data(self, data):
         self.data = data
         self.dataChanged.emit(self.data)
@@ -2738,7 +2760,10 @@ class LabelWithInteractivePlot(QWidget):
         self.renderColumnList()
 
         self.handle_compute_thread = QThread()
-        self.handle_compute_worker = HandleComputeWorker(self.root, self.data, self.RawDatacomboBox.currentText(), self.cfg, self.dataChanged, self.sensor_dict, self.column_names, self.data_length, self.model_path, self.model_name)
+        self.handle_compute_worker = HandleComputeWorker(self.root, self.data, self.RawDatacomboBox.currentText(),
+                                                         self.cfg, self.dataChanged, self.sensor_dict,
+                                                         self.column_names, self.data_length, self.model_path,
+                                                         self.model_name)
         self.handle_compute_worker.moveToThread(self.handle_compute_thread)
         self.handle_compute_thread.started.connect(self.handle_compute_worker.run)
         self.handle_compute_worker.finished.connect(self.handle_compute_finished)
@@ -2751,7 +2776,6 @@ class LabelWithInteractivePlot(QWidget):
 
     def stop_training(self):
         self.handle_compute_worker.stop()
-
 
     def on_training_stopped(self):
         # TODO 绑定停止训练的方法
@@ -3155,7 +3179,7 @@ class LabelWithInteractivePlot(QWidget):
         return None  # 如果没有找到合适的范围
 
     # TODO 点击过快可能报错    self._plot.updateSpots(self._data.reshape(1)) AttributeError: 'NoneType' object has no attribute 'updateSpots'
-    def handle_highlight_scatter_dot_by_index(self, index, useRawIndex = False):
+    def handle_highlight_scatter_dot_by_index(self, index, useRawIndex=False):
         self.jump_to_timestamp(index)
         indice = index
         if not useRawIndex:
@@ -3164,7 +3188,7 @@ class LabelWithInteractivePlot(QWidget):
             for p, original_size, original_brush in self.last_modified_points:
                 p.setSize(original_size)
                 p.setBrush(original_brush)
-            
+
         self.last_modified_points = []  # Clear the list
         if indice is not None:
             for spot in self.scatterItem.points():
@@ -3176,10 +3200,6 @@ class LabelWithInteractivePlot(QWidget):
                     self.last_modified_points.append((spot, original_size, original_brush))
                     spot.setSize(15)
                     spot.setBrush(pg.mkBrush(255, 0, 0, 255))
-
-        
-
-
 
     # 显示原始标签在右下散点图上
     def toggleLabelColor(self):
@@ -3269,8 +3289,6 @@ class LabelWithInteractivePlot(QWidget):
         saveButton.clicked.connect(self.handleSaveButton)
         self.settingPannel.addWidget(saveButton)
 
-
-
     # def getSelectedAreaToSave(self, area_data):
     #     # print(areaData)
     #     try:
@@ -3296,7 +3314,7 @@ class LabelWithInteractivePlot(QWidget):
 
     def on_save_finished(self, new_path):
         QMessageBox.information(None, "保存CSV", f"文件已保存于 {new_path}", QMessageBox.Ok)
-    
+
     def getSelectedAreaToSaveTimer(self, area_data):
         print("Saving CSV in the background.")
         combo_box_text = self.RawDatacomboBox.currentText()
