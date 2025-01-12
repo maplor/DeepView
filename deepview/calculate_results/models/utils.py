@@ -6,8 +6,8 @@ import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 import torch
 import torch.nn as nn
-
-from scipy.interpolate import interp1d
+# import pandas as pd
+from scipy.interpolate import interp1d,CubicSpline
 import math
 from datetime import datetime
 from tqdm import tqdm
@@ -15,6 +15,9 @@ from sklearn.manifold import TSNE
 import torch.nn.functional as F
 # import pickle
 import copy
+import random
+from umap import UMAP
+import plotly.express as px
 
 # get label id from label string
 label_dict = {
@@ -58,6 +61,8 @@ def get_backid_samplerate(result):
     return result_values
 
 def majority_value(arr):
+    if isinstance(arr, torch.Tensor):
+        arr = arr.detach().cpu().numpy()
     majority = []
     for row in arr:
         values, counts = np.unique(row, return_counts=True)
@@ -71,8 +76,8 @@ def AE_eval_time_series(train_loader, model, device, memotimes=30):
     sample_list, timestamp_list, label_list, pred_list, timestr_list, flag_list = [], [], [], [], [], []
     for i, (sample, label) in enumerate(train_loader):
 
-        if i > memotimes:  # cpu memory not enough
-            continue
+        # if i > memotimes:  # cpu memory not enough
+        #     continue
         sample = sample.to(device=device, non_blocking=True, dtype=torch.float)
         # input of autoencoder will be 3D, the backbone is 1d-cnn
         x_encoded, output = model(sample)  # x_encoded.shape=batch512,outchannel128,len13
@@ -109,10 +114,10 @@ def Classify_eval_time_series(train_loader, model, device):
     return representation_list, sample_list, pred_list, label_list
 
 
-def plot_reconstruction_result(representation_list, sample_list, pred_list, label_list):
+def plot_reconstruction_result(sensortype, representation_list, sample_list, pred_list, label_list, name='accel'):
     # tsne latent representation to shape=(2, len) PCA降维到形状为 (2, len)
     repre_concat = np.concatenate(representation_list)
-    repre_reshape = repre_concat.reshape(repre_concat.shape[0], -1)
+    repre_reshape = repre_concat.reshape(repre_concat.shape[0], -1).astype(float)
 
     sample_concat = np.concatenate(sample_list)
     # sample_reshape = sample_concat.reshape(-1, 3)
@@ -124,39 +129,169 @@ def plot_reconstruction_result(representation_list, sample_list, pred_list, labe
     pred_concat = pred_concat.transpose(0, 2, 1)
     pred_reshape = pred_concat.reshape(-1, pred_concat.shape[-1])
 
-    label_concat = np.concatenate(label_list)
-    label_concat_vote = majority_value(label_concat)
-    # label_concat_vote.shape
+    start = 0
+    end = -1
+    # end = min(10000, len(sample_reshape))
 
-    start, end = 0, -1
-    col = 0
-    fig, axes = plt.subplots(3, 1, figsize=(8, 6))
-    axes[0].plot(sample_reshape[start:end, col], 'r', label='groundtruthY')
-    axes[0].plot(pred_reshape[start:end, col], 'b-.', label='predictY')
-    axes[0].set_title('Autoencoder_Reconstruct_Umineko2018_back1_accel_axisy')
-    axes[0].set_xlabel('timestamp')
-    axes[0].set_ylabel('ACC[G]')
-    axes[0].legend()
+    # sensortype = 'pressure'
+    if sensortype == 'accel':
+        axis_dict = {0:'x', 1:'y', 2:'z'}
+        sensordim = len(axis_dict)
+    elif sensortype == 'pressure':
+        axis_dict = {0:'pressure'}
+        sensordim = len(axis_dict)
+    else:
+        print('no such sensor type')
+    fig, axes = plt.subplots(sensordim*3, 1, figsize=(8, 6))
+    for acc_axis in range(sensordim):
+        col = acc_axis
+        axes[0+sensordim*col].plot(sample_reshape[start:end, col], 'r', label='groundtruth%s' % axis_dict[col])
+        axes[0+sensordim*col].plot(pred_reshape[start:end, col], 'b-', label='predict%s' % axis_dict[col])
+        axes[0+sensordim*col].set_title('Autoencoder_Reconstruct_Umineko_%s_axis%s' % (sensortype, axis_dict[col]))
+        axes[0+sensordim*col].set_xlabel('timestamp')
+        axes[0+sensordim*col].set_ylabel('value')
+        axes[0+sensordim*col].legend(loc="right")
 
-    axes[1].plot(sample_reshape[start:end, col], 'r', label='groundtruthY')
-    # axes[1].plot(pred_reshape[10000:length, 1], 'b-.', label='predictY')
-    # axes[1].set_title('ResNet_SSL_pretrained_Reconstruct_Umineko2018_back1')
-    axes[1].set_xlabel('timestamp')
-    axes[1].set_ylabel('ACC[G]')
-    axes[1].legend()
+        axes[1+sensordim*col].plot(sample_reshape[start:end, col], 'r', label='groundtruth%s' % axis_dict[col])
+        axes[1+sensordim*col].set_xlabel('timestamp')
+        axes[1+sensordim*col].set_ylabel('value')
+        axes[1+sensordim*col].legend(loc="right")
 
-    # axes[2].plot(sample_reshape[10000:length, 1], 'r', label='groundtruthY')
-    axes[2].plot(pred_reshape[start:end, col], 'b-.', label='predictY')
-    # axes[2].set_title('ResNet_SSL_pretrained_Reconstruct_Umineko2018_back1')
-    axes[2].set_xlabel('timestamp')
-    axes[2].set_ylabel('ACC[G]')
-    axes[2].legend()
+        axes[2+sensordim*col].plot(pred_reshape[start:end, col], 'b-', label='predict%s' % axis_dict[col])
+        axes[2+sensordim*col].set_xlabel('timestamp')
+        axes[2+sensordim*col].set_ylabel('value')
+        axes[2+sensordim*col].legend(loc="right")
 
     # Adjust layout
     plt.tight_layout()
+    plt.title(name)
     # Show the figure
-    plt.show()
+    plt.savefig(name+'_%s.png'%sensortype)
+    plt.close('all')
+    # print('')
+
+    umap_3d = UMAP(n_components=3)
+
+    proj_3d_gyro = umap_3d.fit_transform(repre_reshape[start:end])
+
+    # set point size
+    # point_size = np.ones(proj_3d_gyro.shape[0]) * 1
+    label_concat = np.concatenate(label_list)
+    label_concat_vote = majority_value(label_concat)
+    # grey_idx = np.where(label_concat_vote == -2)[0]
+    # point_size[grey_idx] = 0.5
+    # create a dict from actID to act:
+    labeldict_findstr = {-2: 'unknown',
+                         0: 'ground_stationary',
+                         1: 'stationary',
+                         2: 'bathing',
+                         3: 'flying_active',
+                         4: 'flying_passive',
+                         5: 'foraging'}
+
+    label_concat_vote_str = [labeldict_findstr[i] for i in label_concat_vote]
+    # label_concat_vote_str = np.char.mod('%d', label_concat_vote)
+
+    fig_3d = px.scatter_3d(
+        proj_3d_gyro, x=0, y=1, z=2,
+        color=label_concat_vote_str[start:end],
+        labels={'color': 'activity'},
+        # color_discrete_map={ '-2.0': ('rgba(239, 239, 240, 1)')},
+        color_discrete_map={'unknown': 'lightgrey'},
+        # size=point_size
+    )
+    # Reduce marker size for all points
+    for trace in fig_3d.data:
+        trace.marker.size = 6  # Adjust the size to your preference (e.g., 6)
+
+    # Update transparency for traces where activity is '-2.0'
+    fig_3d.for_each_trace(lambda trace: trace.update(marker=dict(opacity=0.5)) if trace.name == '-2.0' else ())
+    fig_3d.update_traces(marker=dict(line=dict(width=0)))  # remove boundary of point
+    fig_3d.write_html(name+'_%s.html'%sensortype)
     print('')
+    # fig_3d.write_html("test.html")
+# ################################################################################
+#     umap_3d = UMAP(n_components=2)
+#     proj_3d_gyro = umap_3d.fit_transform(repre_reshape)
+#     # set point size
+#     df = pd.DataFrame(proj_3d_gyro, columns=['UMAP Dim.1', 'UMAP Dim.2'])
+#     fig_3d = px.scatter(
+#         df, x='UMAP Dim.1', y='UMAP Dim.2',
+#         color=label_concat_vote_str,
+#         labels={'color': 'activity'},
+#         color_discrete_map={'unknown': 'lightgrey'},
+#     )
+#     # Reduce marker size for all points
+#     for trace in fig_3d.data:
+#         trace.marker.size = 6  # Adjust the size to your preference (e.g., 6)
+#     # Update transparency for traces where activity is '-2.0'
+#     fig_3d.for_each_trace(lambda trace: trace.update(marker=dict(opacity=0.5)) if trace.name == '-2.0' else ())
+#     fig_3d.update_traces(marker=dict(line=dict(width=0)))  # remove boundary of point
+#     fig_3d.write_image(name+'_actlabel.pdf')
+# #
+
+    # from sklearn.cluster import AgglomerativeClustering
+    # # Apply Agglomerative Clustering
+    # agglo = AgglomerativeClustering(n_clusters=5)  # Adjust n_clusters
+    # cluster_labels = agglo.fit_predict(repre_reshape)
+    #
+    # # Replace activity labels with the new HDBSCAN cluster labels
+    # # Convert to a DataFrame for visualization
+    # df = pd.DataFrame(proj_3d_gyro, columns=['UMAP Dim.1', 'UMAP Dim.2'])
+    # df['cluster'] = cluster_labels
+    #
+    # # Visualize the new clusters
+    # fig = px.scatter(
+    #     df, x='UMAP Dim.1', y='UMAP Dim.2', color='cluster',
+    #     title="Umineko2018, back1, Clusters Generated by Agglomerative Clustering",
+    #     color_discrete_sequence=px.colors.qualitative.Set1
+    # )
+    # fig.write_image(name+'_Agglomerative.pdf')
+    #
+    #
+    # from sklearn.mixture import GaussianMixture
+    # # Apply Gaussian Mixture Model
+    # gmm = GaussianMixture(n_components=5, random_state=42)  # Adjust n_components
+    # cluster_labels = gmm.fit_predict(repre_reshape)
+    # # Replace activity labels with the new GMM cluster labels
+    # df = pd.DataFrame(proj_3d_gyro, columns=['UMAP Dim.1', 'UMAP Dim.2'])
+    # df['cluster'] = cluster_labels
+    # # Visualize the clusters
+    # fig = px.scatter(
+    #     df, x='UMAP Dim.1', y='UMAP Dim.2', color='cluster',
+    #     title="Umineko2018, back1, Clusters Generated by Gaussian Mixture Model",
+    #     color_discrete_sequence=px.colors.qualitative.Set1
+    # )
+    # fig.write_image(name+'_GMM.pdf')
+    #
+    # from sklearn.cluster import KMeans
+    # # Apply K-Means clustering
+    # kmeans = KMeans(n_clusters=5, random_state=42)  # Adjust n_clusters as needed
+    # cluster_labels = kmeans.fit_predict(repre_reshape)
+    #
+    # # Replace activity labels with the new K-Means cluster labels
+    # df = pd.DataFrame(proj_3d_gyro, columns=['UMAP Dim.1', 'UMAP Dim.2'])
+    # df['cluster'] = cluster_labels
+    # # Visualize the clusters
+    # fig = px.scatter(
+    #     df, x='UMAP Dim.1', y='UMAP Dim.2', color='cluster',
+    #     title="Umineko2018, back1, Clusters Generated by K-Means",
+    #     color_discrete_sequence=px.colors.qualitative.Set1
+    # )
+    # fig.write_image(name+'_Kmeans.pdf')
+    #
+    # from sklearn.cluster import DBSCAN
+    # dbscan = DBSCAN(eps=0.25, min_samples=10)  # Adjust 'eps' and 'min_samples' as needed
+    # cluster_labels = dbscan.fit_predict(proj_3d_gyro)
+    # df = pd.DataFrame(proj_3d_gyro, columns=['UMAP Dim.1', 'UMAP Dim.2'])
+    # df['cluster'] = cluster_labels
+    # # Visualize the new clusters
+    # fig = px.scatter(
+    #     df, x='UMAP Dim.1', y='UMAP Dim.2', color='cluster',
+    #     title="Umineko2018, back1, Clusters Generated by DBSCAN",
+    #     color_discrete_sequence=px.colors.qualitative.Set1
+    # )
+    # fig.write_image(name+'_DBSCAN.pdf')
     return
 
 def get_info_from_csv(p):
@@ -398,6 +533,105 @@ class MSEloss(nn.Module):
         output = loss(input, target)
         return output
 
+class MSEloss_weighted(nn.Module):
+    def __init__(self):
+        super(MSEloss_weighted, self).__init__()
+
+    def forward(self, input, target):
+        '''
+        input: raw sensor data
+        target: reconstructed sensor data
+        the mse loss makes the target data to be similar to the input data
+        '''
+        # loss = nn.MSELoss()
+        # output = loss(input, target)
+        input = input.permute(0, 2, 1)  # Convert to (batch, length, dim)
+        target = target.permute(0, 2, 1)  # Convert to (batch, length, dim)
+
+        # Compute MSE manually
+        loss = torch.mean((input - target) ** 4)
+        return loss
+
+class MSEloss_masked(nn.Module):
+    def __init__(self):
+        super(MSEloss_masked, self).__init__()
+
+    def forward(self, inputs, predictions, mask_ratio=0.7):
+    # def continuous_masked_reconstruction_loss(inputs, predictions, mask_ratio=0.2):
+        """
+        Compute reconstruction loss by focusing only on the masked regions.
+
+        Args:
+            inputs (torch.Tensor): Original input tensor, shape (batch, length, dim).
+            predictions (torch.Tensor): Reconstructed input tensor, shape (batch, length, dim).
+            mask_ratio (float): Fraction of the input to mask (0 < mask_ratio < 1).
+
+        Returns:
+            torch.Tensor: Computed loss focusing on masked regions.
+            torch.Tensor: Masked input tensor.
+        """
+
+        inputs = inputs.permute(0, 2, 1)  # Convert to (batch, length, dim)
+        predictions = predictions.permute(0, 2, 1)  # Convert to (batch, length, dim)
+        batch_size, length, dim = inputs.shape
+
+        # Create a mask of ones
+        mask = torch.ones_like(inputs)
+
+        # Calculate the number of masked elements (per sample)
+        num_masked = int(length * mask_ratio)
+
+        for i in range(batch_size):
+            # Randomly select the start of the masked segment
+            start_idx = torch.randint(0, length - num_masked + 1, (1,)).item()
+
+            # Create a continuous masked segment
+            mask[i, start_idx:start_idx + num_masked, :] = 0
+
+        # # Apply the mask to create masked inputs
+        # masked_inputs = inputs * mask
+
+        # Compute reconstruction loss focusing on masked regions
+        # Mask is inverted to focus only on masked areas
+        inverted_mask = 1 - mask
+        loss = torch.sum((predictions - inputs) ** 2 * inverted_mask) / torch.sum(inverted_mask)
+
+        return loss
+        # return loss, masked_inputs
+
+
+class custom_weighted_mse_loss(nn.Module):
+    def __init__(self):
+        super(custom_weighted_mse_loss, self).__init__()
+
+    def forward(self, predictions, groundtruth, threshold=5, weight_high=2.0, weight_low=1.0):
+    # def custom_weighted_mse_loss(predictions, groundtruth, threshold=5, weight_high=2.0, weight_low=1.0):
+        """
+        Compute a weighted MSE loss, giving higher weight to ground truth values larger than the threshold.
+
+        Args:
+            predictions (torch.Tensor): Predicted values, shape (batch, length).
+            groundtruth (torch.Tensor): Ground truth values, shape (batch, length).
+            threshold (float): The threshold for emphasizing data points.
+            weight_high (float): Weight for elements where ground truth > threshold.
+            weight_low (float): Weight for elements where ground truth <= threshold.
+
+        Returns:
+            torch.Tensor: The computed loss.
+        """
+        # Compute the element-wise squared error
+        errors = (predictions - groundtruth) ** 4
+
+        # Create a weight mask based on the threshold
+        weights = torch.where(groundtruth > threshold, weight_high, weight_low)
+
+        # Apply the weights to the errors
+        weighted_errors = weights * errors
+
+        # Return the mean of the weighted errors
+        loss = torch.mean(weighted_errors)
+        return loss
+
 
 def get_optimizer(p_opti, model):
     params = model.parameters()
@@ -477,27 +711,29 @@ def AE_train_time_series_resnet(train_loader, model, criterion, optimizer, epoch
     losses = []
 
     model.train()
-    warm_up_step = 100
+    warm_up_step = 1
     for i, (sample, label) in enumerate(train_loader):
         # aug_sample1 = gen_aug(sample, 't_warp')  # t_warp, out.shape=batch64,width3,height900
         # reshape data by adding channel to 1, and transpose height and width
         # sample = sample.to(device=device, non_blocking=True, dtype=torch.float)
         sample = sample.to(device=device, dtype=torch.float)
 
-        # input of autoencoder will be 3D, the backbone is 1d-cnn
+        # # input of autoencoder will be 3D, the backbone is 1d-cnn
+        # noisy_data = sample + torch.randn_like(sample) * 0.1
+
         x_encoded, output = model(sample)  # x_encoded.shape=batch512,outchannel128,len13
-        loss = criterion(sample, output)
+        loss = criterion(output, sample)
+        # loss = criterion(sample, output)
         losses.append(loss.item())
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
     if (epoch >= warm_up_step):
-    # if (epoch >= warm_up_step) and (scheduler.optimizer.param_groups[0]["lr"] >0.00002):
         # scheduler.step()
         scheduler.step(np.average(losses))
-        print(
-            f'Epoch {epoch + 1}, Learning Rate: {scheduler.optimizer.param_groups[0]["lr"]}')
+        # print(
+        #     f'Epoch {epoch + 1}, Learning Rate: {scheduler.optimizer.param_groups[0]["lr"]}')
     #     if i % 10 == 0:
     #         print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
     # print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
@@ -512,31 +748,36 @@ def Classify_train_time_series_resnet(train_loader, model, criterion, optimizer,
 
     model.train()
     warm_up_step = 5
+    outputs, labels = [], []
     for i, (sample, label) in enumerate(train_loader):
         # aug_sample1 = gen_aug(sample, 't_warp')  # t_warp, out.shape=batch64,width3,height900
         # reshape data by adding channel to 1, and transpose height and width
         # sample = sample.to(device=device, non_blocking=True, dtype=torch.float)
         sample = sample.to(device=device, dtype=torch.float)
-        label = label.to(device=device, dtype=torch.long)
+        # label = label.to(device=device, dtype=torch.long)
 
         # input of autoencoder will be 3D, the backbone is 1d-cnn
         # sample = sample.transpose(0, 2, 1)
         feature, output = model(sample)  # x_encoded.shape=batch512,outchannel128,len13
         # print(output.shape)
         # print(type(label[:,0]))
-        loss = criterion(output, label[:,0])
+        label_concat_vote = majority_value(label)
+        label_concat_vote = torch.asarray(label_concat_vote).to(device=device, dtype=torch.long)
+        loss = criterion(output, label_concat_vote)
         losses.update(loss.item())
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        outputs.append(output.detach().cpu().numpy())
+        labels.append(label[:, 0].detach().cpu().numpy())
 
     if (epoch >= warm_up_step):
         scheduler.step()
     #     if i % 10 == 0:
     #         print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
     # print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
-    return losses
+    return losses,outputs,labels
 
 
 def load_weights(
@@ -952,71 +1193,55 @@ class Resnet(nn.Module):
 class Encoder3d(nn.Module):
     def __init__(self):
         super(Encoder3d, self).__init__()
-        self.conv1 = nn.Conv1d(in_channels=3, out_channels=64, kernel_size=3, padding=1)
-        self.pool1 = nn.MaxPool1d(kernel_size=2)
+        self.conv1 = nn.Conv1d(in_channels=3, out_channels=64, kernel_size=6, padding=1)
         self.bn1 = nn.BatchNorm1d(64)
+        self.pool1 = nn.MaxPool1d(kernel_size=2)
 
-        self.conv2 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
-        self.pool2 = nn.MaxPool1d(kernel_size=2)
+        self.conv2 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=6, padding=1)
         self.bn2 = nn.BatchNorm1d(128)
+        self.pool2 = nn.MaxPool1d(kernel_size=2)
 
-        self.conv3 = nn.Conv1d(in_channels=128, out_channels=256, kernel_size=3, padding=1)
-        self.pool3 = nn.MaxPool1d(kernel_size=2)
+        self.conv3 = nn.Conv1d(in_channels=128, out_channels=256, kernel_size=4, padding=1)
         self.bn3 = nn.BatchNorm1d(256)
+        self.pool3 = nn.MaxPool1d(kernel_size=2)
 
-        # Calculate the flattened size after all convolutions and pooling
-        self.flattened_size = 3072  # Adjust this to match the output of the last pooling layer
-        self.fc = nn.Linear(self.flattened_size, 256)
+        self.flattened_size = 256 * 4#12  # Adjust this based on input size and pooling
+        self.fc = nn.Linear(self.flattened_size, 64)
 
     def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = self.bn1(x)
-        x = self.pool1(x)
-        x = F.relu(self.conv2(x))
-        x = self.bn2(x)
-        x = self.pool2(x)
-        x = F.relu(self.conv3(x))
-        x = self.bn3(x)
-        x = self.pool3(x)
+        x = self.pool1(F.elu(self.bn1(self.conv1(x))))
+        x = self.pool2(F.elu(self.bn2(self.conv2(x))))
+        x = self.pool3(F.elu(self.bn3(self.conv3(x))))
         x = x.view(x.size(0), -1)  # Flatten
-        x = self.fc(x)  # Output size will be (batch_size, 1024)
+        x = self.fc(x)  # Latent space
         return x
 
-
+# Decoder structure
 class Decoder3d(nn.Module):
     def __init__(self):
         super(Decoder3d, self).__init__()
-        self.fc = nn.Linear(256, 3072)  # Adjust size if necessary
-        self.unflatten = nn.Unflatten(1, (256, 12))
+        self.fc = nn.Linear(64, 256 * 4)  # Match encoder flattened size
+        self.unflatten = nn.Unflatten(1, (256, 4))
 
-        self.conv_trans1 = nn.ConvTranspose1d(in_channels=256, out_channels=128, kernel_size=3, padding=1)
-        self.upsample1 = nn.Upsample(scale_factor=2)
+        self.conv_trans1 = nn.ConvTranspose1d(in_channels=256, out_channels=128, kernel_size=4, stride=2, padding=1)
         self.bn1 = nn.BatchNorm1d(128)
 
-        self.conv_trans2 = nn.ConvTranspose1d(in_channels=128, out_channels=64, kernel_size=3, padding=1)
-        self.upsample2 = nn.Upsample(scale_factor=2)
+        self.conv_trans2 = nn.ConvTranspose1d(in_channels=128, out_channels=64, kernel_size=6, stride=3, padding=1)
         self.bn2 = nn.BatchNorm1d(64)
 
-        self.conv_trans3 = nn.ConvTranspose1d(in_channels=64, out_channels=3, kernel_size=3, padding=1)
-        self.upsample3 = nn.Upsample(scale_factor=2)
+        self.conv_trans3 = nn.ConvTranspose1d(in_channels=64, out_channels=3, kernel_size=6, stride=2, padding=1)
         self.bn3 = nn.BatchNorm1d(3)
+        self.linear = nn.Linear(52, 50)
 
-        self.linear = nn.Linear(96, 100)
     def forward(self, x):
-        x = F.relu(self.fc(x))
+        x = F.elu(self.fc(x))
         x = self.unflatten(x)
-        x = F.relu(self.conv_trans1(x))
-        x = self.bn1(x)
-        x = self.upsample1(x)
-        x = F.relu(self.conv_trans2(x))
-        x = self.bn2(x)
-        x = self.upsample2(x)
-        x = F.mish(self.conv_trans3(x))
-        x = self.bn3(x)
-        x = self.upsample3(x)
+        x = F.elu(self.bn1(self.conv_trans1(x)))
+        x = F.elu(self.bn2(self.conv_trans2(x)))
+        x = F.elu(self.bn3(self.conv_trans3(x)))  # Sigmoid to normalize output between 0 and 1
+        # x = torch.sigmoid(self.conv_trans3(x))  # Sigmoid to normalize output between 0 and 1
         x = self.linear(x)
         return x
-
 
 class Autoencoder3d(nn.Module):
     def __init__(self, is_reconst=True, is_classify=False):
@@ -1028,7 +1253,8 @@ class Autoencoder3d(nn.Module):
         if self.is_reconst:
             self.decoder = Decoder3d()
         elif self.is_classify:
-            self.classify = EvaClassifier(output_size=15)
+            # self.classify = EvaClassifier(output_size=15)
+            self.classify = MLP(output_size=6)  # number of classes
         else:
             print('error: no module in Autoencoder3d.')
 
@@ -1047,97 +1273,259 @@ class Autoencoder3d(nn.Module):
         return feature, out
 
 
-class Encoder3d_transf(nn.Module):
+# transfer the channel and length of the input data: Autoencoder3d transfer
+class Encoder3d4(nn.Module):
     def __init__(self):
-        super(Encoder3d_transf, self).__init__()
-        self.conv1 = nn.Conv1d(in_channels=300, out_channels=150, kernel_size=3, padding=1)
-        self.pool1 = nn.MaxPool1d(kernel_size=2)
-        self.batchnorm1 = nn.BatchNorm1d(150)
+        super(Encoder3d4, self).__init__()
+        self.conv1 = nn.Conv1d(in_channels=3,
+                               out_channels=64,
+                               kernel_size=3,
+                               padding=1)
+        self.bn1 = nn.BatchNorm1d(64)
+        self.pool1 = nn.MaxPool1d(kernel_size=2,
+                                  stride=2,
+                                  return_indices=True)
 
-        self.conv2 = nn.Conv1d(in_channels=150, out_channels=75, kernel_size=3, padding=1)
-        self.pool2 = nn.MaxPool1d(kernel_size=2)
-        self.batchnorm2 = nn.BatchNorm1d(75)
+        self.conv2 = nn.Conv1d(in_channels=64,
+                               out_channels=128,
+                               kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm1d(128)
+        self.pool2 = nn.MaxPool1d(kernel_size=2,
+                                  stride=2,
+                                  return_indices=True)
 
-        self.conv3 = nn.Conv1d(in_channels=75, out_channels=75, kernel_size=3, padding=1)
-        self.pool3 = nn.MaxPool1d(kernel_size=2)
-        self.batchnorm3 = nn.BatchNorm1d(75)
+        self.conv3 = nn.Conv1d(in_channels=128,
+                               out_channels=128,
+                               kernel_size=3,
+                               padding=1)
+        self.bn3 = nn.BatchNorm1d(128)
+        self.pool3 = nn.MaxPool1d(kernel_size=2,
+                                  stride=2,
+                                  return_indices=True)
 
-        # Calculate the flattened size after all convolutions and pooling
-        self.flattened_size = 75 * 3  # Adjust this to match the output of the last pooling layer
-        self.fc = nn.Linear(self.flattened_size, 1024)
+        self.flattened_size = 128 * 6  # 12  # Adjust this based on input size and pooling
+        self.fc = nn.Linear(self.flattened_size, 64)
 
     def forward(self, x):
-        x = x.permute(0,2,1)
-        x = self.batchnorm1(F.relu(self.conv1(x)))
-        # x = self.pool1(x)
-        x = self.batchnorm2(F.relu(self.conv2(x)))
-        # x = self.pool2(x)
-        x = self.batchnorm3(F.relu(self.conv3(x)))
-        # x = self.pool3(x)
-        x = x.view(x.size(0), -1)  # Flatten
-        # x = self.fc(x)  # Output size will be (batch_size, 1024)
-        return x
+        # input: batch, channel, length
+        # x = input.permute(0, 2, 1)
+        size1 = x.size()
+        x, idx1 = self.pool1(F.elu(self.bn1(self.conv1(x))))
+        size2 = x.size()
+        x, idx2 = self.pool2(F.elu(self.bn2(self.conv2(x))))
+        size3 = x.size()
+        x, idx3 = self.pool3(F.elu(self.bn3(self.conv3(x))))
+        x = x.view(x.size(0), -1)  # Flatten: batch, 128*6
+        # x = self.fc(x)  # Latent space
+        return x, [idx1, idx2, idx3], [size1, size2, size3]
 
 
-class Decoder3d_transf(nn.Module):
+# Decoder structure with skip connections and strides=1 for finer upsampling
+class Decoder3d4(nn.Module):
     def __init__(self):
-        super(Decoder3d_transf, self).__init__()
-        # self.fc = nn.Linear(1024, 256 * 37)  # Adjust size if necessary
-        self.unflatten = nn.Unflatten(1, (75, 3))
+        super(Decoder3d4, self).__init__()
+        # self.fc = nn.Linear(64, 128 * 6)  # Match encoder flattened size
+        self.unflatten = nn.Unflatten(1, (128, 6))
 
-        self.conv_trans1 = nn.ConvTranspose1d(in_channels=75, out_channels=75, kernel_size=3, padding=1)
-        self.upsample1 = nn.Upsample(scale_factor=2)
-        self.batchnorm1 = nn.BatchNorm1d(75)
+        self.conv_trans1 = nn.ConvTranspose1d(in_channels=128,
+                                              out_channels=128,
+                                              kernel_size=3,
+                                              stride=1,
+                                              padding=1)
+        self.bn1 = nn.BatchNorm1d(128)
+        self.unpool1 = nn.MaxUnpool1d(2, stride=2)
 
-        self.conv_trans2 = nn.ConvTranspose1d(in_channels=75, out_channels=150, kernel_size=3, padding=1)
-        self.upsample2 = nn.Upsample(scale_factor=2)
-        self.batchnorm2 = nn.BatchNorm1d(150)
+        self.conv_trans2 = nn.ConvTranspose1d(in_channels=128,
+                                              out_channels=64,
+                                              kernel_size=3,
+                                              stride=1,
+                                              padding=1)
+        self.bn2 = nn.BatchNorm1d(64)
+        self.unpool2 = nn.MaxUnpool1d(2, stride=2)
 
-        self.conv_trans3 = nn.ConvTranspose1d(in_channels=150, out_channels=300, kernel_size=3, padding=1)
-        self.upsample3 = nn.Upsample(scale_factor=2)
-        self.batchnorm3 = nn.BatchNorm1d(300)
+        self.conv_trans3 = nn.ConvTranspose1d(in_channels=64,
+                                              out_channels=3,
+                                              kernel_size=3,
+                                              stride=1,
+                                              padding=1)
+        self.bn3 = nn.BatchNorm1d(3)
+        self.unpool3 = nn.MaxUnpool1d(2, stride=2)
+        # self.linear = nn.Linear(47, 48)
 
-        # self.linear = nn.Linear(296, 300)
-    def forward(self, x):
-        # x = F.relu(self.fc(x))
+    def forward(self, x, idxs, sizes):
+        [idx1, idx2, idx3] = idxs
+        [size1, size2, size3] = sizes
+        # x = F.elu(self.fc(x))
         x = self.unflatten(x)
-        x = self.batchnorm1(F.relu(self.conv_trans1(x)))
-        # x = self.upsample1(x)
-        x = self.batchnorm2(F.relu(self.conv_trans2(x)))
-        # x = self.upsample2(x)
-        x = self.batchnorm3(F.mish((self.conv_trans3(x))))
-        # x = self.upsample3(x)
+        x = self.unpool1(x, idx3,
+                         output_size=size3)
+        x = F.elu(self.bn1(self.conv_trans1(x)))
+        x = self.unpool2(x, idx2,
+                         output_size=size2)
+        x = F.elu(self.bn2(self.conv_trans2(x)))
+        x = self.unpool3(x, idx1,
+                         output_size=size1)
+        x = self.bn3(self.conv_trans3(x))
+
+        # x = torch.sigmoid(self.conv_trans3(x))  # Sigmoid to normalize output between 0 and 1
         # x = self.linear(x)
-        x = x.permute(0,2,1)
         return x
 
-class Autoencoder3d_transf(nn.Module):
+
+class Autoencoder3d4(nn.Module):
     def __init__(self, is_reconst=True, is_classify=False):
-        super(Autoencoder3d_transf, self).__init__()
-        self.feature_extractor = Encoder3d_transf()
+        super(Autoencoder3d4, self).__init__()
+        self.feature_extractor = Encoder3d4()
 
         self.is_reconst = is_reconst
         self.is_classify = is_classify
         if self.is_reconst:
-            self.decoder = Decoder3d_transf()
+            self.decoder = Decoder3d4()
         elif self.is_classify:
-            self.classify = EvaClassifier(output_size=15)
+            # self.classify = EvaClassifier(output_size=12)
+            self.classify = MLP(output_size=5)
         else:
             print('error: no module in Autoencoder3d.')
 
+        # Weight initialization (if you use custom weight_init function)
         weight_init(self)
 
     def forward(self, x):
-        feature = self.feature_extractor(x)
-        # out = self.decoder(feature)
+        feature, idxs, sizes = self.feature_extractor(x)  # Get features and skip connections
         if self.is_reconst:
-            out = self.decoder(feature)
+            out = self.decoder(feature, idxs, sizes)  # Pass skip connections to the decoder
         elif self.is_classify:
             out = self.classify(feature)
         else:
             out = self.decoder(feature)
             print('error: no module in Autoencoder3d.')
         return feature, out
+
+
+class Encoder4d(nn.Module):
+    def __init__(self):
+        super(Encoder4d, self).__init__()
+        self.conv1 = nn.Conv1d(in_channels=4,
+                               out_channels=64,
+                               kernel_size=3,
+                               padding=1)
+        self.bn1 = nn.BatchNorm1d(64)
+        self.pool1 = nn.MaxPool1d(kernel_size=2,
+                                  stride=2,
+                                  return_indices=True)
+
+        self.conv2 = nn.Conv1d(in_channels=64,
+                               out_channels=128,
+                               kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm1d(128)
+        self.pool2 = nn.MaxPool1d(kernel_size=2,
+                                  stride=2,
+                                  return_indices=True)
+
+        self.conv3 = nn.Conv1d(in_channels=128,
+                               out_channels=128,
+                               kernel_size=3,
+                               padding=1)
+        self.bn3 = nn.BatchNorm1d(128)
+        self.pool3 = nn.MaxPool1d(kernel_size=2,
+                                  stride=2,
+                                  return_indices=True)
+
+        self.flattened_size = 128 * 6  # 12  # Adjust this based on input size and pooling
+        self.fc = nn.Linear(self.flattened_size, 64)
+
+    def forward(self, x):
+        # input: batch, channel, length
+        # x = input.permute(0, 2, 1)
+        size1 = x.size()
+        x, idx1 = self.pool1(F.elu(self.bn1(self.conv1(x))))
+        size2 = x.size()
+        x, idx2 = self.pool2(F.elu(self.bn2(self.conv2(x))))
+        size3 = x.size()
+        x, idx3 = self.pool3(F.elu(self.bn3(self.conv3(x))))
+        x = x.view(x.size(0), -1)  # Flatten: batch, 128*6
+        # x = self.fc(x)  # Latent space
+        return x, [idx1, idx2, idx3], [size1, size2, size3]
+
+class Decoder4d(nn.Module):
+    def __init__(self):
+        super(Decoder4d, self).__init__()
+        # self.fc = nn.Linear(64, 128 * 6)  # Match encoder flattened size
+        self.unflatten = nn.Unflatten(1, (128, 6))
+
+        self.conv_trans1 = nn.ConvTranspose1d(in_channels=128,
+                                              out_channels=128,
+                                              kernel_size=3,
+                                              stride=1,
+                                              padding=1)
+        self.bn1 = nn.BatchNorm1d(128)
+        self.unpool1 = nn.MaxUnpool1d(2, stride=2)
+
+        self.conv_trans2 = nn.ConvTranspose1d(in_channels=128,
+                                              out_channels=64,
+                                              kernel_size=3,
+                                              stride=1,
+                                              padding=1)
+        self.bn2 = nn.BatchNorm1d(64)
+        self.unpool2 = nn.MaxUnpool1d(2, stride=2)
+
+        self.conv_trans3 = nn.ConvTranspose1d(in_channels=64,
+                                              out_channels=4,
+                                              kernel_size=3,
+                                              stride=1,
+                                              padding=1)
+        self.bn3 = nn.BatchNorm1d(4)
+        self.unpool3 = nn.MaxUnpool1d(2, stride=2)
+        # self.linear = nn.Linear(47, 48)
+
+    def forward(self, x, idxs, sizes):
+        [idx1, idx2, idx3] = idxs
+        [size1, size2, size3] = sizes
+        # x = F.elu(self.fc(x))
+        x = self.unflatten(x)
+        x = self.unpool1(x, idx3,
+                         output_size=size3)
+        x = F.elu(self.bn1(self.conv_trans1(x)))
+        x = self.unpool2(x, idx2,
+                         output_size=size2)
+        x = F.elu(self.bn2(self.conv_trans2(x)))
+        x = self.unpool3(x, idx1,
+                         output_size=size1)
+        x = self.bn3(self.conv_trans3(x))
+
+        # x = torch.sigmoid(self.conv_trans3(x))  # Sigmoid to normalize output between 0 and 1
+        # x = self.linear(x)
+        return x
+class Autoencoder4d(nn.Module):
+    def __init__(self, is_reconst=True, is_classify=False):
+        super(Autoencoder4d, self).__init__()
+        self.feature_extractor = Encoder4d()
+
+        self.is_reconst = is_reconst
+        self.is_classify = is_classify
+        if self.is_reconst:
+            self.decoder = Decoder4d()
+        elif self.is_classify:
+            # self.classify = EvaClassifier(output_size=12)
+            self.classify = MLP(output_size=5)
+        else:
+            print('error: no module in Autoencoder3d.')
+
+        # Weight initialization (if you use custom weight_init function)
+        weight_init(self)
+
+    def forward(self, x):
+        feature, idxs, sizes = self.feature_extractor(x)  # Get features and skip connections
+        if self.is_reconst:
+            out = self.decoder(feature, idxs, sizes)  # Pass skip connections to the decoder
+        elif self.is_classify:
+            out = self.classify(feature)
+        else:
+            out = self.decoder(feature)
+            print('error: no module in Autoencoder3d.')
+        return feature, out
+
+
 
 class Encoder2d(nn.Module):
     def __init__(self):
@@ -1213,57 +1601,76 @@ class Autoencoder2d(nn.Module):
 class Encoder1d(nn.Module):
     def __init__(self):
         super(Encoder1d, self).__init__()
-        self.conv1 = nn.Conv1d(in_channels=1, out_channels=16, kernel_size=3, padding=1)
-        self.pool1 = nn.MaxPool1d(kernel_size=2)
+        self.conv1 = nn.Conv1d(in_channels=1, out_channels=64, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm1d(64)
+        self.pool1 = nn.MaxPool1d(kernel_size=2,
+                                  stride=2,
+                                  return_indices=True)
 
-        self.conv2 = nn.Conv1d(in_channels=16, out_channels=32, kernel_size=3, padding=1)
-        self.pool2 = nn.MaxPool1d(kernel_size=2)
+        self.conv2 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm1d(128)
+        self.pool2 = nn.MaxPool1d(kernel_size=2,
+                                  stride=2,
+                                  return_indices=True)
 
-        self.conv3 = nn.Conv1d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
-        self.pool3 = nn.MaxPool1d(kernel_size=2)
+        self.conv3 = nn.Conv1d(in_channels=128, out_channels=128, kernel_size=3, padding=1)
+        self.bn3 = nn.BatchNorm1d(128)
+        self.pool3 = nn.MaxPool1d(kernel_size=2,
+                                  stride=2,
+                                  return_indices=True)
 
         # Calculate the flattened size after all convolutions and pooling
-        self.flattened_size = 64 * 37  # Adjust this to match the output of the last pooling layer
-        self.fc = nn.Linear(self.flattened_size, 1024)
+        self.flattened_size = 128 * 6  # Adjust this to match the output of the last pooling layer
+        self.fc = nn.Linear(self.flattened_size, 64)
 
     def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = self.pool1(x)
-        x = F.relu(self.conv2(x))
-        x = self.pool2(x)
-        x = F.relu(self.conv3(x))
-        x = self.pool3(x)
-        x = x.view(x.size(0), -1)  # Flatten
-        x = self.fc(x)  # Output size will be (batch_size, 1024)
-        return x
+        # input: batch, channel, length
+        size1 = x.size()
+        x, idx1 = self.pool1(F.elu(self.bn1(self.conv1(x))))
+        size2 = x.size()
+        x, idx2 = self.pool2(F.elu(self.bn2(self.conv2(x))))
+        size3 = x.size()
+        x, idx3 = self.pool3(F.elu(self.bn3(self.conv3(x))))
+        x = x.view(x.size(0), -1)  # Flatten: batch, 128*6
+        # x = self.fc(x)  # Latent space
+        return x, [idx1, idx2, idx3], [size1, size2, size3]
 
 
 class Decoder1d(nn.Module):
     def __init__(self):
         super(Decoder1d, self).__init__()
-        self.fc = nn.Linear(1024, 64 * 37)  # Adjust size if necessary
-        self.unflatten = nn.Unflatten(1, (64, 37))
+        # self.fc = nn.Linear(64, 64 * 37)  # Adjust size if necessary
+        self.unflatten = nn.Unflatten(1, (128, 6))
 
-        self.conv_trans1 = nn.ConvTranspose1d(in_channels=64, out_channels=32, kernel_size=3, padding=1)
-        self.upsample1 = nn.Upsample(scale_factor=2)
+        self.conv_trans1 = nn.ConvTranspose1d(in_channels=128, out_channels=128, kernel_size=3, padding=1)
+        # self.upsample1 = nn.Upsample(scale_factor=2)
+        self.unpool1 = nn.MaxUnpool1d(2, stride=2)
+        self.bn1 = nn.BatchNorm1d(128)
 
-        self.conv_trans2 = nn.ConvTranspose1d(in_channels=32, out_channels=16, kernel_size=3, padding=1)
-        self.upsample2 = nn.Upsample(scale_factor=2)
+        self.conv_trans2 = nn.ConvTranspose1d(in_channels=128, out_channels=64, kernel_size=3, padding=1)
+        # self.upsample2 = nn.Upsample(scale_factor=2)
+        self.unpool2 = nn.MaxUnpool1d(2, stride=2)
+        self.bn2 = nn.BatchNorm1d(64)
 
-        self.conv_trans3 = nn.ConvTranspose1d(in_channels=16, out_channels=1, kernel_size=3, padding=1)
-        self.upsample3 = nn.Upsample(scale_factor=2)
+        self.conv_trans3 = nn.ConvTranspose1d(in_channels=64, out_channels=1, kernel_size=3, padding=1)
+        # self.upsample3 = nn.Upsample(scale_factor=2)
+        self.unpool3 = nn.MaxUnpool1d(2, stride=2)
+        self.bn3 = nn.BatchNorm1d(1)
 
-        self.linear = nn.Linear(296, 300)
-    def forward(self, x):
-        x = F.relu(self.fc(x))
+        # self.linear = nn.Linear(296, 300)
+    def forward(self, x, idxs, sizes):
+        [idx1, idx2, idx3] = idxs
+        [size1, size2, size3] = sizes
         x = self.unflatten(x)
-        x = F.relu(self.conv_trans1(x))
-        x = self.upsample1(x)
-        x = F.relu(self.conv_trans2(x))
-        x = self.upsample2(x)
-        x = torch.sigmoid(self.conv_trans3(x))
-        x = self.upsample3(x)
-        x = self.linear(x)
+        x = self.unpool1(x, idx3,
+                         output_size=size3)
+        x = F.elu(self.bn1(self.conv_trans1(x)))
+        x = self.unpool2(x, idx2,
+                         output_size=size2)
+        x = F.elu(self.bn2(self.conv_trans2(x)))
+        x = self.unpool3(x, idx1,
+                         output_size=size1)
+        x = self.bn3(self.conv_trans3(x))
         return x
 
 
@@ -1276,26 +1683,27 @@ class Autoencoder1d(nn.Module):
         weight_init(self)
 
     def forward(self, x):
-        feature = self.feature_extractor(x)
-        out = self.decoder(feature)
+        feature, idxs, sizes = self.feature_extractor(x)
+        out = self.decoder(feature, idxs, sizes)
         return feature, out
 #-----------------------autoencoder------------------------------------------
 
-def weight_init(self, mode="fan_out", nonlinearity="relu"):
-
-    for m in self.modules():
-
-        if isinstance(m, (nn.Conv1d, nn.Linear, nn.ConvTranspose1d)):
-            nn.init.kaiming_normal_(
-                m.weight, mode=mode, nonlinearity=nonlinearity
-            )
-
-        elif isinstance(m, (nn.BatchNorm1d)):
-            nn.init.constant_(m.weight, 1)
+# Model weight initialization function
+def weight_init(m, mode="fan_out", nonlinearity="relu"):
+    if isinstance(m, nn.Conv1d) or isinstance(m, nn.ConvTranspose1d):
+        nn.init.kaiming_normal_(m.weight, mode=mode, nonlinearity=nonlinearity)
+        if m.bias is not None:
             nn.init.constant_(m.bias, 0)
+    elif isinstance(m, nn.Linear):
+        nn.init.kaiming_normal_(m.weight, mode=mode, nonlinearity=nonlinearity)
+        if m.bias is not None:
+            nn.init.constant_(m.bias, 0)
+    elif isinstance(m, nn.BatchNorm1d):
+        nn.init.constant_(m.weight, 1)
+        nn.init.constant_(m.bias, 0)
 
 class EvaClassifier(nn.Module):
-    def __init__(self, input_size=1024, nn_size=512, output_size=2):
+    def __init__(self, input_size=64, nn_size=512, output_size=2):
         super(EvaClassifier, self).__init__()
         self.linear1 = torch.nn.Linear(input_size, nn_size)
         self.linear2 = torch.nn.Linear(nn_size, output_size)
@@ -1304,6 +1712,7 @@ class EvaClassifier(nn.Module):
         x = self.linear1(x)
         x = F.relu(x)
         x = self.linear2(x)
+        x = F.softmax(x, dim=-1)
         return x
 
 class Classifier(nn.Module):
@@ -1314,6 +1723,22 @@ class Classifier(nn.Module):
     def forward(self, x):
         y_pred = self.linear1(x)
         return y_pred
+
+
+class MLP(nn.Module):
+    def __init__(self, input_size=64, hidden_size=32, output_size=5):
+        super(MLP, self).__init__()
+        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(hidden_size, output_size)
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+        out = self.softmax(x)
+        return out
 
 
 class ProjectionHead(nn.Module):
@@ -1327,3 +1752,190 @@ class ProjectionHead(nn.Module):
         x = F.relu(x)
         x = self.linear2(x)
         return x
+
+
+def Permutation(x, max_segments=5, seg_mode="random"):
+    orig_steps = np.arange(x.shape[1])
+
+    num_segs = np.random.randint(1, max_segments, size=(x.shape[-1]))
+    ret = np.zeros_like(x)
+    for i, pat in enumerate(x):
+        if num_segs[i] > 1:
+            if seg_mode == "random":
+                split_points = np.random.choice(x.shape[1] - 2, num_segs[i] - 1, replace=False)
+                split_points.sort()
+                splits = np.split(orig_steps, split_points)
+            else:
+                splits = np.array_split(orig_steps, num_segs[i])
+            np.random.shuffle(splits)
+            warp = np.concatenate(splits).ravel()
+            ret[i] = pat[warp]
+        else:
+            ret[i] = pat
+    return torch.from_numpy(ret)
+
+def get_cubic_spline_interpolation(x_eval, x_data, y_data):
+    """
+    Get values for the cubic spline interpolation
+    """
+    cubic_spline = CubicSpline(x_data, y_data)
+    return cubic_spline(x_eval)
+
+def DistortTimesteps(X, sigma=0.2):
+    tt = GenerateRandomCurves(
+        X, sigma
+    )  # Regard these samples aroun 1 as time intervals
+    tt_cum = np.cumsum(tt, axis=0)  # Add intervals to make a cumulative graph
+    # Make the last value to have X.shape[0]
+    t_scale = [
+        (X.shape[0] - 1) / tt_cum[-1, 0],
+        (X.shape[0] - 1) / tt_cum[-1, 1],
+        (X.shape[0] - 1) / tt_cum[-1, 2],
+    ]
+    tt_cum[:, 0] = tt_cum[:, 0] * t_scale[0]
+    tt_cum[:, 1] = tt_cum[:, 1] * t_scale[1]
+    tt_cum[:, 2] = tt_cum[:, 2] * t_scale[2]
+    return tt_cum
+
+
+def GenerateRandomCurves(X, sigma=0.2, knot=4):
+    xx = (
+        np.ones((X.shape[1], 1))
+        * (np.arange(0, X.shape[0], (X.shape[0] - 1) / (knot + 1)))
+    ).transpose()
+    yy = np.random.normal(loc=1.0, scale=sigma, size=(knot + 2, X.shape[1]))
+    x_range = np.arange(X.shape[0])
+    cs_x = CubicSpline(xx[:, 0], yy[:, 0])
+    cs_y = CubicSpline(xx[:, 1], yy[:, 1])
+    cs_z = CubicSpline(xx[:, 2], yy[:, 2])
+    return np.array([cs_x(x_range), cs_y(x_range), cs_z(x_range)]).transpose()
+
+
+def DA_TimeWarp(X, sigma=0.2):
+    tt_new = DistortTimesteps(X, sigma)
+    X_new = np.zeros(X.shape)
+    x_range = np.arange(X.shape[0])
+    X_new[:, 0] = np.interp(x_range, tt_new[:, 0], X[:, 0])
+    X_new[:, 1] = np.interp(x_range, tt_new[:, 1], X[:, 1])
+    X_new[:, 2] = np.interp(x_range, tt_new[:, 2], X[:, 2])
+    return X_new
+
+
+def time_warp(sample, sigma=0.2):
+    sample = np.swapaxes(sample, 0, 1)
+    sample = DA_TimeWarp(sample, sigma=sigma)
+    sample = np.swapaxes(sample, 0, 1)
+    return torch.from_numpy(sample)
+
+
+
+# cross model contrastive learning models
+class ProjectionHead(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        """
+        Args:
+            input_dim: 输入特征的维度 (e.g., 编码器输出的维度)
+            hidden_dim: 隐藏层的维度 (通常设置较大，如 2048)
+            output_dim: 输出维度 (e.g., 对比学习空间的维度，如 128)
+        """
+        super(ProjectionHead, self).__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, x):
+        """
+        Forward pass for the projection head.
+        Args:
+            x: 输入特征 (通常是编码器输出的特征向量)
+        Returns:
+            z: 经过投影并 L2 归一化的特征向量
+        """
+        x = F.relu(self.fc1(x))  # 全连接层 + ReLU
+        x = self.fc2(x)  # 第二个全连接层
+        z = F.normalize(x, dim=1)  # L2 归一化
+        return z
+class CrossModelAutoencoderContrastiveModel(nn.Module):
+    def __init__(self, input_size=1024, hidden_size=512, output_size=128):
+        super(CrossModelAutoencoderContrastiveModel, self).__init__()
+        self.acc_feature_extractor = Encoder3d4()
+        self.acc_decoder = Decoder3d4()
+        self.press_feature_extractor = Encoder1d()
+        self.press_decoder = Decoder1d()
+
+        self.accel_projection = ProjectionHead(768, 512, 215)
+        self.press_projection = ProjectionHead(768, 512, 215)
+
+        self.temperature = 0.3
+
+
+    def forward(self, acc, press):
+        acc_feature, idxs, sizes = self.acc_feature_extractor(acc)  # Get features and skip connections
+        press_feature, idxs, sizes = self.press_feature_extractor(press)
+
+        acc_features = self.accel_projection(acc_feature)
+        press_features = self.press_projection(press_feature)
+
+        # 归一化嵌入
+        acc_features = F.normalize(acc_features, p=2, dim=1)
+        press_features = F.normalize(press_features, p=2, dim=1)
+
+        # feature extractor visualization, projector for regression
+        return acc_feature, acc_features, press_feature, press_features
+
+    def calculate_loss(self, acc_features, press_features):
+
+        # 计算相似度矩阵 (余弦相似度)
+        logits_per_image = torch.matmul(acc_features, press_features.t()) / self.temperature
+        logits_per_text = logits_per_image.t()
+
+        # 创建标签：每个图像与其对应文本的索引是匹配的
+        batch_size = acc_features.size(0)
+        targets = torch.arange(batch_size, device=acc_features.device)
+
+        # 计算交叉熵损失
+        loss_image_to_text = F.cross_entropy(logits_per_image, targets)
+        loss_text_to_image = F.cross_entropy(logits_per_text, targets)
+
+        # 返回平均损失
+        loss = (loss_image_to_text + loss_text_to_image) / 2
+        return loss
+
+
+# 对比学习损失 (NT-Xent Loss)
+class NTXentloss(nn.Module):
+    def __init__(self):
+        super(NTXentloss, self).__init__()
+    def forward(self, features_1, features_2, temperature=0.5):
+        """
+        Compute NT-Xent contrastive loss for two sets of features.
+        :param features_1: Tensor of shape (batch_size, hidden_dim) from modality 1
+        :param features_2: Tensor of shape (batch_size, hidden_dim) from modality 2
+        :param temperature: Temperature scaling factor
+        :return: Contrastive loss scalar
+        """
+        batch_size = features_1.size(0)
+
+        # Normalize features
+        features_1 = F.normalize(features_1, dim=1)
+        features_2 = F.normalize(features_2, dim=1)
+
+        # Concatenate features to form a joint batch
+        features = torch.cat([features_1, features_2], dim=0)  # (2 * batch_size, hidden_dim)
+
+        # Compute similarity matrix (2N x 2N)
+        similarity_matrix = torch.matmul(features, features.T)  # (2 * batch_size, 2 * batch_size)
+
+        # Remove self-similarity by masking the diagonal
+        mask = torch.eye(2 * batch_size, device=features.device).bool()
+        similarity_matrix = similarity_matrix.masked_fill(mask, float('-inf'))
+
+        # Scale by temperature
+        logits = similarity_matrix / temperature
+
+        # Create labels: positives are diagonal in cross-modality (e.g., [0, batch_size], [1, batch_size + 1], ...)
+        labels = torch.cat([torch.arange(batch_size, 2 * batch_size),
+                           torch.arange(0, batch_size)]).to(features.device)
+
+        # Compute NT-Xent loss using cross entropy
+        loss = F.cross_entropy(logits, labels)
+        return loss

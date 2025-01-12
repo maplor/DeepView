@@ -177,7 +177,8 @@ def train(
                '_datalen%s_' % str(cfg['data_length']) + sensor_str[:-1] + '.pth')
 
     # return to original path.
-    os.chdir(str(start_path))
+    os.chdir(str(start_path))    # training
+
 
 
 if __name__ == "__main__":

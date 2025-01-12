@@ -3176,8 +3176,6 @@ class LabelWithInteractivePlot(QWidget):
 
         
 
-
-
     # 显示原始标签在右下散点图上
     def toggleLabelColor(self):
 
