@@ -12,57 +12,44 @@ from deepview.generate_training_dataset.utils import resampling
 from deepview.clustering_pytorch.datasets.factory import sliding_window
 
 
+# label_dict = {
+#     'ground_stationary': 0,  #  if a bird is resting on the ground, including standing
+#     'ground_active': 0,
+#     'stationary': 1,  #  if a bird is resting on the sea surface
+#     'preening': 1,
+#     'bathing': 2,
+#     'bathing_poss': 2,
+#     'body_shaking': 2,
+#     # 'flight_take_off': 4,
+#     # 'flight_cruising': 3,
+#     'flying_active': 3,  # flying active -> flapping
+#     'flying_passive': 4,  # flying passive -> flying without flapping, including gliding
+#     'foraging': -2,# 5,
+#     'poss_foraging': -2,# 5,
+#     'foraging_fish_poss': -2,# 5,
+#     'foraging_insect_poss': -2,# 5,
+#     'forgaing_insect': -2,# 5,
+#     'foraging_non-fish': -2,# 5,
+#     'foraging_steal': -2,# 5,
+#     'foraging_poss': -2,# 5,
+#     'foraging_dive': -2,# 5,
+#     # 'surface_seizing': 11,
+#     'unknown': -2,  #-1
+# }
 
-# get label id from label string
 label_dict = {
-    'ground_stationary': 0,  #  if a bird is resting on the ground, including standing
-    'ground_active': 0,
-    'stationary': 1,  #  if a bird is resting on the sea surface
-    'preening': 1,
-    'bathing': 2,
-    'bathing_poss': 2,
-    'body_shaking': 2,
-    # 'flight_take_off': 4,
-    # 'flight_cruising': 3,
-    'flying_active': 3,  # flying active -> flapping
-    'flying_passive': 4,  # flying passive -> flying without flapping, including gliding
-    'foraging': -2,# 5,
-    'poss_foraging': -2,# 5,
-    'foraging_fish_poss': -2,# 5,
-    'foraging_insect_poss': -2,# 5,
-    'forgaing_insect': -2,# 5,
-    'foraging_non-fish': -2,# 5,
-    'foraging_steal': -2,# 5,
-    'foraging_poss': -2,# 5,
-    'foraging_dive': -2,# 5,
-    # 'surface_seizing': 11,
-    'unknown': -2,  #-1
+'stationary': 0,
+'preening': 1,
+'bathing': 2,
+'flight_take_off': 3,
+'flight_cruising': 4, #3,
+'foraging_dive': 5, #4,
+'surface_seizing': 6, #4,
+'body_shaking': 7, #-2,
+'unknown': -2
 }
 
-label_dict_origin = {
-    'ground_stationary': 0,  #  if a bird is resting on the ground, including standing
-    'stationary': 0,  #  if a bird is resting on the sea surface
-    'preening': 0,
-    'bathing': 1,
-    'bathing_poss': 1,
-    'flight_take_off': 4,
-    'flight_cruising': 3,
-    'flying_active': 2,  # flying active -> flapping
-    'flying_passive': 2,  # flying passive -> flying without flapping, including gliding
-    'foraging': 5,
-    'poss_foraging': 5,
-    'foraging_fish_poss': 6,
-    'foraging_insect_poss': 7,
-    'forgaing_insect': 7,
-    'foraging_non-fish': 8,
-    'foraging_steal': 9,
-    'foraging_poss': 9,
-    'foraging_dive': 10,
-    'surface_seizing': 11,
-    'body_shaking': 12,
-    'ground_active': 13,
-    'unknown': -2,  #-1
-}
+year_list = [2018, 2020, 2021, 2022]
 
 class data_loader_umineko(Dataset):
     def __init__(self, samples, labels, device='cpu'):
@@ -90,7 +77,7 @@ def get_info_from_csv(p):
     # 提取所需的信息
     # 假设你需要的固定模式是：<name><year>_<other>_<code>_<id>
     name_year = parts[0]  # 如 'Umineko2022'
-    code = parts[-2]  # 如 'LB09'
+    code = parts[-2]  # animal_tag, 如 'LB09'
 
     # 将 'Umineko2022' 分成 'Umineko' 和 '2022'
     name = ''.join(filter(str.isalpha, name_year))  # 提取字母部分
@@ -109,7 +96,7 @@ def get_backid_samplerate(back_label_path, result):
     [species, year, tag] = result
     # filtering
     filtered_rows = back_label_pd[(back_label_pd['species'] == species) &
-                                  (back_label_pd['animal_tag'] == tag)  &
+                                  (back_label_pd['animal_tag'].str.contains(tag))  &
                                   (back_label_pd['year'] == year)]
 
     # Get the values from column C for the filtered rows
@@ -123,7 +110,7 @@ def read_umineko_path(umi_root_path):
 
     # umi_root_path = r'D:\logbot-data\BioTaggerData\export\raw\umineko\v.1.0.0'
     # because it contains data of three years, try to extract data separately
-    year_list = [2018, 2019, 2022]
+
 
     # get all filenames
     file_paths = {}
@@ -384,7 +371,7 @@ if __name__ == "__main__":
     # print("Hello, World!")
 
     back_label_path = r'D:\logbot-data\BioTaggerData\masterLabelsByOtsuka\animal_id.csv'
-    umi_root_path = r'D:\logbot-data\BioTaggerData\export\raw\umineko\v.1.0.0'
+    umi_root_path = r'D:\logbot-data\BioTaggerData\export\raw\omizunagidori\v1.0.0'
     file_paths = read_umineko_path(umi_root_path)
 
     # # data_path = r'D:\code\DeepView\deepview\calculate_results\data\umineko.pkl'
@@ -413,176 +400,9 @@ if __name__ == "__main__":
     # for loop for all umineko data
 
     df_list, df_clean_list = read_umineko_data(back_label_path, file_paths)
-    for idx, year in enumerate(['2018', '2019', '2022']):
-        dp = r'D:\code\DeepView\deepview\calculate_results\data\umineko_%s.npy'
-        np.save(dp % year, {'raw_data': df_list[idx], 'labeled_data': df_clean_list[idx]})
+    # for idx, year in enumerate(['2017', '2018', '2020', '2021', '2022']):
+    for idx, year in enumerate(year_list):
+        dp = r'D:\code\DeepView\deepview\calculate_results\data\omizunagidori_%s.npy'
+        np.save(dp % str(year), {'raw_data': df_list[idx], 'labeled_data': df_clean_list[idx]})
     print('')
 
-    # selected_df, selected_clean_df = (
-    #     extract_data_from_year_back(df_list, df_clean_list, 1))
-    #
-    # # selected_df['label_id'] = selected_df['label'].map(label_dict)
-    # # selected_clean_df['label_id'] = selected_clean_df['label'].map(label_dict)
-    #
-    # # 将df_list没有标签的位置赋值-2，标记灰色，其他label正常标记。观察是否有label的标记能在不同灰色cluster中
-    # # Replace NaN with -2 in column A
-    # selected_df['label_id'] = selected_df['label_id'].fillna(-2)
-    #
-    # device = 'cuda'
-    # len_sw = 300
-    # sensor_type = 'pressure'
-    # # train_loader = get_accel_batch_data(selected_clean_df,
-    # #                                     len_sw,
-    # #                                     batch_size=512,
-    # #                                     device=device)
-    #
-    # # train_loader = get_gps_batch_data(selected_clean_df,
-    # #                                     len_sw,
-    # #                                     batch_size=512,
-    # #                                     device=device)
-    # # train_loader = get_gps_raw_batch_data(selected_clean_df,
-    # #                                   len_sw,
-    # #                                   batch_size=512,
-    # #                                   device=device)
-    # # train_loader = get_temperature_batch_data(selected_clean_df,
-    # #                                       len_sw,
-    # #                                       batch_size=512,
-    # #                                       device=device)
-    # train_loader = get_pressure_batch_data(selected_clean_df,
-    #                                           len_sw,
-    #                                           batch_size=512,
-    #                                           device=device)
-    #
-    # print('')
-    #
-    # model = Autoencoder1d()
-    #
-    # # class_num = len(set(list(label_dict.values())))
-    # # # Example usage
-    # # model = Resnet(
-    # #         output_size=class_num,
-    # #         is_reconst=True,
-    # #         len_sw=len_sw,
-    # #         # is_simclr=True,
-    # #         # is_eva=True,
-    # #         resnet_version=1,
-    # #                )
-    # model = model.to(device)
-    # # dirname = os.path.dirname(__file__)
-    # # checkpoint = os.path.join(
-    # # os.getcwd(), "model_check_point", "mtl_best.mdl"
-    # # )
-    # checkpoint = r'D:\code\DeepView\deepview\calculate_results\model_check_point\mtl_best.mdl'
-    # print(checkpoint)
-    # #
-    # # load_weights(
-    # # checkpoint, model, my_device=device, is_dist=True, name_start_idx=1
-    # # )
-    # #
-    # #
-    # criterion = MSEloss()
-    # criterion = criterion.to(device)
-    #
-    # learning_rate = 0.0001
-    # optimizer = optim.Adam(
-    #     model.parameters(), lr=learning_rate, amsgrad=True
-    # )
-    # optimizer = optim.Adam(
-    #             model.parameters(), lr=learning_rate, amsgrad=True
-    #         )
-    # lambda1 = lambda epoch: 1.0**epoch
-    # scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda1)
-    #
-    # # training
-    # start_epoch = 0
-    # num_epochs = 1800
-    # # lr = 0.0001
-    # early_stopper = EarlyStopper(patience=3, min_delta=10)
-    # # for epoch in np.arange(n_epochs):
-    # #     train_loss = train_one_epoch(model, train_loader)
-    # #     validation_loss = validate_one_epoch(model, validation_loader)
-    # #     if early_stopper.early_stop(validation_loss):
-    # #         break
-    # for epoch in tqdm(range(start_epoch, num_epochs)):
-    #
-    #     learning_rate = adjust_learning_rate(
-    #         learning_rate, optimizer, epoch, p_scheduler='cosine', p_epochs=num_epochs)
-    #
-    #     losses = AE_train_time_series_resnet(train_loader, model, criterion, optimizer, epoch, scheduler, device)
-    #
-    #     if early_stopper.early_stop(losses):
-    #         break
-    #     if (epoch % 10 == 0) or (epoch == num_epochs - 1):
-    #         print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
-    #
-    # # print('Saving model at: ' + 'Resnet_ssl_pretrain_epoch%s' % str(epoch) \
-    # #       + '_datalen%s_' % str(len_sw) +sensor_type+ '.pth')
-    # # torch.save(model.state_dict(), 'Resnet_ssl_pretrain_epoch%s' % str(epoch) + \
-    # #            '_datalen%s_' % str(len_sw) +sensor_type+ '.pth')
-    #
-    # print('Saving model at: ' + 'AE_ssl_pretrain_epoch%s_raw' % str(epoch) \
-    #       + '_datalen%s_' % str(len_sw) +sensor_type+ '.pth')
-    # torch.save(model.state_dict(), 'AE_ssl_pretrain_epoch%s_raw' % str(epoch) + \
-    #            '_datalen%s_' % str(len_sw) +sensor_type+ '.pth')
-    #
-    # # full_model_path = r'D:\code\DeepView\deepview\calculate_results\data\Resnet_ssl_conv_pretrain_epoch79_datalen300_accel_labeldata.pth'
-    # # out_channels = 32
-    # # model = Resnet(output_size=class_num,
-    # #     is_reconst=True,
-    # #     len_sw= len_sw,
-    # #     # is_simclr=True,
-    # #     # is_eva=True,
-    # #     resnet_version=1,)
-    # # device = 'cuda'
-    # # model = model.to(device)
-    # # if torch.cuda.is_available():
-    # #     model.load_state_dict(torch.load(full_model_path, weights_only=False))
-    # # else:
-    # #     model.load_state_dict(torch.load(full_model_path, weights_only=False, map_location=torch.device('cpu')))
-    #
-    #
-    # # reconstruction result
-    # representation_list, sample_list, pred_list, label_list = \
-    #             AE_eval_time_series(train_loader, model, device)
-    #
-    # # tsne latent representation to shape=(2, len) PCA降维到形状为 (2, len)
-    # repre_concat = np.concatenate(representation_list)
-    # repre_reshape = repre_concat.reshape(repre_concat.shape[0], -1)
-    #
-    # sample_concat = np.concatenate(sample_list)
-    # sample_concat = sample_concat.transpose(0,2,1)
-    # sample_reshape = sample_concat.reshape(-1, sample_concat.shape[-1])
-    #
-    # pred_concat = np.concatenate(pred_list)
-    # pred_concat = pred_concat.transpose(0, 2, 1)
-    # pred_reshape = pred_concat.reshape(-1, pred_concat.shape[-1])
-    # fig, axes = plt.subplots(3, 1, figsize=(8, 6))
-    # axes[0].plot(sample_reshape[5000:10000, 0], 'r', label='groundtruthY')
-    # axes[0].plot(pred_reshape[5000:10000, 0], 'b-.', label='predictY')
-    # axes[0].set_title('AE_Umineko2018_back1_%s'%sensor_type)
-    # # axes[0].set_title('ResNet_SSL_pretrained_Reconstruct_Umineko2018_back1')
-    # axes[0].set_xlabel('timestamp')
-    # axes[0].set_ylabel(sensor_type)
-    # axes[0].legend()
-    #
-    # axes[1].plot(sample_reshape[5000:10000, 0], 'r', label='groundtruthY')
-    # # axes[1].plot(pred_reshape[10000:length, 1], 'b-.', label='predictY')
-    # # axes[1].set_title('ResNet_SSL_pretrained_Reconstruct_Umineko2018_back1')
-    # axes[1].set_xlabel('timestamp')
-    # axes[1].set_ylabel(sensor_type)
-    # axes[1].legend()
-    #
-    # # axes[2].plot(sample_reshape[10000:length, 1], 'r', label='groundtruthY')
-    # axes[2].plot(pred_reshape[5000:10000, 0], 'b-.', label='predictY')
-    # # axes[2].set_title('ResNet_SSL_pretrained_Reconstruct_Umineko2018_back1')
-    # axes[2].set_xlabel('timestamp')
-    # axes[2].set_ylabel(sensor_type)
-    # axes[2].legend()
-    #
-    # # Adjust layout
-    # plt.tight_layout()
-    # # Show the figure
-    # # plt.show()
-    # # plt.savefig('AEreconst_only_labeled.png')
-    # plt.savefig('AE_Umineko2018_back1_labeled_%s.png'%sensor_type)
-    # plt.close()

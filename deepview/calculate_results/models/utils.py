@@ -1,52 +1,79 @@
 import numpy as np
 import os
 import matplotlib.pyplot as plt
-import pickle
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 import torch
 import torch.nn as nn
-# import pandas as pd
 from scipy.interpolate import interp1d,CubicSpline
 import math
-from datetime import datetime
-from tqdm import tqdm
-from sklearn.manifold import TSNE
-import torch.nn.functional as F
-# import pickle
 import copy
 import random
-from umap import UMAP
-import plotly.express as px
+from deepview.calculate_results.data.umineko.umineko_data import label_dict
 
-# get label id from label string
-label_dict = {
-    'ground_stationary': 0,
-    'stationary': 0,
-    'preening': 0,
-    'bathing': 1,
-    'bathing_poss': 1,
-    'flight_take_off': 2,
-    'flight_cruising': 3,
-    'flying_active': 4,
-    'flying_passive': 4,
-    'foraging': 5,
-    'poss_foraging': 5,
-    'foraging_fish_poss': 6,
-    'foraging_insect_poss': 7,
-    'foraging_insect': 7,
-    'foraging_non-fish': 8,
-    'foraging_poss': 9,
-    'foraging_dive': 10,
-    'surface_seizing': 11,
-    'body_shaking': 12,
-    'ground_active': 13,
-    'unknown': 14,  #-1
+
+labeldict_findstr = {
+                     0: 'ground_stationary',
+                     1: 'stationary',
+                     2: 'bathing',
+                     3: 'flying_active',
+                     4: 'flying_passive'}
+                     # -2: 'unknown',
+                     # 5: 'foraging'}
+
+labeldict_findstr_omizu = {
+                     0: 'stationary',
+                     1: 'bathing',
+                     2: 'flying',
+                     3: 'foraging'}
+
+labeldict_findstr_turtle = {
+                     0: 'surface_behavior',
+                     1: 'social_selfdirected',
+                     2: 'rest_passive',
+                     3: 'locomotion',
+                     4: 'feeding_related',
+                     5: 'exploration_environment',
 }
 
+label_colors = {
+    0: "#5470C6",  # 深蓝 - Attack
+    1: "#91CC75",  # 绿色 - Investigation
+    2: "#FAC858",  # 金黄 - Mount
+    3: "#EE6666",  # 红色 - Category 3
+    4: "#73C0DE",  # 天蓝 - Category 4
+    5: 'brown',     # 棕色
+    6: 'pink',      # 粉色
+    7: 'cyan',      # 青色
+    8: 'magenta',   # 品红
+    9: 'lime',      # 青柠色
+    10: 'teal',     # 蓝绿色
+    11: 'violet',   # 紫罗兰色
+    12: 'gold',     # 金色
+    13: 'coral',    # 珊瑚色
+    14: 'salmon'    # 三文鱼色
+}
 
 back_label_path = r'D:\logbot-data\BioTaggerData\masterLabelsByOtsuka\animal_id.csv'
 back_label_pd = pd.read_csv(back_label_path)
+
+# def set_random_seed(seed):
+#     # Set seed for Python's random module
+#     random.seed(seed)
+#
+#     # Set seed for NumPy
+#     np.random.seed(seed)
+#
+#     # Set seed for PyTorch
+#     torch.manual_seed(seed)
+#
+#     # If using CUDA, set seed for GPU as well
+#     if torch.cuda.is_available():
+#         torch.cuda.manual_seed(seed)
+#         torch.cuda.manual_seed_all(seed)  # For multi-GPU setups
+
+
+
 def get_backid_samplerate(result):
     [species, year, tag] = result
     # filtering
@@ -60,6 +87,148 @@ def get_backid_samplerate(result):
     result_values[1] = filtered_rows['acc_sampling_rate'].values[0]
     return result_values
 
+
+##########################raw data processing###################################
+def read_sensor_data():
+    raw_data, labeled_data = [], []
+    for year in ['2018', '2022']:
+        dp = r'D:\code\DeepView\deepview\calculate_results\data\umineko_%s.npy'
+        data = np.load(dp % year, allow_pickle=True).item()
+        # Access the individual components
+        raw_ = data['raw_data']
+        labeled_ = data['labeled_data']
+        if year == '2018':
+            df_raw_2018 = raw_
+            df_2018 = labeled_
+        # elif year=='2019':
+        #     df_raw_2019 = raw_
+        #     df_2019 = labeled_
+        elif year == '2022':
+            df_raw_2022 = raw_
+            df_2022 = labeled_
+        else:
+            print('Error: year not found')
+            break
+
+    selected_df = pd.concat([df_raw_2018, df_raw_2022], ignore_index=True)
+    selected_df['filename'] = selected_df['year'].astype(int).astype(str) + '_' + selected_df['animal_tag']
+    animal_tag_list = ['2018_LB07', '2018_LB08', '2018_LB09', '2018_LB10',
+                       '2018_LB11', '2018_LB12', '2018_LB13',
+                       '2022_LB02', '2022_LB03', '2022_LB08', '2022_LB09']
+    selected_df = selected_df[selected_df['filename'].isin(animal_tag_list)]
+
+    selected_df['label_id'] = selected_df['label'].map(label_dict)
+    selected_df['label_id'] = selected_df['label_id'].fillna(-2)
+
+    # # 删除无标签的数据
+    # selected_df = selected_df[selected_df.label_id != -2]
+    return selected_df
+
+def pd2np(selected_df, columns):
+    # 选择需要的列
+    selected_df = selected_df[columns]
+    # selected_df = selected_df[['acc_x', 'acc_y', 'acc_z', 'pressure', 'label_id']]
+    fill_selected_df = selected_df.fillna(method='ffill').fillna(method='bfill')  # pressure has nan values
+    selected_np = fill_selected_df.values
+    return selected_np
+
+def gaussian_std(X):
+    mean_val = np.mean(X.astype(float), axis=0)
+    std_val = np.std(X.astype(float), axis=0)
+    X_standardized = (X - mean_val) / np.maximum(std_val, 10 ** -5)
+    return X_standardized, mean_val, std_val
+
+def process_accel(acc_np):
+    tmp_acc_stand, mean_val, std_val = gaussian_std(acc_np)
+    return tmp_acc_stand, mean_val, std_val
+
+def process_press(pre_np):
+    data = pre_np - 1013.25  # standard pressure
+
+    # 计算均值和标准差
+    mean_val = np.mean(data)
+    std_val = np.std(data)
+    # 识别超过3个标准差的异常值
+    outlier_mask = np.abs(data - mean_val) > 5 * std_val
+    indices = np.where(data > outlier_mask)
+    # Convert the result to a list (optional)
+    indices_list = indices[0].tolist()
+    # 创建数据副本
+    data_replaced = np.copy(data)
+
+    # 用周围最近的正常值替换异常值
+    for i in indices_list:
+        if outlier_mask[i]:
+            # 查找前一个正常值
+            j = i - 1
+            # 查找后一个正常值
+            k = i + 1
+
+            # 找到前一个正常值
+            while j >= 0 and outlier_mask[j]:
+                j -= 1
+            # 找到后一个正常值
+            while k < len(data) and outlier_mask[k]:
+                k += 1
+
+            # 用最近的正常值替换异常值
+            if j >= 0 and (k >= len(data) or i - j <= k - i):
+                data_replaced[i] = data[j]
+            elif k < len(data):
+                data_replaced[i] = data[k]
+    press_stand, mean_pre, std_pre = gaussian_std(data_replaced)
+    return press_stand, mean_pre, std_pre
+
+def process_acc(selected_df, columns):
+    selected_np = pd2np(selected_df, columns)
+    acc_np, mean_acc, std_acc = process_accel(selected_np[:, 0:3])
+    selected_np[:, :3] = acc_np
+    return selected_np
+
+def process_acc_press(selected_df, columns):
+    selected_np = pd2np(selected_df, columns)
+    acc_np, mean_acc, std_acc = process_accel(selected_np[:, 0:3])
+    pres_np, mean_prs, std_prs = process_press(selected_np[:, 3:4])
+    selected_np[:, :3] = acc_np
+    selected_np[:, 3:4] = pres_np
+    return selected_np
+
+def process_press_temperature(selected_df, columns):
+    selected_np = pd2np(selected_df, columns)
+    acc_np, mean_acc, std_acc = process_press(selected_np[:, 0:1])
+    pres_np, mean_prs, std_prs = gaussian_std(selected_np[:, 1:2])
+    selected_np[:, 0:1] = acc_np
+    selected_np[:, 1:2] = pres_np
+    return selected_np
+
+def process_acc_temperature(selected_df, columns):
+    selected_np = pd2np(selected_df, columns)
+    acc_np, mean_acc, std_acc = process_accel(selected_np[:, 0:3])
+    temp_stand, mean_tem, std_tem = gaussian_std(selected_np[:, 3:4])
+    selected_np[:, :3] = acc_np
+    selected_np[:, 3:4] = temp_stand
+    return selected_np
+
+def process_acc_gyr(selected_df, columns):
+    selected_np = pd2np(selected_df, columns)
+    acc_np, mean_acc, std_acc = process_accel(selected_np[:, 0:3])
+    gyr_np, _, _ = process_accel(selected_np[:, 3:6])
+    selected_np[:, :3] = acc_np
+    selected_np[:, 3:6] = gyr_np
+    return selected_np
+
+def process_acc_gps(selected_df, columns):
+    selected_np = pd2np(selected_df, columns)
+    acc_np, mean_acc, std_acc = process_accel(selected_np[:, 0:3])
+    gps_np, _, _ = process_accel(selected_np[:, 3:5])
+    selected_np[:, :3] = acc_np
+    selected_np[:, 3:5] = gps_np
+    return selected_np
+
+
+###########################raw data processing###################################
+
+
 def majority_value(arr):
     if isinstance(arr, torch.Tensor):
         arr = arr.detach().cpu().numpy()
@@ -68,6 +237,20 @@ def majority_value(arr):
         values, counts = np.unique(row, return_counts=True)
         majority.append(values[np.argmax(counts)])
     return np.array(majority)
+
+
+def find_majority_minority(label_b):
+    unique_labels, counts = np.unique(label_b, return_counts=True)
+
+    if len(unique_labels) == 1:
+        print(f"Only one label present: {unique_labels[0]}")
+        return unique_labels[0], unique_labels[0]  # 只有一个类别，返回相同的值
+
+    # 计算多数类和少数类
+    majority_label = unique_labels[np.argmax(counts)]
+    minority_label = unique_labels[np.argmin(counts)]
+
+    return majority_label, minority_label
 
 def AE_eval_time_series(train_loader, model, device, memotimes=30):
     model.eval()
@@ -113,6 +296,34 @@ def Classify_eval_time_series(train_loader, model, device):
 
     return representation_list, sample_list, pred_list, label_list
 
+def plot_func(sensordim, sample_reshape, pred_reshape, sensortype, axis_dict, name, start, end):
+    fig, axes = plt.subplots(sensordim * 3, 1, figsize=(8, 6))
+    for acc_axis in range(sensordim):
+        col = acc_axis
+        axes[0 + sensordim * col].plot(sample_reshape[start:end, col], 'r', label='groundtruth%s' % axis_dict[col])
+        axes[0 + sensordim * col].plot(pred_reshape[start:end, col], 'b-', label='predict%s' % axis_dict[col])
+        axes[0 + sensordim * col].set_title('Autoencoder_Reconstruct_Umineko_%s_axis%s' % (sensortype, axis_dict[col]))
+        axes[0 + sensordim * col].set_xlabel('timestamp')
+        axes[0 + sensordim * col].set_ylabel('value')
+        axes[0 + sensordim * col].legend(loc="right")
+
+        axes[1 + sensordim * col].plot(sample_reshape[start:end, col], 'r', label='groundtruth%s' % axis_dict[col])
+        axes[1 + sensordim * col].set_xlabel('timestamp')
+        axes[1 + sensordim * col].set_ylabel('value')
+        axes[1 + sensordim * col].legend(loc="right")
+
+        axes[2 + sensordim * col].plot(pred_reshape[start:end, col], 'b-', label='predict%s' % axis_dict[col])
+        axes[2 + sensordim * col].set_xlabel('timestamp')
+        axes[2 + sensordim * col].set_ylabel('value')
+        axes[2 + sensordim * col].legend(loc="right")
+
+    # Adjust layout
+    plt.tight_layout()
+    plt.title(name)
+    # Show the figure
+    plt.savefig(name + '_%s.png' % sensortype)
+    plt.close('all')
+    return
 
 def plot_reconstruction_result(sensortype, representation_list, sample_list, pred_list, label_list, name='accel'):
     # tsne latent representation to shape=(2, len) PCA降维到形状为 (2, len)
@@ -129,10 +340,6 @@ def plot_reconstruction_result(sensortype, representation_list, sample_list, pre
     pred_concat = pred_concat.transpose(0, 2, 1)
     pred_reshape = pred_concat.reshape(-1, pred_concat.shape[-1])
 
-    start = 0
-    end = -1
-    # end = min(10000, len(sample_reshape))
-
     # sensortype = 'pressure'
     if sensortype == 'accel':
         axis_dict = {0:'x', 1:'y', 2:'z'}
@@ -142,73 +349,49 @@ def plot_reconstruction_result(sensortype, representation_list, sample_list, pre
         sensordim = len(axis_dict)
     else:
         print('no such sensor type')
-    fig, axes = plt.subplots(sensordim*3, 1, figsize=(8, 6))
-    for acc_axis in range(sensordim):
-        col = acc_axis
-        axes[0+sensordim*col].plot(sample_reshape[start:end, col], 'r', label='groundtruth%s' % axis_dict[col])
-        axes[0+sensordim*col].plot(pred_reshape[start:end, col], 'b-', label='predict%s' % axis_dict[col])
-        axes[0+sensordim*col].set_title('Autoencoder_Reconstruct_Umineko_%s_axis%s' % (sensortype, axis_dict[col]))
-        axes[0+sensordim*col].set_xlabel('timestamp')
-        axes[0+sensordim*col].set_ylabel('value')
-        axes[0+sensordim*col].legend(loc="right")
 
-        axes[1+sensordim*col].plot(sample_reshape[start:end, col], 'r', label='groundtruth%s' % axis_dict[col])
-        axes[1+sensordim*col].set_xlabel('timestamp')
-        axes[1+sensordim*col].set_ylabel('value')
-        axes[1+sensordim*col].legend(loc="right")
+    plot_func(sensordim, sample_reshape, pred_reshape, sensortype, axis_dict, 'all_'+name, start=0, end=-1)
+    plot_func(sensordim, sample_reshape, pred_reshape, sensortype, axis_dict, name, start=0, end=10000)
 
-        axes[2+sensordim*col].plot(pred_reshape[start:end, col], 'b-', label='predict%s' % axis_dict[col])
-        axes[2+sensordim*col].set_xlabel('timestamp')
-        axes[2+sensordim*col].set_ylabel('value')
-        axes[2+sensordim*col].legend(loc="right")
-
-    # Adjust layout
-    plt.tight_layout()
-    plt.title(name)
-    # Show the figure
-    plt.savefig(name+'_%s.png'%sensortype)
-    plt.close('all')
+    # umap_3d = UMAP(n_components=3)
+    #
+    # proj_3d_gyro = umap_3d.fit_transform(repre_reshape[start:end])
+    #
+    # # set point size
+    # # point_size = np.ones(proj_3d_gyro.shape[0]) * 1
+    # label_concat = np.concatenate(label_list)
+    # label_concat_vote = majority_value(label_concat)
+    # # grey_idx = np.where(label_concat_vote == -2)[0]
+    # # point_size[grey_idx] = 0.5
+    # # create a dict from actID to act:
+    # labeldict_findstr = {-2: 'unknown',
+    #                      0: 'ground_stationary',
+    #                      1: 'stationary',
+    #                      2: 'bathing',
+    #                      3: 'flying_active',
+    #                      4: 'flying_passive',
+    #                      5: 'foraging'}
+    #
+    # label_concat_vote_str = [labeldict_findstr[i] for i in label_concat_vote]
+    # # label_concat_vote_str = np.char.mod('%d', label_concat_vote)
+    #
+    # fig_3d = px.scatter_3d(
+    #     proj_3d_gyro, x=0, y=1, z=2,
+    #     color=label_concat_vote_str[start:end],
+    #     labels={'color': 'activity'},
+    #     # color_discrete_map={ '-2.0': ('rgba(239, 239, 240, 1)')},
+    #     color_discrete_map={'unknown': 'lightgrey'},
+    #     # size=point_size
+    # )
+    # # Reduce marker size for all points
+    # for trace in fig_3d.data:
+    #     trace.marker.size = 6  # Adjust the size to your preference (e.g., 6)
+    #
+    # # Update transparency for traces where activity is '-2.0'
+    # fig_3d.for_each_trace(lambda trace: trace.update(marker=dict(opacity=0.5)) if trace.name == '-2.0' else ())
+    # fig_3d.update_traces(marker=dict(line=dict(width=0)))  # remove boundary of point
+    # fig_3d.write_html(name+'_%s.html'%sensortype)
     # print('')
-
-    umap_3d = UMAP(n_components=3)
-
-    proj_3d_gyro = umap_3d.fit_transform(repre_reshape[start:end])
-
-    # set point size
-    # point_size = np.ones(proj_3d_gyro.shape[0]) * 1
-    label_concat = np.concatenate(label_list)
-    label_concat_vote = majority_value(label_concat)
-    # grey_idx = np.where(label_concat_vote == -2)[0]
-    # point_size[grey_idx] = 0.5
-    # create a dict from actID to act:
-    labeldict_findstr = {-2: 'unknown',
-                         0: 'ground_stationary',
-                         1: 'stationary',
-                         2: 'bathing',
-                         3: 'flying_active',
-                         4: 'flying_passive',
-                         5: 'foraging'}
-
-    label_concat_vote_str = [labeldict_findstr[i] for i in label_concat_vote]
-    # label_concat_vote_str = np.char.mod('%d', label_concat_vote)
-
-    fig_3d = px.scatter_3d(
-        proj_3d_gyro, x=0, y=1, z=2,
-        color=label_concat_vote_str[start:end],
-        labels={'color': 'activity'},
-        # color_discrete_map={ '-2.0': ('rgba(239, 239, 240, 1)')},
-        color_discrete_map={'unknown': 'lightgrey'},
-        # size=point_size
-    )
-    # Reduce marker size for all points
-    for trace in fig_3d.data:
-        trace.marker.size = 6  # Adjust the size to your preference (e.g., 6)
-
-    # Update transparency for traces where activity is '-2.0'
-    fig_3d.for_each_trace(lambda trace: trace.update(marker=dict(opacity=0.5)) if trace.name == '-2.0' else ())
-    fig_3d.update_traces(marker=dict(line=dict(width=0)))  # remove boundary of point
-    fig_3d.write_html(name+'_%s.html'%sensortype)
-    print('')
     # fig_3d.write_html("test.html")
 # ################################################################################
 #     umap_3d = UMAP(n_components=2)
@@ -519,6 +702,7 @@ class EarlyStopper:
             if self.counter >= self.patience:
                 return True
         return False
+
 class MSEloss(nn.Module):
     def __init__(self):
         super(MSEloss, self).__init__()
@@ -532,105 +716,6 @@ class MSEloss(nn.Module):
         loss = nn.MSELoss()
         output = loss(input, target)
         return output
-
-class MSEloss_weighted(nn.Module):
-    def __init__(self):
-        super(MSEloss_weighted, self).__init__()
-
-    def forward(self, input, target):
-        '''
-        input: raw sensor data
-        target: reconstructed sensor data
-        the mse loss makes the target data to be similar to the input data
-        '''
-        # loss = nn.MSELoss()
-        # output = loss(input, target)
-        input = input.permute(0, 2, 1)  # Convert to (batch, length, dim)
-        target = target.permute(0, 2, 1)  # Convert to (batch, length, dim)
-
-        # Compute MSE manually
-        loss = torch.mean((input - target) ** 4)
-        return loss
-
-class MSEloss_masked(nn.Module):
-    def __init__(self):
-        super(MSEloss_masked, self).__init__()
-
-    def forward(self, inputs, predictions, mask_ratio=0.7):
-    # def continuous_masked_reconstruction_loss(inputs, predictions, mask_ratio=0.2):
-        """
-        Compute reconstruction loss by focusing only on the masked regions.
-
-        Args:
-            inputs (torch.Tensor): Original input tensor, shape (batch, length, dim).
-            predictions (torch.Tensor): Reconstructed input tensor, shape (batch, length, dim).
-            mask_ratio (float): Fraction of the input to mask (0 < mask_ratio < 1).
-
-        Returns:
-            torch.Tensor: Computed loss focusing on masked regions.
-            torch.Tensor: Masked input tensor.
-        """
-
-        inputs = inputs.permute(0, 2, 1)  # Convert to (batch, length, dim)
-        predictions = predictions.permute(0, 2, 1)  # Convert to (batch, length, dim)
-        batch_size, length, dim = inputs.shape
-
-        # Create a mask of ones
-        mask = torch.ones_like(inputs)
-
-        # Calculate the number of masked elements (per sample)
-        num_masked = int(length * mask_ratio)
-
-        for i in range(batch_size):
-            # Randomly select the start of the masked segment
-            start_idx = torch.randint(0, length - num_masked + 1, (1,)).item()
-
-            # Create a continuous masked segment
-            mask[i, start_idx:start_idx + num_masked, :] = 0
-
-        # # Apply the mask to create masked inputs
-        # masked_inputs = inputs * mask
-
-        # Compute reconstruction loss focusing on masked regions
-        # Mask is inverted to focus only on masked areas
-        inverted_mask = 1 - mask
-        loss = torch.sum((predictions - inputs) ** 2 * inverted_mask) / torch.sum(inverted_mask)
-
-        return loss
-        # return loss, masked_inputs
-
-
-class custom_weighted_mse_loss(nn.Module):
-    def __init__(self):
-        super(custom_weighted_mse_loss, self).__init__()
-
-    def forward(self, predictions, groundtruth, threshold=5, weight_high=2.0, weight_low=1.0):
-    # def custom_weighted_mse_loss(predictions, groundtruth, threshold=5, weight_high=2.0, weight_low=1.0):
-        """
-        Compute a weighted MSE loss, giving higher weight to ground truth values larger than the threshold.
-
-        Args:
-            predictions (torch.Tensor): Predicted values, shape (batch, length).
-            groundtruth (torch.Tensor): Ground truth values, shape (batch, length).
-            threshold (float): The threshold for emphasizing data points.
-            weight_high (float): Weight for elements where ground truth > threshold.
-            weight_low (float): Weight for elements where ground truth <= threshold.
-
-        Returns:
-            torch.Tensor: The computed loss.
-        """
-        # Compute the element-wise squared error
-        errors = (predictions - groundtruth) ** 4
-
-        # Create a weight mask based on the threshold
-        weights = torch.where(groundtruth > threshold, weight_high, weight_low)
-
-        # Apply the weights to the errors
-        weighted_errors = weights * errors
-
-        # Return the mean of the weighted errors
-        loss = torch.mean(weighted_errors)
-        return loss
 
 
 def get_optimizer(p_opti, model):
@@ -820,939 +905,6 @@ def freeze_feature_extractor(model):
         print(f"{name} requires_grad: {param.requires_grad}")
     return model
 
-class Downsample(nn.Module):
-    r"""Downsampling layer that applies anti-aliasing filters.
-    For example, order=0 corresponds to a box filter (or average downsampling
-    -- this is the same as AvgPool in Pytorch), order=1 to a triangle filter
-    (or linear downsampling), order=2 to cubic downsampling, and so on.
-    See https://richzhang.github.io/antialiased-cnns/ for more details.
-    """
-
-    def __init__(self, channels=None, factor=2, order=1):
-        super(Downsample, self).__init__()
-        assert factor > 1, "Downsampling factor must be > 1"
-        self.stride = factor
-        self.channels = channels
-        self.order = order
-
-        # Figure out padding and check params make sense
-        # The padding is given by order*(factor-1)/2
-        # so order*(factor-1) must be divisible by 2
-        total_padding = order * (factor - 1)
-        assert total_padding % 2 == 0, (
-            "Misspecified downsampling parameters."
-            "Downsampling factor and order must be such "
-            "that order*(factor-1) is divisible by 2"
-        )
-        self.padding = int(order * (factor - 1) / 2)
-
-        box_kernel = np.ones(factor)
-        kernel = np.ones(factor)
-        for _ in range(order):
-            kernel = np.convolve(kernel, box_kernel)
-        kernel /= np.sum(kernel)
-        kernel = torch.Tensor(kernel)
-        self.register_buffer(
-            "kernel", kernel[None, None, :].repeat((channels, 1, 1))
-        )
-
-    def forward(self, x):
-        return F.conv1d(
-            x,
-            self.kernel,
-            stride=self.stride,
-            padding=self.padding,
-            groups=x.shape[1],
-        )
-
-#-----------------------Resnet------------------------------------------
-
-class ResBlock(nn.Module):
-    r""" Basic bulding block in Resnets:
-
-       bn-relu-conv-bn-relu-conv
-      /                         \
-    x --------------------------(+)->
-
-    """
-
-    def __init__(
-        self, in_channels, out_channels, kernel_size=5, stride=1, padding=2
-    ):
-
-        super(ResBlock, self).__init__()
-
-        self.bn1 = nn.BatchNorm1d(in_channels)
-        self.bn2 = nn.BatchNorm1d(out_channels)
-
-        self.conv1 = nn.Conv1d(
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride,
-            padding,
-            bias=False,
-            padding_mode="circular",
-        )
-        self.conv2 = nn.Conv1d(
-            out_channels,
-            out_channels,
-            kernel_size,
-            stride,
-            padding,
-            bias=False,
-            padding_mode="circular",
-        )
-        self.relu = nn.ReLU(inplace=True)
-
-    def forward(self, x):
-        identity = x
-        x = self.relu(self.bn1(x))
-        x = self.conv1(x)
-        x = self.relu(self.bn2(x))
-        x = self.conv2(x)
-
-        x = x + identity
-
-        return x
-
-class Reconstructor(nn.Module):
-    def __init__(self, input_size=512, len_sw=300):
-        super().__init__()
-        self.len_sw = len_sw
-        self.decoder = nn.Sequential(
-            nn.Linear(input_size, 2048),
-            nn.Mish(),
-            nn.Linear(2048, 1024),
-            nn.Mish(),
-            nn.Linear(1024, self.len_sw * 3),
-            # nn.PReLU()
-            # nn.Softmax()
-        )
-
-    def forward(self, x):
-        x = self.decoder(x)
-        x = x.reshape(x.shape[0], -1, self.len_sw)  # batch,dim,len
-        return x
-
-
-class ReconstructorConv(nn.Module):
-    def __init__(self, input_size=512, len_sw=300):
-        super().__init__()
-        self.len_sw = len_sw
-        # self.decoder = nn.Sequential(
-        #     nn.Linear(input_size, 2048),
-        #     nn.Mish(),
-        #     nn.Linear(2048, 1024),
-        #     nn.Mish(),
-        #     nn.Linear(1024, self.len_sw * 3),
-        #     nn.Mish()
-        # )
-
-        self.Conv1 = nn.Conv1d(1, 16, 3, stride=1)
-        self.bn1 = nn.BatchNorm1d(16)
-        self.drop = nn.Dropout(0.5)
-        self.ac1 = nn.Mish()
-        self.Conv2 = nn.Conv1d(16, 3, 3, stride=2)
-        self.bn2 = nn.BatchNorm1d(3)
-        self.drop2 = nn.Dropout(0.5)
-        self.ac2 = nn.Mish()
-        self.linear1 = nn.Linear(510, self.len_sw)
-        self.ac3 = nn.Mish()
-
-    def forward(self, x):  # batch, 1024
-        # x = self.decoder(x)
-        # x = x.reshape(x.shape[0], -1, self.len_sw)  # batch,dim,len
-        x = x.unsqueeze(1)
-        x = self.Conv1(x)
-        x = self.bn1(x)
-        x = self.drop(x)
-        x = self.ac1(x)
-
-        x = self.Conv2(x)
-        x = self.bn2(x)
-        x = self.drop2(x)
-        x = self.ac2(x)
-
-        # x = x.reshape(x.shape[0], self.len_sw, -1)
-        x = self.linear1(x)
-        x = self.ac3(x)
-        # x = x.reshape(x.shape[0], -1, self.len_sw)
-
-        return x
-
-class Resnet(nn.Module):
-    r"""The general form of the architecture can be described as follows:
-
-    x->[Conv-[ResBlock]^m-BN-ReLU-Down]^n->y
-
-    In other words:
-
-            bn-relu-conv-bn-relu-conv                        bn-
-           /                         \                      /
-    x->conv --------------------------(+)-bn-relu-down-> conv ----
-
-    """
-
-    def __init__(
-        self,
-        output_size=1,
-        n_channels=3,
-            len_sw=300,
-        is_eva=False,
-        resnet_version=1,
-        epoch_len=10,
-        is_mtl=False,
-        is_simclr=False,
-            is_reconst=False
-    ):
-        super(Resnet, self).__init__()
-
-        # Architecture definition. Each tuple defines
-        # a basic Resnet layer Conv-[ResBlock]^m]-BN-ReLU-Down
-        # isEva: change the classifier to two FC with ReLu
-        # For example, (64, 5, 1, 5, 3, 1) means:
-        # - 64 convolution filters
-        # - kernel size of 5
-        # - 1 residual block (ResBlock)
-        # - ResBlock's kernel size of 5
-        # - downsampling factor of 3
-        # - downsampling filter order of 1
-        # In the below, note that 3*3*5*5*4 = 900 (input size)
-        if resnet_version == 1:
-            if epoch_len == 5:
-                cgf = [
-                    (64, 5, 2, 5, 2, 2),
-                    (128, 5, 2, 5, 2, 2),
-                    (256, 5, 2, 5, 3, 1),
-                    (256, 5, 2, 5, 3, 1),
-                    (512, 5, 0, 5, 3, 1),
-                ]
-            elif epoch_len == 10:
-                cgf = [
-                    (64, 5, 2, 5, 2, 2),
-                    (128, 5, 2, 5, 2, 2),
-                    (256, 5, 2, 5, 5, 1),
-                    (512, 5, 2, 5, 5, 1),
-                    (1024, 5, 0, 5, 3, 1),
-                ]
-            else:
-                cgf = [
-                    (64, 5, 2, 5, 3, 1),
-                    (128, 5, 2, 5, 3, 1),
-                    (256, 5, 2, 5, 5, 1),
-                    (512, 5, 2, 5, 5, 1),
-                    (1024, 5, 0, 5, 4, 0),
-                ]
-        else:
-            cgf = [
-                (64, 5, 2, 5, 3, 1),
-                (64, 5, 2, 5, 3, 1),
-                (128, 5, 2, 5, 5, 1),
-                (128, 5, 2, 5, 5, 1),
-                (256, 5, 2, 5, 4, 0),
-            ]  # smaller resnet
-        in_channels = n_channels
-        feature_extractor = nn.Sequential()
-        for i, layer_params in enumerate(cgf):
-            (
-                out_channels,
-                conv_kernel_size,
-                n_resblocks,
-                resblock_kernel_size,
-                downfactor,
-                downorder,
-            ) = layer_params
-            feature_extractor.add_module(
-                f"layer{i+1}",
-                Resnet.make_layer(
-                    in_channels,
-                    out_channels,
-                    conv_kernel_size,
-                    n_resblocks,
-                    resblock_kernel_size,
-                    downfactor,
-                    downorder,
-                ),
-            )
-            in_channels = out_channels
-
-        self.feature_extractor = feature_extractor
-        self.is_mtl = is_mtl
-
-        # Classifier input size = last out_channels in previous layer
-        if is_eva:
-            self.classifier = EvaClassifier(
-                input_size=out_channels, output_size=output_size
-            )
-        elif is_mtl:
-            self.aot_h = Classifier(
-                input_size=out_channels, output_size=output_size
-            )
-            self.scale_h = Classifier(
-                input_size=out_channels, output_size=output_size
-            )
-            self.permute_h = Classifier(
-                input_size=out_channels, output_size=output_size
-            )
-            self.time_w_h = Classifier(
-                input_size=out_channels, output_size=output_size
-            )
-        elif is_simclr:
-            self.classifier = ProjectionHead(
-                input_size=out_channels, encoding_size=output_size
-            )
-        elif is_reconst:
-            self.classifier = Reconstructor(
-                input_size=out_channels,
-                len_sw=len_sw,
-            )
-
-        weight_init(self)
-
-    @staticmethod
-    def make_layer(
-        in_channels,
-        out_channels,
-        conv_kernel_size,
-        n_resblocks,
-        resblock_kernel_size,
-        downfactor,
-        downorder=1,
-    ):
-        r""" Basic layer in Resnets:
-
-        x->[Conv-[ResBlock]^m-BN-ReLU-Down]->
-
-        In other words:
-
-                bn-relu-conv-bn-relu-conv
-               /                         \
-        x->conv --------------------------(+)-bn-relu-down->
-
-        """
-
-        # Check kernel sizes make sense (only odd numbers are supported)
-        assert (
-            conv_kernel_size % 2
-        ), "Only odd number for conv_kernel_size supported"
-        assert (
-            resblock_kernel_size % 2
-        ), "Only odd number for resblock_kernel_size supported"
-
-        # Figure out correct paddings
-        conv_padding = int((conv_kernel_size - 1) / 2)
-        resblock_padding = int((resblock_kernel_size - 1) / 2)
-
-        modules = [
-            nn.Conv1d(
-                in_channels,
-                out_channels,
-                conv_kernel_size,
-                1,
-                conv_padding,
-                bias=False,
-                padding_mode="circular",
-            )
-        ]
-
-        for i in range(n_resblocks):
-            modules.append(
-                ResBlock(
-                    out_channels,
-                    out_channels,
-                    resblock_kernel_size,
-                    1,
-                    resblock_padding,
-                )
-            )
-
-        modules.append(nn.BatchNorm1d(out_channels))
-        modules.append(nn.ReLU(True))
-        modules.append(Downsample(out_channels, downfactor, downorder))
-
-        return nn.Sequential(*modules)
-
-    def forward(self, x):
-        feats = self.feature_extractor(x)
-
-        if self.is_mtl:
-            aot_y = self.aot_h(feats.view(x.shape[0], -1))
-            scale_y = self.scale_h(feats.view(x.shape[0], -1))
-            permute_y = self.permute_h(feats.view(x.shape[0], -1))
-            time_w_h = self.time_w_h(feats.view(x.shape[0], -1))
-            return aot_y, scale_y, permute_y, time_w_h
-        else:
-            y = self.classifier(feats.view(x.shape[0], -1))
-            return feats, y
-        return y
-
-#-----------------------Resnet------------------------------------------
-
-#-----------------------autoencoder------------------------------------------
-class Encoder3d(nn.Module):
-    def __init__(self):
-        super(Encoder3d, self).__init__()
-        self.conv1 = nn.Conv1d(in_channels=3, out_channels=64, kernel_size=6, padding=1)
-        self.bn1 = nn.BatchNorm1d(64)
-        self.pool1 = nn.MaxPool1d(kernel_size=2)
-
-        self.conv2 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=6, padding=1)
-        self.bn2 = nn.BatchNorm1d(128)
-        self.pool2 = nn.MaxPool1d(kernel_size=2)
-
-        self.conv3 = nn.Conv1d(in_channels=128, out_channels=256, kernel_size=4, padding=1)
-        self.bn3 = nn.BatchNorm1d(256)
-        self.pool3 = nn.MaxPool1d(kernel_size=2)
-
-        self.flattened_size = 256 * 4#12  # Adjust this based on input size and pooling
-        self.fc = nn.Linear(self.flattened_size, 64)
-
-    def forward(self, x):
-        x = self.pool1(F.elu(self.bn1(self.conv1(x))))
-        x = self.pool2(F.elu(self.bn2(self.conv2(x))))
-        x = self.pool3(F.elu(self.bn3(self.conv3(x))))
-        x = x.view(x.size(0), -1)  # Flatten
-        x = self.fc(x)  # Latent space
-        return x
-
-# Decoder structure
-class Decoder3d(nn.Module):
-    def __init__(self):
-        super(Decoder3d, self).__init__()
-        self.fc = nn.Linear(64, 256 * 4)  # Match encoder flattened size
-        self.unflatten = nn.Unflatten(1, (256, 4))
-
-        self.conv_trans1 = nn.ConvTranspose1d(in_channels=256, out_channels=128, kernel_size=4, stride=2, padding=1)
-        self.bn1 = nn.BatchNorm1d(128)
-
-        self.conv_trans2 = nn.ConvTranspose1d(in_channels=128, out_channels=64, kernel_size=6, stride=3, padding=1)
-        self.bn2 = nn.BatchNorm1d(64)
-
-        self.conv_trans3 = nn.ConvTranspose1d(in_channels=64, out_channels=3, kernel_size=6, stride=2, padding=1)
-        self.bn3 = nn.BatchNorm1d(3)
-        self.linear = nn.Linear(52, 50)
-
-    def forward(self, x):
-        x = F.elu(self.fc(x))
-        x = self.unflatten(x)
-        x = F.elu(self.bn1(self.conv_trans1(x)))
-        x = F.elu(self.bn2(self.conv_trans2(x)))
-        x = F.elu(self.bn3(self.conv_trans3(x)))  # Sigmoid to normalize output between 0 and 1
-        # x = torch.sigmoid(self.conv_trans3(x))  # Sigmoid to normalize output between 0 and 1
-        x = self.linear(x)
-        return x
-
-class Autoencoder3d(nn.Module):
-    def __init__(self, is_reconst=True, is_classify=False):
-        super(Autoencoder3d, self).__init__()
-        self.feature_extractor = Encoder3d()
-
-        self.is_reconst = is_reconst
-        self.is_classify = is_classify
-        if self.is_reconst:
-            self.decoder = Decoder3d()
-        elif self.is_classify:
-            # self.classify = EvaClassifier(output_size=15)
-            self.classify = MLP(output_size=6)  # number of classes
-        else:
-            print('error: no module in Autoencoder3d.')
-
-        weight_init(self)
-
-    def forward(self, x):
-        feature = self.feature_extractor(x)
-        # out = self.decoder(feature)
-        if self.is_reconst:
-            out = self.decoder(feature)
-        elif self.is_classify:
-            out = self.classify(feature)
-        else:
-            out = self.decoder(feature)
-            print('error: no module in Autoencoder3d.')
-        return feature, out
-
-
-# transfer the channel and length of the input data: Autoencoder3d transfer
-class Encoder3d4(nn.Module):
-    def __init__(self):
-        super(Encoder3d4, self).__init__()
-        self.conv1 = nn.Conv1d(in_channels=3,
-                               out_channels=64,
-                               kernel_size=3,
-                               padding=1)
-        self.bn1 = nn.BatchNorm1d(64)
-        self.pool1 = nn.MaxPool1d(kernel_size=2,
-                                  stride=2,
-                                  return_indices=True)
-
-        self.conv2 = nn.Conv1d(in_channels=64,
-                               out_channels=128,
-                               kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm1d(128)
-        self.pool2 = nn.MaxPool1d(kernel_size=2,
-                                  stride=2,
-                                  return_indices=True)
-
-        self.conv3 = nn.Conv1d(in_channels=128,
-                               out_channels=128,
-                               kernel_size=3,
-                               padding=1)
-        self.bn3 = nn.BatchNorm1d(128)
-        self.pool3 = nn.MaxPool1d(kernel_size=2,
-                                  stride=2,
-                                  return_indices=True)
-
-        self.flattened_size = 128 * 6  # 12  # Adjust this based on input size and pooling
-        self.fc = nn.Linear(self.flattened_size, 64)
-
-    def forward(self, x):
-        # input: batch, channel, length
-        # x = input.permute(0, 2, 1)
-        size1 = x.size()
-        x, idx1 = self.pool1(F.elu(self.bn1(self.conv1(x))))
-        size2 = x.size()
-        x, idx2 = self.pool2(F.elu(self.bn2(self.conv2(x))))
-        size3 = x.size()
-        x, idx3 = self.pool3(F.elu(self.bn3(self.conv3(x))))
-        x = x.view(x.size(0), -1)  # Flatten: batch, 128*6
-        # x = self.fc(x)  # Latent space
-        return x, [idx1, idx2, idx3], [size1, size2, size3]
-
-
-# Decoder structure with skip connections and strides=1 for finer upsampling
-class Decoder3d4(nn.Module):
-    def __init__(self):
-        super(Decoder3d4, self).__init__()
-        # self.fc = nn.Linear(64, 128 * 6)  # Match encoder flattened size
-        self.unflatten = nn.Unflatten(1, (128, 6))
-
-        self.conv_trans1 = nn.ConvTranspose1d(in_channels=128,
-                                              out_channels=128,
-                                              kernel_size=3,
-                                              stride=1,
-                                              padding=1)
-        self.bn1 = nn.BatchNorm1d(128)
-        self.unpool1 = nn.MaxUnpool1d(2, stride=2)
-
-        self.conv_trans2 = nn.ConvTranspose1d(in_channels=128,
-                                              out_channels=64,
-                                              kernel_size=3,
-                                              stride=1,
-                                              padding=1)
-        self.bn2 = nn.BatchNorm1d(64)
-        self.unpool2 = nn.MaxUnpool1d(2, stride=2)
-
-        self.conv_trans3 = nn.ConvTranspose1d(in_channels=64,
-                                              out_channels=3,
-                                              kernel_size=3,
-                                              stride=1,
-                                              padding=1)
-        self.bn3 = nn.BatchNorm1d(3)
-        self.unpool3 = nn.MaxUnpool1d(2, stride=2)
-        # self.linear = nn.Linear(47, 48)
-
-    def forward(self, x, idxs, sizes):
-        [idx1, idx2, idx3] = idxs
-        [size1, size2, size3] = sizes
-        # x = F.elu(self.fc(x))
-        x = self.unflatten(x)
-        x = self.unpool1(x, idx3,
-                         output_size=size3)
-        x = F.elu(self.bn1(self.conv_trans1(x)))
-        x = self.unpool2(x, idx2,
-                         output_size=size2)
-        x = F.elu(self.bn2(self.conv_trans2(x)))
-        x = self.unpool3(x, idx1,
-                         output_size=size1)
-        x = self.bn3(self.conv_trans3(x))
-
-        # x = torch.sigmoid(self.conv_trans3(x))  # Sigmoid to normalize output between 0 and 1
-        # x = self.linear(x)
-        return x
-
-
-class Autoencoder3d4(nn.Module):
-    def __init__(self, is_reconst=True, is_classify=False):
-        super(Autoencoder3d4, self).__init__()
-        self.feature_extractor = Encoder3d4()
-
-        self.is_reconst = is_reconst
-        self.is_classify = is_classify
-        if self.is_reconst:
-            self.decoder = Decoder3d4()
-        elif self.is_classify:
-            # self.classify = EvaClassifier(output_size=12)
-            self.classify = MLP(output_size=5)
-        else:
-            print('error: no module in Autoencoder3d.')
-
-        # Weight initialization (if you use custom weight_init function)
-        weight_init(self)
-
-    def forward(self, x):
-        feature, idxs, sizes = self.feature_extractor(x)  # Get features and skip connections
-        if self.is_reconst:
-            out = self.decoder(feature, idxs, sizes)  # Pass skip connections to the decoder
-        elif self.is_classify:
-            out = self.classify(feature)
-        else:
-            out = self.decoder(feature)
-            print('error: no module in Autoencoder3d.')
-        return feature, out
-
-
-class Encoder4d(nn.Module):
-    def __init__(self):
-        super(Encoder4d, self).__init__()
-        self.conv1 = nn.Conv1d(in_channels=4,
-                               out_channels=64,
-                               kernel_size=3,
-                               padding=1)
-        self.bn1 = nn.BatchNorm1d(64)
-        self.pool1 = nn.MaxPool1d(kernel_size=2,
-                                  stride=2,
-                                  return_indices=True)
-
-        self.conv2 = nn.Conv1d(in_channels=64,
-                               out_channels=128,
-                               kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm1d(128)
-        self.pool2 = nn.MaxPool1d(kernel_size=2,
-                                  stride=2,
-                                  return_indices=True)
-
-        self.conv3 = nn.Conv1d(in_channels=128,
-                               out_channels=128,
-                               kernel_size=3,
-                               padding=1)
-        self.bn3 = nn.BatchNorm1d(128)
-        self.pool3 = nn.MaxPool1d(kernel_size=2,
-                                  stride=2,
-                                  return_indices=True)
-
-        self.flattened_size = 128 * 6  # 12  # Adjust this based on input size and pooling
-        self.fc = nn.Linear(self.flattened_size, 64)
-
-    def forward(self, x):
-        # input: batch, channel, length
-        # x = input.permute(0, 2, 1)
-        size1 = x.size()
-        x, idx1 = self.pool1(F.elu(self.bn1(self.conv1(x))))
-        size2 = x.size()
-        x, idx2 = self.pool2(F.elu(self.bn2(self.conv2(x))))
-        size3 = x.size()
-        x, idx3 = self.pool3(F.elu(self.bn3(self.conv3(x))))
-        x = x.view(x.size(0), -1)  # Flatten: batch, 128*6
-        # x = self.fc(x)  # Latent space
-        return x, [idx1, idx2, idx3], [size1, size2, size3]
-
-class Decoder4d(nn.Module):
-    def __init__(self):
-        super(Decoder4d, self).__init__()
-        # self.fc = nn.Linear(64, 128 * 6)  # Match encoder flattened size
-        self.unflatten = nn.Unflatten(1, (128, 6))
-
-        self.conv_trans1 = nn.ConvTranspose1d(in_channels=128,
-                                              out_channels=128,
-                                              kernel_size=3,
-                                              stride=1,
-                                              padding=1)
-        self.bn1 = nn.BatchNorm1d(128)
-        self.unpool1 = nn.MaxUnpool1d(2, stride=2)
-
-        self.conv_trans2 = nn.ConvTranspose1d(in_channels=128,
-                                              out_channels=64,
-                                              kernel_size=3,
-                                              stride=1,
-                                              padding=1)
-        self.bn2 = nn.BatchNorm1d(64)
-        self.unpool2 = nn.MaxUnpool1d(2, stride=2)
-
-        self.conv_trans3 = nn.ConvTranspose1d(in_channels=64,
-                                              out_channels=4,
-                                              kernel_size=3,
-                                              stride=1,
-                                              padding=1)
-        self.bn3 = nn.BatchNorm1d(4)
-        self.unpool3 = nn.MaxUnpool1d(2, stride=2)
-        # self.linear = nn.Linear(47, 48)
-
-    def forward(self, x, idxs, sizes):
-        [idx1, idx2, idx3] = idxs
-        [size1, size2, size3] = sizes
-        # x = F.elu(self.fc(x))
-        x = self.unflatten(x)
-        x = self.unpool1(x, idx3,
-                         output_size=size3)
-        x = F.elu(self.bn1(self.conv_trans1(x)))
-        x = self.unpool2(x, idx2,
-                         output_size=size2)
-        x = F.elu(self.bn2(self.conv_trans2(x)))
-        x = self.unpool3(x, idx1,
-                         output_size=size1)
-        x = self.bn3(self.conv_trans3(x))
-
-        # x = torch.sigmoid(self.conv_trans3(x))  # Sigmoid to normalize output between 0 and 1
-        # x = self.linear(x)
-        return x
-class Autoencoder4d(nn.Module):
-    def __init__(self, is_reconst=True, is_classify=False):
-        super(Autoencoder4d, self).__init__()
-        self.feature_extractor = Encoder4d()
-
-        self.is_reconst = is_reconst
-        self.is_classify = is_classify
-        if self.is_reconst:
-            self.decoder = Decoder4d()
-        elif self.is_classify:
-            # self.classify = EvaClassifier(output_size=12)
-            self.classify = MLP(output_size=5)
-        else:
-            print('error: no module in Autoencoder3d.')
-
-        # Weight initialization (if you use custom weight_init function)
-        weight_init(self)
-
-    def forward(self, x):
-        feature, idxs, sizes = self.feature_extractor(x)  # Get features and skip connections
-        if self.is_reconst:
-            out = self.decoder(feature, idxs, sizes)  # Pass skip connections to the decoder
-        elif self.is_classify:
-            out = self.classify(feature)
-        else:
-            out = self.decoder(feature)
-            print('error: no module in Autoencoder3d.')
-        return feature, out
-
-
-
-class Encoder2d(nn.Module):
-    def __init__(self):
-        super(Encoder2d, self).__init__()
-        self.conv1 = nn.Conv1d(in_channels=2, out_channels=32, kernel_size=3, padding=1)
-        self.pool1 = nn.MaxPool1d(kernel_size=2)
-
-        self.conv2 = nn.Conv1d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
-        self.pool2 = nn.MaxPool1d(kernel_size=2)
-
-        self.conv3 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
-        self.pool3 = nn.MaxPool1d(kernel_size=2)
-
-        # Calculate the flattened size after all convolutions and pooling
-        self.flattened_size = 128 * 37  # Adjust this to match the output of the last pooling layer
-        self.fc = nn.Linear(self.flattened_size, 1024)
-
-    def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = self.pool1(x)
-        x = F.relu(self.conv2(x))
-        x = self.pool2(x)
-        x = F.relu(self.conv3(x))
-        x = self.pool3(x)
-        x = x.view(x.size(0), -1)  # Flatten
-        x = self.fc(x)  # Output size will be (batch_size, 1024)
-        return x
-
-
-class Decoder2d(nn.Module):
-    def __init__(self):
-        super(Decoder2d, self).__init__()
-        self.fc = nn.Linear(1024, 128 * 37)  # Adjust size if necessary
-        self.unflatten = nn.Unflatten(1, (128, 37))
-
-        self.conv_trans1 = nn.ConvTranspose1d(in_channels=128, out_channels=64, kernel_size=3, padding=1)
-        self.upsample1 = nn.Upsample(scale_factor=2)
-
-        self.conv_trans2 = nn.ConvTranspose1d(in_channels=64, out_channels=32, kernel_size=3, padding=1)
-        self.upsample2 = nn.Upsample(scale_factor=2)
-
-        self.conv_trans3 = nn.ConvTranspose1d(in_channels=32, out_channels=2, kernel_size=3, padding=1)
-        self.upsample3 = nn.Upsample(scale_factor=2)
-
-        self.linear = nn.Linear(296, 300)
-    def forward(self, x):
-        x = F.relu(self.fc(x))
-        x = self.unflatten(x)
-        x = F.relu(self.conv_trans1(x))
-        x = self.upsample1(x)
-        x = F.relu(self.conv_trans2(x))
-        x = self.upsample2(x)
-        x = torch.sigmoid(self.conv_trans3(x))
-        x = self.upsample3(x)
-        x = self.linear(x)
-        return x
-
-
-class Autoencoder2d(nn.Module):
-    def __init__(self):
-        super(Autoencoder2d, self).__init__()
-        self.feature_extractor = Encoder2d()
-        self.decoder = Decoder2d()
-
-        weight_init(self)
-
-    def forward(self, x):
-        feature = self.feature_extractor(x)
-        out = self.decoder(feature)
-        return feature, out
-
-
-class Encoder1d(nn.Module):
-    def __init__(self):
-        super(Encoder1d, self).__init__()
-        self.conv1 = nn.Conv1d(in_channels=1, out_channels=64, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm1d(64)
-        self.pool1 = nn.MaxPool1d(kernel_size=2,
-                                  stride=2,
-                                  return_indices=True)
-
-        self.conv2 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm1d(128)
-        self.pool2 = nn.MaxPool1d(kernel_size=2,
-                                  stride=2,
-                                  return_indices=True)
-
-        self.conv3 = nn.Conv1d(in_channels=128, out_channels=128, kernel_size=3, padding=1)
-        self.bn3 = nn.BatchNorm1d(128)
-        self.pool3 = nn.MaxPool1d(kernel_size=2,
-                                  stride=2,
-                                  return_indices=True)
-
-        # Calculate the flattened size after all convolutions and pooling
-        self.flattened_size = 128 * 6  # Adjust this to match the output of the last pooling layer
-        self.fc = nn.Linear(self.flattened_size, 64)
-
-    def forward(self, x):
-        # input: batch, channel, length
-        size1 = x.size()
-        x, idx1 = self.pool1(F.elu(self.bn1(self.conv1(x))))
-        size2 = x.size()
-        x, idx2 = self.pool2(F.elu(self.bn2(self.conv2(x))))
-        size3 = x.size()
-        x, idx3 = self.pool3(F.elu(self.bn3(self.conv3(x))))
-        x = x.view(x.size(0), -1)  # Flatten: batch, 128*6
-        # x = self.fc(x)  # Latent space
-        return x, [idx1, idx2, idx3], [size1, size2, size3]
-
-
-class Decoder1d(nn.Module):
-    def __init__(self):
-        super(Decoder1d, self).__init__()
-        # self.fc = nn.Linear(64, 64 * 37)  # Adjust size if necessary
-        self.unflatten = nn.Unflatten(1, (128, 6))
-
-        self.conv_trans1 = nn.ConvTranspose1d(in_channels=128, out_channels=128, kernel_size=3, padding=1)
-        # self.upsample1 = nn.Upsample(scale_factor=2)
-        self.unpool1 = nn.MaxUnpool1d(2, stride=2)
-        self.bn1 = nn.BatchNorm1d(128)
-
-        self.conv_trans2 = nn.ConvTranspose1d(in_channels=128, out_channels=64, kernel_size=3, padding=1)
-        # self.upsample2 = nn.Upsample(scale_factor=2)
-        self.unpool2 = nn.MaxUnpool1d(2, stride=2)
-        self.bn2 = nn.BatchNorm1d(64)
-
-        self.conv_trans3 = nn.ConvTranspose1d(in_channels=64, out_channels=1, kernel_size=3, padding=1)
-        # self.upsample3 = nn.Upsample(scale_factor=2)
-        self.unpool3 = nn.MaxUnpool1d(2, stride=2)
-        self.bn3 = nn.BatchNorm1d(1)
-
-        # self.linear = nn.Linear(296, 300)
-    def forward(self, x, idxs, sizes):
-        [idx1, idx2, idx3] = idxs
-        [size1, size2, size3] = sizes
-        x = self.unflatten(x)
-        x = self.unpool1(x, idx3,
-                         output_size=size3)
-        x = F.elu(self.bn1(self.conv_trans1(x)))
-        x = self.unpool2(x, idx2,
-                         output_size=size2)
-        x = F.elu(self.bn2(self.conv_trans2(x)))
-        x = self.unpool3(x, idx1,
-                         output_size=size1)
-        x = self.bn3(self.conv_trans3(x))
-        return x
-
-
-class Autoencoder1d(nn.Module):
-    def __init__(self):
-        super(Autoencoder1d, self).__init__()
-        self.feature_extractor = Encoder1d()
-        self.decoder = Decoder1d()
-
-        weight_init(self)
-
-    def forward(self, x):
-        feature, idxs, sizes = self.feature_extractor(x)
-        out = self.decoder(feature, idxs, sizes)
-        return feature, out
-#-----------------------autoencoder------------------------------------------
-
-# Model weight initialization function
-def weight_init(m, mode="fan_out", nonlinearity="relu"):
-    if isinstance(m, nn.Conv1d) or isinstance(m, nn.ConvTranspose1d):
-        nn.init.kaiming_normal_(m.weight, mode=mode, nonlinearity=nonlinearity)
-        if m.bias is not None:
-            nn.init.constant_(m.bias, 0)
-    elif isinstance(m, nn.Linear):
-        nn.init.kaiming_normal_(m.weight, mode=mode, nonlinearity=nonlinearity)
-        if m.bias is not None:
-            nn.init.constant_(m.bias, 0)
-    elif isinstance(m, nn.BatchNorm1d):
-        nn.init.constant_(m.weight, 1)
-        nn.init.constant_(m.bias, 0)
-
-class EvaClassifier(nn.Module):
-    def __init__(self, input_size=64, nn_size=512, output_size=2):
-        super(EvaClassifier, self).__init__()
-        self.linear1 = torch.nn.Linear(input_size, nn_size)
-        self.linear2 = torch.nn.Linear(nn_size, output_size)
-
-    def forward(self, x):
-        x = self.linear1(x)
-        x = F.relu(x)
-        x = self.linear2(x)
-        x = F.softmax(x, dim=-1)
-        return x
-
-class Classifier(nn.Module):
-    def __init__(self, input_size=1024, output_size=2):
-        super(Classifier, self).__init__()
-        self.linear1 = torch.nn.Linear(input_size, output_size)
-
-    def forward(self, x):
-        y_pred = self.linear1(x)
-        return y_pred
-
-
-class MLP(nn.Module):
-    def __init__(self, input_size=64, hidden_size=32, output_size=5):
-        super(MLP, self).__init__()
-        self.fc1 = nn.Linear(input_size, hidden_size)
-        self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_size, output_size)
-        self.softmax = nn.Softmax(dim=1)
-
-    def forward(self, x):
-        x = self.fc1(x)
-        x = self.relu(x)
-        x = self.fc2(x)
-        out = self.softmax(x)
-        return out
-
-
-class ProjectionHead(nn.Module):
-    def __init__(self, input_size=1024, nn_size=256, encoding_size=100):
-        super(ProjectionHead, self).__init__()
-        self.linear1 = torch.nn.Linear(input_size, nn_size)
-        self.linear2 = torch.nn.Linear(nn_size, encoding_size)
-
-    def forward(self, x):
-        x = self.linear1(x)
-        x = F.relu(x)
-        x = self.linear2(x)
-        return x
-
 
 def Permutation(x, max_segments=5, seg_mode="random"):
     orig_steps = np.arange(x.shape[1])
@@ -1828,114 +980,3 @@ def time_warp(sample, sigma=0.2):
     return torch.from_numpy(sample)
 
 
-
-# cross model contrastive learning models
-class ProjectionHead(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim):
-        """
-        Args:
-            input_dim: 输入特征的维度 (e.g., 编码器输出的维度)
-            hidden_dim: 隐藏层的维度 (通常设置较大，如 2048)
-            output_dim: 输出维度 (e.g., 对比学习空间的维度，如 128)
-        """
-        super(ProjectionHead, self).__init__()
-        self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, output_dim)
-
-    def forward(self, x):
-        """
-        Forward pass for the projection head.
-        Args:
-            x: 输入特征 (通常是编码器输出的特征向量)
-        Returns:
-            z: 经过投影并 L2 归一化的特征向量
-        """
-        x = F.relu(self.fc1(x))  # 全连接层 + ReLU
-        x = self.fc2(x)  # 第二个全连接层
-        z = F.normalize(x, dim=1)  # L2 归一化
-        return z
-class CrossModelAutoencoderContrastiveModel(nn.Module):
-    def __init__(self, input_size=1024, hidden_size=512, output_size=128):
-        super(CrossModelAutoencoderContrastiveModel, self).__init__()
-        self.acc_feature_extractor = Encoder3d4()
-        self.acc_decoder = Decoder3d4()
-        self.press_feature_extractor = Encoder1d()
-        self.press_decoder = Decoder1d()
-
-        self.accel_projection = ProjectionHead(768, 512, 215)
-        self.press_projection = ProjectionHead(768, 512, 215)
-
-        self.temperature = 0.3
-
-
-    def forward(self, acc, press):
-        acc_feature, idxs, sizes = self.acc_feature_extractor(acc)  # Get features and skip connections
-        press_feature, idxs, sizes = self.press_feature_extractor(press)
-
-        acc_features = self.accel_projection(acc_feature)
-        press_features = self.press_projection(press_feature)
-
-        # 归一化嵌入
-        acc_features = F.normalize(acc_features, p=2, dim=1)
-        press_features = F.normalize(press_features, p=2, dim=1)
-
-        # feature extractor visualization, projector for regression
-        return acc_feature, acc_features, press_feature, press_features
-
-    def calculate_loss(self, acc_features, press_features):
-
-        # 计算相似度矩阵 (余弦相似度)
-        logits_per_image = torch.matmul(acc_features, press_features.t()) / self.temperature
-        logits_per_text = logits_per_image.t()
-
-        # 创建标签：每个图像与其对应文本的索引是匹配的
-        batch_size = acc_features.size(0)
-        targets = torch.arange(batch_size, device=acc_features.device)
-
-        # 计算交叉熵损失
-        loss_image_to_text = F.cross_entropy(logits_per_image, targets)
-        loss_text_to_image = F.cross_entropy(logits_per_text, targets)
-
-        # 返回平均损失
-        loss = (loss_image_to_text + loss_text_to_image) / 2
-        return loss
-
-
-# 对比学习损失 (NT-Xent Loss)
-class NTXentloss(nn.Module):
-    def __init__(self):
-        super(NTXentloss, self).__init__()
-    def forward(self, features_1, features_2, temperature=0.5):
-        """
-        Compute NT-Xent contrastive loss for two sets of features.
-        :param features_1: Tensor of shape (batch_size, hidden_dim) from modality 1
-        :param features_2: Tensor of shape (batch_size, hidden_dim) from modality 2
-        :param temperature: Temperature scaling factor
-        :return: Contrastive loss scalar
-        """
-        batch_size = features_1.size(0)
-
-        # Normalize features
-        features_1 = F.normalize(features_1, dim=1)
-        features_2 = F.normalize(features_2, dim=1)
-
-        # Concatenate features to form a joint batch
-        features = torch.cat([features_1, features_2], dim=0)  # (2 * batch_size, hidden_dim)
-
-        # Compute similarity matrix (2N x 2N)
-        similarity_matrix = torch.matmul(features, features.T)  # (2 * batch_size, 2 * batch_size)
-
-        # Remove self-similarity by masking the diagonal
-        mask = torch.eye(2 * batch_size, device=features.device).bool()
-        similarity_matrix = similarity_matrix.masked_fill(mask, float('-inf'))
-
-        # Scale by temperature
-        logits = similarity_matrix / temperature
-
-        # Create labels: positives are diagonal in cross-modality (e.g., [0, batch_size], [1, batch_size + 1], ...)
-        labels = torch.cat([torch.arange(batch_size, 2 * batch_size),
-                           torch.arange(0, batch_size)]).to(features.device)
-
-        # Compute NT-Xent loss using cross entropy
-        loss = F.cross_entropy(logits, labels)
-        return loss
