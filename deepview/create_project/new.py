@@ -354,7 +354,7 @@ def create_new_project(
                 GPS_velocity REAL,
                 GPS_bearing REAL,
                 temperature REAL,
-                label_id TEXT,
+                label_id INTEGER,
                 label TEXT,
                 label_flag INTEGER
                     )''')

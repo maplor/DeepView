@@ -19,7 +19,7 @@ import pandas as pd
 import pyqtgraph as pg
 import torch
 from PySide6.QtCore import (
-    QObject, Signal, Slot, QTime, QTimer, Qt
+    QObject, Signal, Slot, QTime, QTimer, Qt, QMetaObject
 )
 # 从PySide6.QtCore导入QTimer, QRectF, Qt
 from PySide6.QtCore import QRectF
@@ -49,8 +49,9 @@ from PySide6.QtGui import QMouseEvent, QPainter, QColor
 import sqlite3
 from PySide6.QtCore import QDate
 from PySide6.QtGui import QTextCharFormat
-from PySide6.QtWidgets import QTextEdit, QTimeEdit, QPushButton
+from PySide6.QtWidgets import QTextEdit, QTimeEdit, QPushButton, QScrollArea
 import re
+
 
 # 从deepview.utils.auxiliaryfunctions导入多个函数
 from deepview.utils.auxiliaryfunctions import (
@@ -62,6 +63,8 @@ from deepview.utils.auxiliaryfunctions import (
     grab_files_in_folder_deep,
     get_db_folder
 )
+
+from deepview.gui.label_with_interactive_plot.util import DeepViewPipeline, generate_propagated_labels, majority_value, apply_window_labels_to_all_df
 
 from deepview.gui.label_with_interactive_plot.utils import (
     get_data_from_pkl,
@@ -82,7 +85,24 @@ class ClickableLabel(QLabel):
         if event.button() == Qt.LeftButton:
             self.clicked.emit()
 
+# 自定义滚动条
+class HorizontalScrollArea(QScrollArea):
+    def wheelEvent(self, event):
+        # 将垂直滚轮事件转为水平滚动
+        if event.angleDelta().y() != 0:
+            self.horizontalScrollBar().setValue(
+                self.horizontalScrollBar().value() - event.angleDelta().y()
+            )
+            event.accept()
+        else:
+            super().wheelEvent(event)
 
+
+
+
+
+# 日历
+# TODO 优化获取数据逻辑
 class TimeSelectorWidget(QLabel):
     def __init__(self, begin_time_edit, end_time_edit, video_time_list):
         super().__init__()
@@ -228,6 +248,8 @@ class TimeSelectorWidget(QLabel):
         return segments
 
 
+# 视频数据处理线程
+# TODO 优化：需要将视频文件夹复制和数据库插入分成两个线程
 class VideoDataHandlerThread(QThread):
     error_signal = Signal(str)
     success_signal = Signal(str)
@@ -300,7 +322,7 @@ class VideoDataHandlerThread(QThread):
         else:
             self.error_signal.emit("未选择文件夹")
 
-
+# 日期时间选择器
 class DateTimeSelector(QWidget):
     def __init__(self, main_window):
         super().__init__()
@@ -553,7 +575,29 @@ class DateTimeSelector(QWidget):
         df = pd.DataFrame(rows, columns=[desc[0] for desc in cursor.description])
         # Convert label_flag to integer if it exists
         if 'label_flag' in df.columns:
-            df['label_flag'] = df['label_flag'].fillna(0).astype(int)
+            # df['label_flag'] = df['label_flag'].fillna(0).astype(int)
+            df['label_flag'] = pd.to_numeric(df['label_flag'], errors='coerce').fillna(0).astype(int)
+                # 规范化 label_id：TEXT('1.0')、空值、以及 bytes 都转换为整数；失败置为 -2
+        
+        # TODO 完善后删除，数据库字段有问题
+        if 'label_id' in df.columns:
+            def _parse_label_id(v):
+                if v is None:
+                    return -2
+                # 处理 bytes（极少见于 DB，但做兜底）
+                if isinstance(v, (bytes, bytearray, np.bytes_)):
+                    try:
+                        return int.from_bytes(bytes(v), byteorder='little', signed=False)
+                    except Exception:
+                        return -2
+                try:
+                    return int(float(str(v)))
+                except Exception:
+                    return -2
+            df['label_id'] = df['label_id'].apply(_parse_label_id).astype(int)
+        else:
+            df['label_id'] = -2
+
         df['index'] = df.index
 
         self.main_window.handel_calendar_data(df)
@@ -1059,6 +1103,85 @@ class HandleComputeWorker(QObject):
             count += 1
 
 
+
+# 定义后台运行生成Latent space 类
+class LatentSpaceGenerator(QObject):
+    finished = Signal(object, object)          # (umap2d, pw_scatter)
+    progress = Signal(int)
+    stopped = Signal()
+    # labelPropagationFinished = Signal(object)  # 主动学习选择结果
+    recommendationFinished = Signal(object)    # 推荐新label结果
+    error = Signal(str)
+
+    # 初始化方法，传入所需参数contrastive_learning_times是对比学习次数，supervised_learning_times是监督学习次数
+    def __init__(self, data, sensor_dict, selected_sensor, cfg, contrast_rounds, contrastive_learning_times, supervised_learning_times, batch_size, dataset_name, name_label):
+        self.pipeline = DeepViewPipeline()
+        super().__init__()
+        self.data = data
+        self.sensor_dict = sensor_dict
+
+        # 勾选框勾选的传感器类型
+        self.sensor_types = selected_sensor
+        self.cfg = cfg
+        self.contrast_rounds = contrast_rounds
+        self.contrastive_learning_times = contrastive_learning_times
+        self.supervised_learning_times = supervised_learning_times
+        self.batch_size = batch_size
+        self.dataset_name = dataset_name
+        self.name_label = name_label
+
+        self._is_running = True
+        self._current_progress = 0
+        self._total_steps = 100  # 假设总步骤为100
+        self._model_ready = False          # 训练完成标记
+        self._in_propagation = False       # 防重复调用
+
+
+    @Slot()
+    def run(self):
+        try:
+            self.pipeline.load_and_split(
+                pkl_objects=self.data,
+                sensor_dict=self.sensor_dict,
+                sensor_types=self.sensor_types,
+                len_sw=50
+            )
+            nclass = int(max(list(self.label_dict.values())) + 1)
+            self.pipeline.build_model(nclass=nclass)
+            self.pipeline.train(contrast_rounds=self.contrast_rounds, contrast_epoch_each=self.contrastive_learning_times, supervised_epochs=self.supervised_learning_times, batch_size=self.batch_size)
+            umap2d, pw_scatter = self.pipeline.create_latent_html(dataset_name=self.dataset_name, name_label=self.name_label)
+            self.finished.emit(umap2d, pw_scatter)
+        except Exception as e:
+            self.error.emit(f"训练或生成 latent 失败: {e}")
+
+    @Slot(str, int)
+    # def handleLabelPropagation(self, method, update_size):
+    def handleRecommendation(self, method, update_size):
+        """
+        method: 主动/采样策略
+        update_size: 推荐样本数量
+        """
+        if not self._model_ready:
+            self.error.emit("模型尚未训练完成，无法进行。")
+            return
+        if self._in_propagation:
+            self.error.emit("上一次尚未结束，请稍后。")
+            return
+        self._in_propagation = True
+        try:
+            selected_data = self.pipeline.getSamplingLabel(method, update_size)
+            # selected_data 的结构取决于 pipeline.active_learning_step 的返回
+            self.recommendationFinished.emit(selected_data)
+        except Exception as e:
+            self.error.emit(f"推荐新label执行失败: {e}")
+        finally:
+            self._in_propagation = False
+        
+
+
+
+
+
 # 创建一个函数来找到最近的有效索引
 def find_nearest_index(target_index, valid_indices):
     if len(valid_indices) == 0:
@@ -1076,6 +1199,19 @@ class Backend(QObject):
     setStartAndEndDataSign = Signal(str, str, str, str, str, str)
     getSelectedAreaToSaveSign = Signal(str)
     getSelectedAreaToSaveTimerSign = Signal(str)
+
+    # 后端触发前端函数信号
+    # 添加第一个图表标签
+    addFirstLabel = Signal(str)
+    # 添加第二个图表标签
+    addSecondLabel = Signal(str)
+    # 添加第三个图表标签
+    addThirdLabel = Signal(str)
+
+    # 设置第二个图表数据
+    setSecondChartData = Signal(str)
+    # 设置第三个图表数据
+    setThirdChartData = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -1313,7 +1449,32 @@ class Backend(QObject):
     def triggerUpdate(self):
         self.view.page().runJavaScript("getInputValue()")  # 调用前端的getInputValue函数
 
+    # 设置第二个图表数据
+    @Slot(str)
+    def handleSetSecondChartData(self, data):
+        print("Setting second chart data...")
+        if not isinstance(data, str):
+            try:
+                data = json.dumps(data, ensure_ascii=False)
+            except Exception:
+                data = str(data)
+        self.setSecondChartData.emit(data)
 
+    # 设置第三个图表数据
+    @Slot(str)
+    def handleSetThirdChartData(self, data):
+        print("Setting third chart data...")
+        if not isinstance(data, str):
+            try:
+                data = json.dumps(data, ensure_ascii=False)
+            except Exception:
+                data = str(data)
+        self.setThirdChartData.emit(data)
+
+
+
+
+# 地图交互后台类
 class BackendMap(QObject):
     highlightLineChartDotByindex = Signal(int)
 
@@ -1359,9 +1520,14 @@ class BackendMap(QObject):
         print(f"JavaScript log: {result}")
 
 
+
+
+#主窗口
+
 # 定义LabelWithInteractivePlot类，继承自QWidget
 class LabelWithInteractivePlot(QWidget):
     dataChanged = Signal(pd.DataFrame)
+    recommendationRequested = Signal(str, int)
 
     def __init__(self, root, cfg) -> None:
         super().__init__()
@@ -1448,9 +1614,6 @@ class LabelWithInteractivePlot(QWidget):
         self.sensor_dict = root_cfg['sensor_dict']
         self.all_sensor = list(self.sensor_dict.keys())
 
-        # 初始化主布局、顶部布局和底部布局
-        self.initLayout()
-
         # 创建一个QTimer对象
         self.computeTimer = QTimer()
 
@@ -1461,6 +1624,8 @@ class LabelWithInteractivePlot(QWidget):
 
         self.db_path = os.path.join(self.cfg["project_path"], get_db_folder(), "database.db")
         self.video_path = os.path.join(self.cfg["project_path"], "videos")
+
+        # self.video_path = "/project/videos"
 
         # 模型参数
         self.model_path_list = None
@@ -1473,6 +1638,42 @@ class LabelWithInteractivePlot(QWidget):
         # 初始化列名列表
         self.column_names = []
 
+        self.sampling_methods = [
+        "random",
+        "entropy",
+        "least_confidence",
+        "min_margin",
+        "underRandom",
+        "overAugment",
+        "repreSamp"
+    ]
+        
+        self.label_propagated_data = None
+
+        # 模拟路径设置
+        # self.gps_data_path = r"project\unsupervised-datasets\allDataSet\Omizunagidori2018_raw_data_9B36365_lb0006_25Hz.pkl"
+        # self.video_data_path = r"project\videos"
+        # self.time_series_data_path = r"project\unsupervised-datasets\allDataSet\Omizunagidori2018_raw_data_9B36365_lb0006_25Hz.pkl"
+        
+         
+        file_sets = self.cfg.get("file_sets", {})
+        if isinstance(file_sets, dict) and file_sets:
+            first_key = next(iter(file_sets))
+        else:
+            first_key = ""
+        self.gps_data_path = os.path.join(first_key)
+        # self.video_data_path = os.path.join(self.cfg["file_sets"][0])
+        self.video_data_path = self.video_path
+        self.time_series_data_path = os.path.join(first_key)
+
+        # 自定义图片文件夹（用于切换缩略图显示），外部可手动赋值或调用 set_custom_image_dir
+        self.custom_image_dir = r"C:\Users\user\Desktop\fast-ttt-2024-10-11\test_img"   # 例如 r"D:\my_images"
+
+        # 初始化supervised learning相关参数
+        self.supervised_learning_times = 50
+        # 初始化contrastive learning相关参数
+        self.contrastive_learning_times = 10
+
         # 手动校准视频时间
         self.offset = 0.0
 
@@ -1482,29 +1683,48 @@ class LabelWithInteractivePlot(QWidget):
         # 初始化视频路径
         self.cap = None
 
+
+        self.pipeline = DeepViewPipeline()
+
+        self.data_umap = None
+
         # 状态
         # 初始化训练状态为False
         self.isTraining = False
         # 初始化模式为空字符串
         self.mode = ''
 
-        # 创建右上模型数据选择区域
-        self.createModelSelectLabelArea()
+        # # 创建右上模型数据选择区域
+        # self.createModelSelectLabelArea()
 
-        # 创建右中按钮
-        self.createSettingArea()
+        # # 创建右中按钮
+        # self.createSettingArea()
 
-        # 创建左中按钮区域
-        self.createLeftBotton()
+        # # 创建左中按钮区域
+        # self.createLeftBotton()
 
-        # 创建左上视频区域
-        self.createVideoArea()
+        # # 创建左上视频区域
+        # self.createVideoArea()
+
+        # # 创建顶部布局
+        # self.createTopLayout()
+
+        # # 创建地图、视频和散点图的中心布局
+        # self.createCenterLayout()
+
+        # # 创建底部布局
+        # self.createBottomLayout()
+
+        # self.renderColumnList()
+
+        # 初始化主布局、顶部布局和底部布局
+        self.initLayout()
 
         # 初始化定时器，保存到csv
         self.init_timer()
 
         # 更新按钮状态
-        self.updateBtn()
+        # self.updateBtn()
 
         self.model_watcher = QFileSystemWatcher()
         self.data_watcher = QFileSystemWatcher()
@@ -1512,8 +1732,8 @@ class LabelWithInteractivePlot(QWidget):
         self.model_watcher.directoryChanged.connect(self.update_model_combobox)
         self.data_watcher.directoryChanged.connect(self.update_data_combobox)
 
-        self.update_model_combobox()
-        self.update_data_combobox()
+        # self.update_model_combobox()
+        # self.update_data_combobox()
 
     def init_label_colors(self):
         self.label_colors = {}
@@ -1526,7 +1746,1110 @@ class LabelWithInteractivePlot(QWidget):
         #     "Attempting..."
         # )
 
+
+    # 先初始化各个布局
     def initLayout(self):
+        self.main_layout = QVBoxLayout()
+        self.setLayout(self.main_layout)
+
+        # 第一大行，一个水平布局包含两个垂直布局分别包含不同功能区域
+        self.top_main_h_layout = QHBoxLayout()
+
+
+        #第二大行，水平布局包含地图、视频和散点图，和一个垂直布局按钮区域
+        self.center_main_h_layout = QHBoxLayout()
+
+
+        # 第三大行，水平布局包含折线图和按钮输入框的垂直布局
+        self.bottom_main_h_layout = QHBoxLayout()
+        # 创建顶部布局
+        self.createTopLayout()
+
+        # 创建地图、视频和散点图的中心布局
+        self.createCenterLayout()
+
+        # 创建底部布局
+        self.createBottomLayout()
+
+        self.renderColumnList()
+
+
+
+
+    '''
+    ==================================================
+    顶部布局: 包含数据选择和传感器类型选择
+    - self.top_left_data_selection_layout 左侧垂直布局
+    - self.top_right_data_selection_layout 右侧垂直布局
+    - self.data_selection_button_layout 数据选择按钮布局
+    - self.gps_data_path_layout GPS数据路径布局
+    - self.video_path_layout 视频路径布局
+    - self.time_series_path_layout 时间序列路径布局
+    - self.sensor_type_selection_layout 传感器类型选择布局
+    - self.model_path_selection_layout 模型路径选择布局
+    - self.label_color_show_layout 标签颜色显示布局
+    - self.first_row_layout 第一行布局，包含Select model标签和选择框
+    - self.checkbox_layout 复选框布局
+    - self.modelComboBoxLabel 模型组合框标签
+    - self.modelComboBox 模型组合框
+    - self.label_color_show_layout 标签颜色显示布局
+    - self.color_layout 标签颜色布局
+    - self.calendar_btn 日历按钮
+    - self.gps_data_path_label GPS数据路径标签
+    - self.gps_data_path_value GPS数据路径值
+    - self.video_path_label 视频路径标签
+    - self.video_path_value 视频路径值
+    - self.time_series_path_label 时间序列路径标签
+    - self.time_series_path_value 时间序列路径值
+    ==================================================
+    '''
+
+    # 第一行顶部布局放这里
+    def createTopLayout(self):
+        # 左侧垂直布局，包含数据选择相关功能
+        self.top_left_data_selection_layout = QVBoxLayout()
+        # 第一行，包含数据选择按钮
+        self.data_selection_button_layout = QHBoxLayout()
+        # 第二行，显示GPS数据路径
+        self.gps_data_path_layout = QHBoxLayout()
+        # 第三行，显示视频路径
+        self.video_path_layout = QHBoxLayout()
+        # 第四行，显示时间序列路径
+        self.time_series_path_layout = QHBoxLayout()
+
+
+        # 将数据选择相关功能添加到左侧布局
+        self.top_left_data_selection_layout.addLayout(self.data_selection_button_layout)
+        self.top_left_data_selection_layout.addLayout(self.gps_data_path_layout)
+        self.top_left_data_selection_layout.addLayout(self.video_path_layout)
+        self.top_left_data_selection_layout.addLayout(self.time_series_path_layout)
+
+
+        # 右侧垂直布局，包含传感器类型选择相关功能
+        self.top_right_data_selection_layout = QVBoxLayout()
+
+        # 第一行，包含传感器类型选择框
+        self.checkbox_layout = QHBoxLayout()
+
+        # 第二行，模型路径下拉框
+        self.model_path_selection_layout = QHBoxLayout()
+        # 第三行，Label种类和颜色显示区域
+        self.label_color_show_layout = QVBoxLayout()
+
+        # 将传感器类型选择相关功能添加到右侧布局
+        self.top_right_data_selection_layout.addLayout(self.checkbox_layout)
+        self.top_right_data_selection_layout.addLayout(self.model_path_selection_layout)
+        self.top_right_data_selection_layout.addLayout(self.label_color_show_layout)
+
+
+        # 左侧第一行的日历按钮即数据选择按钮
+        self.calendar_btn = QPushButton('Calendar')
+        self.calendar_btn.setStyleSheet(self.button_style)
+        self.calendar_btn.clicked.connect(self.open_calendar)
+        self.data_selection_button_layout.addWidget(self.calendar_btn, alignment=Qt.AlignLeft)
+
+        # 左二行，显示GPS数据路径
+        self.gps_data_path_label = QLabel('GPS Data Path:')
+        self.gps_data_path_label.setStyleSheet("font-weight: bold;")
+        self.gps_data_path_label.setAlignment(Qt.AlignLeft)
+        self.gps_data_path_value = QLabel(self.gps_data_path)
+        self.gps_data_path_value.setStyleSheet("color: blue;")
+        self.gps_data_path_value.setAlignment(Qt.AlignLeft)
+        self.gps_data_path_layout.setSpacing(2)  # 减小label和value之间的间距
+        self.gps_data_path_layout.setContentsMargins(0, 0, 0, 0)  # 去除外边距
+        self.gps_data_path_layout.addWidget(self.gps_data_path_label, alignment=Qt.AlignLeft)
+        self.gps_data_path_layout.addWidget(self.gps_data_path_value, alignment=Qt.AlignLeft)
+        self.gps_data_path_layout.addStretch(1)  # 添加伸缩空间，使label和value靠左对齐
+
+        # 左三行，显示视频路径
+        self.video_path_label = QLabel('Video Path:')
+        self.video_path_label.setStyleSheet("font-weight: bold;")
+        self.video_path_label.setAlignment(Qt.AlignLeft)
+        self.video_path_value = QLabel(self.video_path)
+        self.video_path_value.setStyleSheet("color: blue;")
+        self.video_path_value.setAlignment(Qt.AlignLeft)
+        self.video_path_layout.setSpacing(2)
+        self.video_path_layout.setContentsMargins(0, 0, 0, 0)
+        self.video_path_layout.addWidget(self.video_path_label, alignment=Qt.AlignLeft)
+        self.video_path_layout.addWidget(self.video_path_value, alignment=Qt.AlignLeft)
+        self.video_path_layout.addStretch(1)  
+
+        # 左四行，显示时间序列路径
+        self.time_series_path_label = QLabel('Time Series Path:')
+        self.time_series_path_label.setStyleSheet("font-weight: bold;")
+        self.time_series_path_value = QLabel(self.time_series_data_path)
+        self.time_series_path_value.setStyleSheet("color: blue;")
+        self.time_series_path_layout.setSpacing(2)
+        self.time_series_path_layout.setContentsMargins(0, 0, 0, 0)
+        self.time_series_path_layout.addWidget(self.time_series_path_label, alignment=Qt.AlignLeft)
+        self.time_series_path_layout.addWidget(self.time_series_path_value, alignment=Qt.AlignLeft)
+        self.time_series_path_layout.addStretch(1)  # 添加伸缩空间，使label和value靠左对齐
+        
+        # 右侧第二行，pth文件路径下拉框，模型组合框和标签
+        modelComboBoxLabel, modelComboBox = self.createModelComboBox()
+        
+        self.model_path_selection_layout.addStretch(1)  # 添加伸缩空间，使标签和组合框靠右对齐
+        self.model_path_selection_layout.addWidget(modelComboBoxLabel, alignment=Qt.AlignRight)
+        self.model_path_selection_layout.addWidget(modelComboBox, alignment=Qt.AlignRight)
+
+        RawDataComboBoxLabel, RawDatacomboBox = self.createRawDataComboBox()
+
+
+        # 右侧第三行，标签颜色显示区域
+        self.color_main_layout = QHBoxLayout()
+        self.color_scroll_area = HorizontalScrollArea()
+        self.color_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.color_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.color_scroll_area.setFixedHeight(60)  # 设置固定高度
+        # self.color_scroll_area.setMaximumWidth(500)  # 设置最大宽度
+        self.color_scroll_area.setWidgetResizable(True)
+        self.color_scroll_area.setStyleSheet("""
+            QScrollArea {
+                background-color: #f9f9f9;
+                border: none;
+            }            
+            QScrollBar:horizontal {
+                background-color: transparent;
+                height: 6px;
+                border-radius: 3px;
+                margin: 0px;
+            }
+            QScrollBar::handle:horizontal {
+                background-color: #bbb;
+                min-width: 15px;
+                border-radius: 3px;
+                margin: 0px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background-color: #999;
+            }
+            QScrollBar::handle:horizontal:pressed {
+                background-color: #666;
+            }
+            QScrollBar::add-line:horizontal,
+            QScrollBar::sub-line:horizontal {
+                background: none;
+                border: none;
+                width: 0px;
+            }
+            QScrollBar::add-page:horizontal,
+            QScrollBar::sub-page:horizontal {
+                background: none;
+            }
+        """)
+        
+        # 创建容器widget
+        self.color_container = QWidget()
+        self.color_layout = QHBoxLayout(self.color_container)
+        # self.color_layout.setContentsMargins(10, 10, 10, 10)
+        # self.color_layout.setSpacing(15)
+        
+        # 设置容器的最小宽度以适应内容
+        # self.color_container.setMinimumWidth(500)  # 设置初始最小宽度
+        
+        # 将容器设置到滚动区域
+        self.color_scroll_area.setWidget(self.color_container)
+
+        self.color_main_layout.addWidget(self.color_scroll_area)
+
+        self.label_color_show_layout.addLayout(self.color_main_layout)
+
+        self.display_colors(self.label_colors)
+
+
+    '''
+    ==================================================
+    中间区域: 包含地图、视频和散点图
+    - self.left_row1_layout 地图布局
+    - self.video_layout 视频布局
+    - self.scatter_plot_layout 散点图布局
+    ==================================================
+    '''
+    def createCenterLayout(self):
+        # 地图布局, 在另一个文件调用
+        self.left_row1_layout = QVBoxLayout()
+        # 视频布局
+        self.video_layout = QVBoxLayout()
+        # 散点图布局
+        self.scatter_plot_layout = QVBoxLayout()
+        # 按钮布局，放入垂直的多个按钮
+        self.center_button_layout = QVBoxLayout()
+
+        # 按钮布局的多个按钮
+        # 生成latent按钮
+        self.generate_latent_button = QPushButton("Generate Latent")
+        self.generate_latent_button.setStyleSheet(self.button_style)
+        # 绑定生成latent按钮点击事件
+        self.generate_latent_button.clicked.connect(self.generate_latent)
+
+        # supervised learning标签
+        self.supervised_learning_label = QLabel("Supervised Learning:")
+        self.supervised_learning_label.setAlignment(Qt.AlignCenter)
+        self.supervised_learning_label.setStyleSheet("font-weight: bold;")
+        # supervised learning 次数输入框
+        self.supervised_learning_input = QLineEdit()
+        # self.supervised_learning_input.setPlaceholderText("Supervised Learning Times")
+        self.supervised_learning_input.setPlaceholderText(str(self.supervised_learning_times))
+        # contrastive learning标签
+        self.contrastive_learning_label = QLabel("Contrastive Learning:")
+        self.contrastive_learning_label.setAlignment(Qt.AlignCenter)
+        self.contrastive_learning_label.setStyleSheet("font-weight: bold;")
+
+        # 对比学习次数输入框
+        self.contrastive_learning_input = QLineEdit()
+        # self.contrastive_learning_input.setPlaceholderText("Contrastive Learning Times")
+        self.contrastive_learning_input.setPlaceholderText(str(self.contrastive_learning_times))
+
+        # 将按钮和输入框添加到按钮布局
+        self.center_button_layout.addStretch()
+        self.center_button_layout.addWidget(self.generate_latent_button)
+        self.center_button_layout.addWidget(self.supervised_learning_label)
+        self.center_button_layout.addWidget(self.supervised_learning_input)
+        self.center_button_layout.addWidget(self.contrastive_learning_label)
+        self.center_button_layout.addWidget(self.contrastive_learning_input)
+
+
+        # 将地图、视频和散点图布局添加到中心主水平布局
+        self.center_main_h_layout.addLayout(self.left_row1_layout, 1)
+        self.center_main_h_layout.addLayout(self.video_layout, 1)
+        self.center_main_h_layout.addLayout(self.scatter_plot_layout, 1)
+        self.center_main_h_layout.addLayout(self.center_button_layout, 0)
+
+
+
+        # 手动校准视频时间
+        self.video_time_layout = QHBoxLayout()
+
+        # 视频时间标签
+        self.video_time_label = ClickableLabel("Current Time / Total Time", self)
+
+        self.video_time_layout.addWidget(self.video_time_label, alignment=Qt.AlignLeft)
+        self.video_time_layout.addWidget(QLabel("Offset(s):"), alignment=Qt.AlignRight)
+        self.timestamp_input = QDoubleSpinBox()
+        self.timestamp_input.setRange(-10000.0, 10000.0)  # Set desired range
+        self.timestamp_input.setSingleStep(0.1)  # Set step size for increment/decrement
+        self.timestamp_input.setValue(0.0)  # Default value
+        self.video_time_layout.addWidget(self.timestamp_input, alignment=Qt.AlignRight)
+
+        # 视频标签
+        # self.video_label = QLabel(self)
+        self.video_label = ClickableLabel(self)
+        self.video_label.setAlignment(Qt.AlignCenter)
+        self.video_layout.addWidget(self.video_label)
+        self.video_layout.addLayout(self.video_time_layout)
+
+
+        # 创建一个用于显示绘图区域的PlotWidget
+        viewC = pg.PlotWidget()
+        self.viewC = viewC
+        # 禁用右键菜单
+        self.viewC.setMenuEnabled(False)
+        self.viewC.setBackground('w')
+        self.scatter_plot_layout.addWidget(viewC, 2)
+
+
+
+
+    '''
+    ==================================================
+    底部布局: 包含折线图和按钮输入框
+    - self.left_row3_layout 折线图布局
+    - self.bottom_right_button_v_layout 按钮输入框的垂直布局
+
+    ==================================================
+    '''
+    def createBottomLayout(self):
+        # 折线图布局 left_row3_layout
+        self.left_row3_layout = QVBoxLayout()
+        # 按钮输入框的垂直布局
+        self.bottom_right_button_v_layout = QVBoxLayout()
+        # add bottom margin (left, top, right, bottom)
+        self.bottom_right_button_v_layout.setContentsMargins(0, 0, 0, 40)
+        # 按钮输入框的第一行水平布局，label propagation按钮和Claer label按钮
+        self.first_edit_button_layout = QHBoxLayout()
+        # 第二行水平布局，Sampling方法下拉框和一个推荐的个数输入框和一个推荐新label按钮
+        self.second_edit_button_layout = QHBoxLayout()
+        # 2.5行水平布局
+        self.left_row2_5_layout = QHBoxLayout()
+        # 第三行水平布局，start time显示框
+        self.third_edit_button_layout = QHBoxLayout()
+        # 第四行水平布局，end time显示框
+        self.fourth_edit_button_layout = QHBoxLayout()
+        # 第五行水平布局，label类型和create label按钮
+        self.fifth_edit_button_layout = QHBoxLayout()
+        # 第六行水平布局，保存标签按钮删除标签按钮和保存csv按钮
+        self.sixth_edit_button_layout = QHBoxLayout()
+
+        # 将按钮输入框的各个布局添加到垂直布局中
+        self.bottom_right_button_v_layout.addLayout(self.first_edit_button_layout)
+        # 添加弹簧
+        self.bottom_right_button_v_layout.addStretch(1)
+        self.bottom_right_button_v_layout.addLayout(self.second_edit_button_layout)
+        self.bottom_right_button_v_layout.addLayout(self.left_row2_5_layout)
+        # 添加弹簧
+        self.bottom_right_button_v_layout.addStretch(1)
+        self.bottom_right_button_v_layout.addLayout(self.third_edit_button_layout)
+        self.bottom_right_button_v_layout.addLayout(self.fourth_edit_button_layout)
+        self.bottom_right_button_v_layout.addLayout(self.fifth_edit_button_layout)
+        self.bottom_right_button_v_layout.addLayout(self.sixth_edit_button_layout)
+
+
+        # 第一行
+        # label propagation按钮 
+        self.label_propagation_button = QPushButton("Label Propagation")
+        self.label_propagation_button.setStyleSheet(self.button_style)
+        # label propagation按钮点击事件
+        self.label_propagation_button.clicked.connect(self.label_propagation)
+        self.first_edit_button_layout.addWidget(self.label_propagation_button, alignment=Qt.AlignLeft)
+        # Clear label按钮
+        self.clear_label_button = QPushButton("Clear Label")
+        self.clear_label_button.setStyleSheet(self.button_style)
+        # Clear label按钮点击事件
+        self.clear_label_button.clicked.connect(self.clear_label)
+        self.first_edit_button_layout.addWidget(self.clear_label_button, alignment=Qt.AlignLeft)
+        self.first_edit_button_layout.addStretch(1)  # 添加伸缩空间，使按钮靠左对齐
+
+        # 第二行
+        # Sampling方法下拉框
+
+
+        self.sampling_method_combobox = QComboBox()
+        self.sampling_method_combobox.addItems(self.sampling_methods)
+        self.sampling_method_combobox.setStyleSheet("font-size: 12px;")
+        self.second_edit_button_layout.addWidget(self.sampling_method_combobox, alignment=Qt.AlignLeft)
+        # 推荐的个数输入框
+        self.recommended_count_input = QLineEdit()
+        self.recommended_count_input.setPlaceholderText("Recommended Count")
+        self.recommended_count_input.setStyleSheet("font-size: 12px;")
+        self.second_edit_button_layout.addWidget(self.recommended_count_input, alignment=Qt.AlignLeft)
+        # 推荐新label按钮
+        self.recommend_new_label_button = QPushButton("Recommend New Label")
+        self.recommend_new_label_button.setStyleSheet(self.button_style)
+        # 推荐新label按钮点击事件
+        self.recommend_new_label_button.clicked.connect(self.get_sampling_label)
+        self.left_row2_5_layout.addWidget(self.recommend_new_label_button, alignment=Qt.AlignLeft)
+        self.second_edit_button_layout.addStretch(1)  # 添加伸缩空间，使按钮靠左对齐
+        # 第三行
+        # start time显示框
+        self.left_start_time_layout = QHBoxLayout()
+        self.start_input_box = QLineEdit(self)
+        self.start_input_box.setPlaceholderText("start time")
+        self.left_start_time_layout.addWidget(QLabel("Start time:"))
+        self.left_start_time_layout.addWidget(self.start_input_box)
+        self.left_start_time_layout.addStretch()
+        self.third_edit_button_layout.addLayout(self.left_start_time_layout)
+
+        # 第四行
+        # end time显示框
+        self.left_end_time_layout = QHBoxLayout()
+        self.end_input_box = QLineEdit(self)
+        self.end_input_box.setPlaceholderText("end time")
+        self.left_end_time_layout.addWidget(QLabel("End time: "))
+        self.left_end_time_layout.addWidget(self.end_input_box)
+        self.left_end_time_layout.addStretch()
+        self.fourth_edit_button_layout.addLayout(self.left_end_time_layout)
+
+        # 第五行第三行label选项框
+        self.label_combobox = QComboBox()
+        self.label_combobox.setStyleSheet(combobox_style_light)
+        self.label_combobox.setModel(QStandardItemModel(self.label_combobox))
+
+        for item in self.label_dict.keys():
+            self.addItem(item)
+
+        self.label_combobox.currentTextChanged.connect(
+            self.backend.handle_label_change
+        )
+
+        self.fifth_edit_button_layout.addWidget(QLabel("Label:     "))
+        self.fifth_edit_button_layout.addWidget(self.label_combobox, alignment=Qt.AlignLeft)
+
+        # 创建label按钮
+        create_label_btn = QPushButton('Create label')
+        create_label_btn.clicked.connect(self.add_item)
+        create_label_btn.setStyleSheet(self.button_style)
+        self.fifth_edit_button_layout.addWidget(create_label_btn)
+
+        # 第六行
+        # add label，del label，save csv按钮
+        # add label按钮
+        add_label_btn = QPushButton('Add label')
+        add_label_btn.clicked.connect(lambda: self.backend.handleAddLabel(self.label_combobox.currentText()))
+        # 设置按钮样式
+        add_label_btn.setStyleSheet(self.button_style)
+
+        # delete label按钮
+        delete_label_btn = QPushButton('Delete label')
+        delete_label_btn.setCheckable(True)  # Make the button checkable
+        delete_label_btn.clicked.connect(lambda: self.backend.handleDeleteLabel(int(delete_label_btn.isChecked())))
+        # Set the button style based on the checked state
+        delete_label_btn.setStyleSheet(
+            self.button_style + "background-color: red;" if delete_label_btn.isChecked() else self.button_style + "background-color: green;")
+        
+        self.save_csv_btn = QPushButton('Save csv')
+        self.save_csv_btn.clicked.connect(lambda: self.backend.getSelectedAreaToSave(0))
+        self.save_csv_btn.setStyleSheet(self.button_style)
+
+        self.sixth_edit_button_layout.addWidget(add_label_btn, alignment=Qt.AlignLeft)
+        self.sixth_edit_button_layout.addWidget(delete_label_btn, alignment=Qt.AlignLeft)
+        self.sixth_edit_button_layout.addWidget(self.save_csv_btn, alignment=Qt.AlignLeft)
+
+
+
+
+
+
+
+
+
+
+        # 将折线图布局和按钮输入框的垂直布局添加到底部主水平布局
+        self.bottom_main_h_layout.addLayout(self.left_row3_layout, 1)
+        self.bottom_main_h_layout.addLayout(self.bottom_right_button_v_layout, 0)
+
+        # 将左侧和右侧布局添加到顶部主水平布局中
+        self.top_main_h_layout.addLayout(self.top_left_data_selection_layout, 0)
+        self.top_main_h_layout.addLayout(self.top_right_data_selection_layout, 1)
+        # 将顶部主水平布局和中心主水平布局添加到主布局中
+        self.main_layout.addLayout(self.top_main_h_layout, 0)
+        self.main_layout.addLayout(self.center_main_h_layout, 1)
+        # 将底部主水平布局添加到主布局中
+        self.main_layout.addLayout(self.bottom_main_h_layout, 1)
+
+
+
+
+
+    def _stop_thread(self, thread_attr_name, worker_attr_name, wait_ms=3000):
+        """
+        通用停止：设置 worker.stop() -> thread.quit() -> thread.wait()
+        """
+        thread = getattr(self, thread_attr_name, None)
+        worker = getattr(self, worker_attr_name, None)
+        if thread and thread.isRunning():
+            if worker and hasattr(worker, "stop"):
+                worker.stop()
+            thread.quit()
+            if not thread.wait(wait_ms):
+                print(f"线程 {thread_attr_name} 超时未退出，可考虑调用 thread.terminate() (不推荐)。")
+
+
+
+    def load_data_umap(filepath='./test/data_umap.pkl'):
+        """
+        读取保存的 UMAP 结果，返回与保存时一致的 numpy.ndarray
+        """
+        with open(filepath, 'rb') as f:
+            obj = pickle.load(f)
+        if isinstance(obj, dict) and 'data_umap' in obj:
+            data_umap = obj['data_umap']
+        else:
+            # 兼容直接保存数组的情况
+            data_umap = obj
+        if not isinstance(data_umap, np.ndarray):
+            raise TypeError("加载的对象不是 numpy.ndarray")
+        print(f"[load_data_umap] 已读取: {filepath}, shape={data_umap.shape}, dtype={data_umap.dtype}")
+        return data_umap
+
+
+# 直接调用函数而不调用后台线程
+    def generate_latent(self):
+        # 获取supervised learning次数输入框的值和对比学习次数输入框的值
+        # self.supervised_learning_times = self.supervised_learning_input.text()
+        # self.contrastive_learning_times = self.contrastive_learning_input.text()
+        sup_text = self.supervised_learning_input.text().strip()
+        con_text = self.contrastive_learning_input.text().strip()
+        if sup_text:
+            try:
+                self.supervised_learning_times = int(sup_text)
+            except ValueError:
+                pass  # 保持默认值
+        if con_text:
+            try:
+                self.contrastive_learning_times = int(con_text)
+            except ValueError:
+                pass  # 保持默认值
+        self.supervised_learning_times = sup_text if sup_text else self.supervised_learning_times
+        self.contrastive_learning_times = con_text if con_text else self.contrastive_learning_times
+
+        contrast_rounds = 10
+        dataset_name = 'omizu'
+        name = '_test'
+        
+        # data_umap = self.load_data_umap('L:\\order\\python\\14_pyside6_cassie_deeplabcut2_3_8\\DeepView\\test\\data_umap.pkl')
+        # with open('L:\\order\\python\\14_pyside6_cassie_deeplabcut2_3_8\\DeepView\\test\\latent_turtle_test.pkl', 'rb') as f:
+        #     latent = pickle.load(f)
+        # repres_list = latent['repres_list']
+        # label_list = latent['label_list']
+        
+        
+
+        self.regenerate_latent_local(contrast_rounds, self.contrastive_learning_times, self.supervised_learning_times, 512, dataset_name, name)
+
+        # TODO 生成Latent按钮点击事件
+        print("Generate Latent button clicked")
+        # 这里可以添加生成Latent的逻辑
+
+    def regenerate_latent_local(self, contrast_rounds, contrastive_learning_times,
+                                supervised_learning_times, batch_size, dataset_name, name_label):
+        
+        selected_sensor = [c for i, c in enumerate(self.all_sensor) if self.checkboxList[i].isChecked()]
+
+        dataset_name = 'turtle'  # 统一使用变量，便于颜色逻辑共享
+
+        # pkl_path = r'./test/turtle.pkl'
+        # # 读取pkl文件
+        # df_list = []
+        # if not os.path.exists(pkl_path):
+        #     raise FileNotFoundError(f"Required data file not found: {pkl_path}. Please ensure the file exists in the working directory.")
+        
+        # # 读取pickle文件中的所有数据片段
+        # with open(pkl_path, 'rb') as f:
+        #     while True:
+        #         try:
+        #             item = pickle.load(f)
+        #             df_list.append(item)
+        #         except EOFError:
+        #             break
+        
+        # # 合并所有数据片段
+        # df_all = pd.concat(df_list, ignore_index=True)
+
+
+        # sensor_types=['accelerometer', 'Depth']
+        sensor_types = selected_sensor
+        if not selected_sensor:
+            print("未选择传感器")
+            return
+        
+        # sensor_dict = {
+        #     'accelerometer': ['AccX', 'AccY', 'AccZ'],
+        #     'gyroscope': ['GyrX', 'GyrY', 'GyrZ'],
+        #     # 'accelerometer': ['acc_x', 'acc_y', 'acc_z'],
+        #     # 'gyroscope': ['gyr_x', 'gyr_y', 'gyr_z'],
+        #     'magnetometer': ['mag_x', 'mag_y', 'mag_z'],
+        #     'temperature': ['temperature'],
+        #     'pressure': ['pressure'],
+        #     'GPS': ['GPS']
+        # }
+    
+
+        # pkl_objects=None, sensor_dict=None, sensor_types=None
+        self.pipeline.load_and_split(self.data, sensor_types=sensor_types, sensor_dict=self.sensor_dict)
+        nclass = int(max(list(self.label_dict.values())) + 1)
+        self.pipeline.build_model(nclass=nclass)
+        self.pipeline.train(contrast_rounds=int(contrast_rounds), contrast_epoch_each=int(contrastive_learning_times), supervised_epochs=int(supervised_learning_times), batch_size=int(batch_size))
+        umap2d, pw_scatter = self.pipeline.create_latent_html(dataset_name=dataset_name, name_label=name_label, label_colors=self.label_colors)
+        self.scatterItem = pw_scatter
+        self.data_umap = umap2d
+        self.viewC.clear()
+        pw_scatter.sigClicked.connect(self.handleScatterItemClick)
+        self.viewC.addItem(pw_scatter)
+
+
+    # def generate_latent(self):
+    #     # 获取supervised learning次数输入框的值和对比学习次数输入框的值
+    #     self.supervised_learning_times = self.supervised_learning_input.text()
+    #     self.contrastive_learning_times = self.contrastive_learning_input.text()
+    #     contrast_rounds = 10
+    #     dataset_name = 'omizu'
+    #     name = '_test'
+    #     self.regenerate_latent(contrast_rounds, self.contrastive_learning_times, self.supervised_learning_times, 512, dataset_name, name)
+
+    #     # TODO 生成Latent按钮点击事件
+    #     print("Generate Latent button clicked")
+    #     # 这里可以添加生成Latent的逻辑
+
+    def regenerate_latent(self, contrast_rounds, contrastive_learning_times,
+                          supervised_learning_times, batch_size, dataset_name, name_label):
+        # 先停止旧的 latent 线程
+        self._stop_thread("_latent_thread", "_latent_worker")
+
+        selected_sensor = [c for i, c in enumerate(self.all_sensor) if self.checkboxList[i].isChecked()]
+        if not selected_sensor:
+            print("未选择传感器")
+            return
+        if self.data is None or self.data.empty:
+            print("无数据")
+            return
+
+        self._latent_worker = LatentSpaceGenerator(
+            data=self.data,
+            sensor_dict=self.sensor_dict,
+            selected_sensor=selected_sensor,
+            cfg=self.cfg,
+            contrast_rounds=contrast_rounds,
+            contrastive_learning_times=int(contrastive_learning_times),
+            supervised_learning_times=int(supervised_learning_times),
+            batch_size=int(batch_size),
+            dataset_name=dataset_name,
+            name_label=name_label
+        )
+        self._latent_thread = QThread()
+        self._latent_worker.moveToThread(self._latent_thread)
+        self._latent_thread.started.connect(self._latent_worker.run)
+        self._latent_worker.finished.connect(self._on_latent_finished)
+        self._latent_worker.finished.connect(self._latent_thread.quit)
+        self._latent_worker.stopped.connect(self._on_latent_stopped)
+        self._latent_worker.stopped.connect(self._latent_thread.quit)
+        self._latent_worker.finished.connect(self._latent_worker.deleteLater)
+        self._latent_worker.recommendationFinished.connect(self._on_recommendation_finished)
+        self._latent_worker.error.connect(self.on_recommendation_error)
+        self._latent_thread.finished.connect(self._latent_thread.deleteLater)
+        self._latent_worker.progress.connect(lambda p: print(f"Latent 进度 {p}%"))
+
+        # 新增: 连接信号到 worker 槽，确保跨线程队列调用
+        try:
+            self.recommendationRequested.disconnect()
+        except Exception:
+            pass
+        self.recommendationRequested.connect(
+            self._latent_worker.handleRecommendation,
+            Qt.QueuedConnection
+        )
+
+        print("开始生成 latent ...")
+        self._latent_thread.start()
+
+    def stop_latent_generation(self):
+        self._stop_thread("_latent_thread", "_latent_worker")
+
+    def _on_latent_stopped(self):
+        print("Latent 任务已停止")
+
+    def _on_latent_finished(self, data_umap, pw_scatter):
+        print("Latent 任务已完成")
+        # 给ViewC添加scatter
+        self.viewC.clear()
+        pw_scatter.sigClicked.connect(self.handleScatterItemClick)
+        self.viewC.add_scatter(pw_scatter)
+
+        
+
+        # 这里可以添加处理逻辑
+
+    # Label Propagation按钮点击事件 
+    # def recommend_new_label(self):
+    # #     # TODO majority_label和 minority_label的获取，需要从main.py中传入,device要从当前文件传入
+
+    # #     # X_labeled, y_labeled, X_unlabeled, y_unlabeled, selected_data = (
+    # #     #     data_sampling(sampling_method, X_labeled, y_labeled,
+    # #     #                   X_unlabeled, y_unlabeled,
+    # #     #                   model, 
+    # #     #                   select_size,
+    # #     #                   majority_label=majority_label,
+    # #     #                   minority_label=minority_label,
+    # #     #                   device=device))
+    # #     # TODO 推荐新label按钮点击事件
+    #     method = self.sampling_method_combobox.currentText()
+    #     text_val = self.recommended_count_input.text().strip()
+    #     try:
+    #         update_size = int(text_val) if text_val else 10
+    #     except ValueError:
+    #         update_size = 10
+    #     if not hasattr(self, "_latent_worker") or self._latent_worker is None:
+    #         print("尚未生成 latent / 训练模型，无法执行主动学习。")
+    #         return
+    #     if not self._latent_worker._model_ready:
+    #         print("模型尚未就绪，请等待训练完成。")
+    #         return
+    #     # 通过 invokeMethod 让调用在工作线程进行
+    #     QMetaObject.invokeMethod(
+    #         self._latent_worker,
+    #         "handleLabelPropagation",
+    #         Qt.QueuedConnection,
+    #         Q_ARG(str, method),
+    #         Q_ARG(int, update_size)
+    #     )
+
+
+    # Label Propagation按钮点击事件 
+    def label_propagation(self):
+        # TODO Label Propagation按钮点击事件
+        print("Label Propagation button clicked")
+        # 函数返回传播后的标签数组
+        label_propagated_data = generate_propagated_labels(data_umap=self.data_umap, label_b=self.pipeline.data['label_b'])
+        
+        # 将窗口级 propagated_labels 写回 all_df（逐行）
+        all_df = apply_window_labels_to_all_df(self.data, self.pipeline.data['window_spans'], label_propagated_data, colname='propagated_label')
+
+        # 构建markData
+        markData = self.build_second_mark_data(all_df)
+        # 放到echart的markarea中
+        self.backend.handleSetSecondChartData(markData)
+
+    # 构建第二个图Label Propagation的markData TODO: 优化性能
+    def build_second_mark_data(self, label_propagated_data_df):
+        """
+        将传播后的标签(np.ndarray 或 list)转换为 ECharts markArea 数据并下发到前端。
+        要求:
+        - len(labels) == len(self.data)
+        - 标签 > 0 视为有效；<=0 或 NaN 跳过不绘制
+        """
+        label_propagated_data = label_propagated_data_df['propagated_label']
+        
+        # 保存原始数据，避免多次调用时被覆盖
+        self.label_propagated_data = label_propagated_data
+
+        try:
+            if self.data is None or len(self.data) == 0:
+                print("update_propagated_labels: 后端没有可用的数据 DataFrame。")
+                return
+
+            arr = np.asarray(label_propagated_data)
+            if arr.ndim != 1:
+                print(f"update_propagated_labels: 期望一维数组，收到 ndim={arr.ndim}")
+                return
+            if len(arr) != len(self.data):
+                print(f"update_propagated_labels: 长度不一致, labels={len(arr)} vs data={len(self.data)}")
+                return
+            
+            # color_for: label_colors 的 key 为 label 名，lbl 为对应的 id（int），0-based index
+            def color_for(lbl: int) -> str:
+                try:
+                    vals = list(self.label_colors.values())
+                    if not vals:
+                        return "rgba(0,0,0,0.28)"
+                    idx = int(lbl)
+                    if idx < 0:
+                        return "rgba(0,0,0,0.28)"
+                    # 使用 0-based 索引；越界时循环取模
+                    return vals[idx % len(vals)]
+                except Exception:
+                    return "rgba(0,0,0,0.28)"
+
+            label_str_list = list(self.label_dict.keys())
+
+            markData = []
+            curr_label = None
+            start_i = None
+
+
+            def flush_segment(end_i, lbl):
+                if start_i is None or end_i is None:
+                    return
+                # 位置索引用 iloc，避免非 RangeIndex 时出错
+                start_ts = self.data.iloc[start_i]["timestamp"]
+                end_ts = self.data.iloc[end_i]["timestamp"]
+                markData.append([
+                    {
+                        "name": f"{label_str_list[lbl] if 0 < lbl <= len(label_str_list) else lbl}",
+                        "labelId": int(lbl),
+                        "xAxis": start_ts,
+                        "itemStyle": {"color": color_for(int(lbl))}
+                    },
+                    {"xAxis": end_ts}
+                ])
+
+            for i, lbl in enumerate(arr):
+                # 仅正整数作为有效标签
+                valid = False
+                if lbl is not None and not (isinstance(lbl, float) and np.isnan(lbl)):
+                    try:
+                        valid = int(lbl) > 0
+                    except Exception:
+                        valid = False
+
+                if not valid:
+                    if curr_label is not None:
+                        flush_segment(i - 1, curr_label)
+                        curr_label, start_i = None, None
+                    continue
+
+                lbl = int(lbl)
+                if curr_label is None:
+                    curr_label, start_i = lbl, i
+                elif lbl != curr_label:
+                    flush_segment(i - 1, curr_label)
+                    curr_label, start_i = lbl, i
+
+            if curr_label is not None:
+                flush_segment(len(arr) - 1, curr_label)
+        except Exception as e:
+            print(f"update_propagated_labels: 发生错误: {e}")
+
+        return markData
+
+
+
+
+    def get_sampling_label(self):
+        method = self.sampling_method_combobox.currentText()
+        text_val = self.recommended_count_input.text().strip()
+        try:
+            update_size = int(text_val) if text_val else 10
+        except ValueError:
+            update_size = 10
+
+        selected_data = self.pipeline.getSamplingLabel(
+            method=method,
+            update_size=update_size
+        )
+
+        selected_samples, selected_labels_win, selected_indices_rel = selected_data
+        # 相对未标注集合 -> 绝对“全量窗口”索引
+        selected_win_idx_abs = self.pipeline.data['idx_unlabeled'][selected_indices_rel]
+        # 用窗口多数票作为行级标签写回（可按需修改为别的定义）
+        selected_win_labels = majority_value(selected_labels_win)
+        selected_spans_abs = self.pipeline.data['window_spans'][selected_win_idx_abs]
+        all_df = apply_window_labels_to_all_df(self.data, selected_spans_abs, selected_win_labels, colname='selected_label')
+        markData_sampling = self.build_third_mark_data(all_df)
+        self.backend.handleSetThirdChartData(markData_sampling)
+
+
+        
+    # 构建第三个图推荐新标签Sampling的markData
+    def build_third_mark_data(self, selected_data_df):
+        """
+        将推荐的新标签索引列表转换为 ECharts markArea 数据并下发到前端。
+        要求:
+        - 使用 selected_data_df['selected_label'] 非空的行作为“被推荐”的区间
+        - 区间 name = label_str_list[int(label_id_多数票)]
+        """
+        if self.data is None or len(self.data) == 0:
+            print("build_third_mark_data: 后端没有可用的数据 DataFrame。")
+            return []
+
+        if 'selected_label' not in selected_data_df.columns:
+            print("build_third_mark_data: 传入的 DataFrame 缺少列 'selected_label'。")
+            return []
+
+        label_str_list = list(self.label_dict.keys())
+        sel_col = selected_data_df['selected_label']
+
+        # 取出“被推荐”的行索引（selected_label 非空）
+        sel_idx = sel_col[sel_col.notna()].index.tolist()
+        if not sel_idx:
+            print("build_third_mark_data: 没有任何被推荐的行。")
+            return []
+
+        sel_idx.sort()
+
+        markData = []
+        seg_start = sel_idx[0]
+        prev = sel_idx[0]
+
+        def flush_segment(s, e):
+            if s is None or e is None:
+                return
+            # 位置索引用 iloc，避免非 RangeIndex 时出错
+            start_ts = self.data.iloc[s]["timestamp"]
+            end_ts = self.data.iloc[e]["timestamp"]
+
+            # 该区间内的标签多数票
+            seg_labels = sel_col.loc[s:e].dropna().astype(float).astype(int).values
+            if len(seg_labels) > 0:
+                vals, counts = np.unique(seg_labels, return_counts=True)
+                label_id = int(vals[np.argmax(counts)])
+                if 0 <= label_id < len(label_str_list):
+                    name_str = label_str_list[label_id]
+                else:
+                    name_str = str(label_id)
+            else:
+                name_str = "Selected"
+
+            markData.append([
+                {
+                    "name": name_str,
+                    "xAxis": start_ts,
+                    "labelId": int(label_id) if 'label_id' in locals() else -1,
+                    "itemStyle": {"color": "rgba(255, 165, 0, 0.6)"}
+                },
+                {"xAxis": end_ts}
+            ])
+
+        # 按连续行索引拼区间
+        for i in sel_idx[1:]:
+            if i == prev + 1:
+                prev = i
+            else:
+                flush_segment(seg_start, prev)
+                seg_start = i
+                prev = i
+        flush_segment(seg_start, prev)
+
+        return markData
+
+    # 推荐新标签按钮点击事件
+    def recommend_new_label(self):
+        method = self.sampling_method_combobox.currentText()
+        text_val = self.recommended_count_input.text().strip()
+        try:
+            update_size = int(text_val) if text_val else 10
+        except ValueError:
+            update_size = 10
+        # if not hasattr(self, "_latent_worker") or self._latent_worker is None:
+        #     print("尚未生成 latent / 训练模型，无法执行主动学习。")
+        #     return
+        # if not self._latent_worker._model_ready:
+        #     print("模型尚未就绪，请等待训练完成。")
+        #     return
+        # 原先使用 QMetaObject.invokeMethod + Q_ARG 的代码删除
+        # 改为发射信号 (线程安全, QueuedConnection)
+        print(f"recommend new label: method={method}, size={update_size}")
+        self.recommendationRequested.emit(method, update_size)
+
+    # def recommend_new_label_local(self):
+    #     method = self.sampling_method_combobox.currentText()
+    #     text_val = self.recommended_count_input.text().strip()
+    #     try:
+    #         update_size = int(text_val) if text_val else 10
+    #     except ValueError:
+    #         update_size = 10
+
+    #     X_labeled, y_labeled, X_unlabeled, y_unlabeled, selected_data = self.pipeline.getSamplingLabel(
+    #         sampling_method=method,
+    #         select_size=update_size,
+    #         majority_label=None,
+    #         minority_label=None
+    #     )
+
+
+
+    def _on_recommendation_finished(self, selected_data):
+        """
+        selected_data: pipeline.active_learning_step 返回的结果 标签列表
+
+        """
+        print("推荐新label:", str(selected_data)[:200])
+        # 示例：：
+        # if isinstance(selected_data, (list, tuple)) and len(selected_data) > 0:
+        #     # 仅示例：取前几个索引用于高亮
+        #     for raw_index in selected_data[:5]:
+        #         self.handle_highlight_scatter_dot_by_index(raw_index, useRawIndex=True)
+
+
+    def on_recommendation_error(self, msg: str):
+        print("推荐新label错误:", msg)
+
+    # 清除标签按钮点击事件
+    def clear_label(self):
+        # TODO 清除标签按钮点击事件
+        print("Clear Label button clicked")
+        # 这里可以添加处理逻辑
+
+    # sampling方法下拉框选择事件
+    def sampling_method_changed(self):
+        # TODO sampling方法下拉框选择事件
+        print("Sampling method changed")
+        # 这里可以添加处理逻辑
+
+    # 推荐的个数输入框回车事件
+    def recommended_count_enter(self):
+        # TODO 推荐的个数输入框回车事件
+        print("Recommended Count input entered")
+        # 这里可以添加处理逻辑
+
+    # # 推荐新label按钮点击事件
+    # def recommend_new_label(self):
+    #     # 获取sampling方法和推荐的个数
+    #     sampling_method = self.sampling_method_combobox.currentText()
+    #     recommended_count = self.recommended_count_input.text()
+    #     select_size = int(recommended_count) if recommended_count.isdigit() else 0
+
+    #     print("Recommend New Label button clicked")
+    #     # 这里可以添加处理逻辑
+
+    
+    # 添加标签按钮点击事件（已有）
+
+    
+
+
+
+
+
+
+
+
+
+# 旧代码
+
+
+
+
+    '''
+    ==================================================
+    右上区域复选框: 列表
+    - self.checkboxList 列表(QCheckBox)
+    ==================================================
+    '''
+
+    # 创建右上角的选择模型和数据复选框
+    def createModelSelectLabelArea(self):
+
+        # 日历按钮
+        self.calendar_btn = QPushButton('Calendar')
+        self.calendar_btn.setStyleSheet(self.button_style)
+        self.calendar_btn.clicked.connect(self.open_calendar)
+        self.first_row_layout.addWidget(self.calendar_btn, alignment=Qt.AlignLeft)
+
+        # 第一行布局,包含Select model标签和选择框，, alignment=Qt.AlignLeft
+        # 创建模型组合框和标签
+        modelComboBoxLabel, modelComboBox = self.createModelComboBox()
+        # self.first_row1_layout = QHBoxLayout()
+        # self.first_row1_layout.addWidget(modelComboBoxLabel, alignment=Qt.AlignLeft)
+        # self.first_row1_layout.addWidget(modelComboBox, alignment=Qt.AlignLeft)
+        self.first_row_layout.addWidget(modelComboBoxLabel, alignment=Qt.AlignLeft)
+        self.first_row_layout.addWidget(modelComboBox, alignment=Qt.AlignLeft)
+        self.first_row_layout.addStretch()  # 添加一个伸缩因子来填充剩余空间
+        self.refresh_btn = QPushButton('Refresh')
+        self.refresh_btn.setStyleSheet(self.button_style)
+        self.refresh_btn.clicked.connect(self.handleRefresh)
+
+        self.first_row_layout.addWidget(self.refresh_btn, alignment=Qt.AlignLeft)
+
+        # self.first_row1_layout.addWidget(self.refresh_btn, alignment=Qt.AlignLeft)
+        # self.first_row1_layout.addStretch()  # 添加一个伸缩因子来填充剩余空间
+
+        # 第二行布局
+        # 创建原始数据组合框和标签
+        RawDataComboBoxLabel, RawDatacomboBox = self.createRawDataComboBox()
+        # self.first_row_layout.addLayout(RawDataComboBoxLabel, alignment=Qt.AlignLeft)
+        # self.first_row_layout.addWidget(RawDataComboBoxLabel, alignment=Qt.AlignLeft)
+        # self.first_row_layout.addWidget(RawDatacomboBox, alignment=Qt.AlignLeft)
+
+        featureExtractBtn = self.createFeatureExtractButton()
+        # self.first_row_layout.addWidget(featureExtractBtn, alignment=Qt.AlignRight)
+        # self.second_row1_layout = QHBoxLayout()
+        # self.first_row_layout.addLayout(self.second_row1_layout)
+        # self.second_row1_layout.addWidget(RawDataComboBoxLabel, alignment=Qt.AlignLeft)
+        # self.second_row1_layout.addWidget(RawDatacomboBox, alignment=Qt.AlignLeft)
+        # self.second_row1_layout.addStretch()  # 添加一个伸缩因子来填充剩余空间
+
+        # check_box布局
+        self.checkbox_layout = QHBoxLayout()
+
+        # 颜色展示
+        self.color_layout = QHBoxLayout()
+
+        self.second_row_layout.addLayout(self.checkbox_layout)
+        self.second_row_layout.addLayout(self.color_layout)
+
+        # TODO: 将一部分功能改到日历中
+        # 第三行布局 Display data 按钮
+        # self.third_row1_layout = QHBoxLayout()
+        # featureExtractBtn = self.createFeatureExtractButton()
+        # self.labelColorBtn = self.createToggleLabelColor()  # 单击可以让右下散点图显示已有标签
+
+        # self.third_row1_layout.addWidget(featureExtractBtn, alignment=Qt.AlignRight)
+        # self.third_row1_layout.addWidget(labelColorBtn, alignment=Qt.AlignRight)
+
+        # self.nestend_layout.addLayout(self.first_row1_layout)
+        # self.nestend_layout.addLayout(self.second_row1_layout)
+        # self.nestend_layout.addLayout(self.checkbox_layout)
+        # self.nestend_layout.addLayout(self.color_layout)
+        # self.nestend_layout.addLayout(self.third_row1_layout)
+
+        self.renderColumnList()
+        # self.clear_color_layout()
+        self.display_colors(self.label_colors)
+
+
+
+
+
+    def initLayout_old1(self):
         self.main_layout = QVBoxLayout()
         self.setLayout(self.main_layout)
 
@@ -1600,7 +2923,6 @@ class LabelWithInteractivePlot(QWidget):
 
         # 创建左侧row1布局
         self.left_row1_layout_all = QHBoxLayout()
-        self.left_row1_layout = QHBoxLayout()
         self.left_row1_layout = QHBoxLayout()
         self.left_row1_layout_all.addLayout(self.left_row1_layout)
         self.left_row1_layout_all.addLayout(self.left_row1_video_layout)
@@ -2065,7 +3387,10 @@ class LabelWithInteractivePlot(QWidget):
 
         # Format the times
         current_time_str = self.format_time(current_time)
-        total_duration_str = self.format_time(total_duration)
+        # total_duration_str = self.format_time(total_duration)
+        # 一小时54分42秒
+        total_duration_seconds = 1 * 3600 + 54 * 60 + 42
+        total_duration_str = self.format_time(total_duration_seconds)
 
         self.video_time_label.setText(f"当前时间: {current_time_str} / 总时间: {total_duration_str}")
         self.display_frame(0)
@@ -2224,82 +3549,6 @@ class LabelWithInteractivePlot(QWidget):
     # self.video_label.setScaledContents(True)
     # self.video_label.setFixedSize(600, 400)
 
-    '''
-    ==================================================
-    右上区域复选框: 列表
-    - self.checkboxList 列表(QCheckBox)
-    ==================================================
-    '''
-
-    # 创建右上角的选择模型和数据复选框
-    def createModelSelectLabelArea(self):
-
-        # 日历按钮
-        self.calendar_btn = QPushButton('Calendar')
-        self.calendar_btn.setStyleSheet(self.button_style)
-        self.calendar_btn.clicked.connect(self.open_calendar)
-        self.first_row_layout.addWidget(self.calendar_btn, alignment=Qt.AlignLeft)
-
-        # 第一行布局,包含Select model标签和选择框，, alignment=Qt.AlignLeft
-        # 创建模型组合框和标签
-        modelComboBoxLabel, modelComboBox = self.createModelComboBox()
-        # self.first_row1_layout = QHBoxLayout()
-        # self.first_row1_layout.addWidget(modelComboBoxLabel, alignment=Qt.AlignLeft)
-        # self.first_row1_layout.addWidget(modelComboBox, alignment=Qt.AlignLeft)
-        self.first_row_layout.addWidget(modelComboBoxLabel, alignment=Qt.AlignLeft)
-        self.first_row_layout.addWidget(modelComboBox, alignment=Qt.AlignLeft)
-        self.first_row_layout.addStretch()  # 添加一个伸缩因子来填充剩余空间
-        self.refresh_btn = QPushButton('Refresh')
-        self.refresh_btn.setStyleSheet(self.button_style)
-        self.refresh_btn.clicked.connect(self.handleRefresh)
-
-        self.first_row_layout.addWidget(self.refresh_btn, alignment=Qt.AlignLeft)
-
-        # self.first_row1_layout.addWidget(self.refresh_btn, alignment=Qt.AlignLeft)
-        # self.first_row1_layout.addStretch()  # 添加一个伸缩因子来填充剩余空间
-
-        # 第二行布局
-        # 创建原始数据组合框和标签
-        RawDataComboBoxLabel, RawDatacomboBox = self.createRawDataComboBox()
-        # self.first_row_layout.addLayout(RawDataComboBoxLabel, alignment=Qt.AlignLeft)
-        # self.first_row_layout.addWidget(RawDataComboBoxLabel, alignment=Qt.AlignLeft)
-        # self.first_row_layout.addWidget(RawDatacomboBox, alignment=Qt.AlignLeft)
-
-        featureExtractBtn = self.createFeatureExtractButton()
-        # self.first_row_layout.addWidget(featureExtractBtn, alignment=Qt.AlignRight)
-        # self.second_row1_layout = QHBoxLayout()
-        # self.first_row_layout.addLayout(self.second_row1_layout)
-        # self.second_row1_layout.addWidget(RawDataComboBoxLabel, alignment=Qt.AlignLeft)
-        # self.second_row1_layout.addWidget(RawDatacomboBox, alignment=Qt.AlignLeft)
-        # self.second_row1_layout.addStretch()  # 添加一个伸缩因子来填充剩余空间
-
-        # check_box布局
-        self.checkbox_layout = QHBoxLayout()
-
-        # 颜色展示
-        self.color_layout = QHBoxLayout()
-
-        self.second_row_layout.addLayout(self.checkbox_layout)
-        self.second_row_layout.addLayout(self.color_layout)
-
-        # TODO: 将一部分功能改到日历中
-        # 第三行布局 Display data 按钮
-        # self.third_row1_layout = QHBoxLayout()
-        # featureExtractBtn = self.createFeatureExtractButton()
-        # self.labelColorBtn = self.createToggleLabelColor()  # 单击可以让右下散点图显示已有标签
-
-        # self.third_row1_layout.addWidget(featureExtractBtn, alignment=Qt.AlignRight)
-        # self.third_row1_layout.addWidget(labelColorBtn, alignment=Qt.AlignRight)
-
-        # self.nestend_layout.addLayout(self.first_row1_layout)
-        # self.nestend_layout.addLayout(self.second_row1_layout)
-        # self.nestend_layout.addLayout(self.checkbox_layout)
-        # self.nestend_layout.addLayout(self.color_layout)
-        # self.nestend_layout.addLayout(self.third_row1_layout)
-
-        self.renderColumnList()
-        # self.clear_color_layout()
-        self.display_colors(self.label_colors)
 
     def handleRefresh(self):
         self.update_model_combobox()
@@ -2315,32 +3564,68 @@ class LabelWithInteractivePlot(QWidget):
             self.calendar.close()
         super().closeEvent(event)
 
+    # def display_colors(self, colors):
+    #     self.color_layout.addStretch()
+    #     # 创建水平布局并添加标签和颜色框
+    #     for color_name, color_value in colors.items():
+    #         layout = QHBoxLayout()
+
+    #         label = QLabel(color_name + ":")
+    #         layout.addWidget(label)
+
+    #         color_frame = QFrame()
+    #         color_frame.setFixedSize(20, 20)
+    #         color_frame.setStyleSheet(f"background-color: {color_value};")
+    #         layout.addWidget(color_frame)
+
+    #         self.color_layout.addLayout(layout)
+
     def display_colors(self, colors):
+        # 清除现有的颜色项目
+        self.clear_color_layout()
+
+        self.color_layout.addStretch()
         # 创建水平布局并添加标签和颜色框
         for color_name, color_value in colors.items():
-            layout = QHBoxLayout()
+            # 创建一个容器widget来包含每个颜色项
+            item_widget = QWidget()
+            item_layout = QHBoxLayout(item_widget)
+            # item_layout.setContentsMargins(5, 5, 5, 5)
+            # item_layout.setSpacing(5)
 
             label = QLabel(color_name + ":")
-            layout.addWidget(label)
+            item_layout.addWidget(label)
 
             color_frame = QFrame()
             color_frame.setFixedSize(20, 20)
-            color_frame.setStyleSheet(f"background-color: {color_value};")
-            layout.addWidget(color_frame)
+            color_frame.setStyleSheet(f"""
+                background-color: {color_value}; 
 
-            self.color_layout.addLayout(layout)
-        self.color_layout.addStretch()
+            """)
+            item_layout.addWidget(color_frame)
+            self.color_layout.addWidget(item_widget)
+
+        
+        
+
+    # def clear_color_layout(self):
+    #     # 移除并删除所有布局项
+    #     while self.color_layout.count() > 0:  # 改为0以清除所有
+    #         item = self.color_layout.takeAt(0)
+    #         if item.layout():
+    #             while item.layout().count():
+    #                 widget = item.layout().takeAt(0).widget()
+    #                 if widget:
+    #                     widget.deleteLater()
+    #             item.layout().deleteLater()
 
     def clear_color_layout(self):
-        # 移除并删除所有布局项
-        while self.color_layout.count() > 0:  # 改为0以清除所有
-            item = self.color_layout.takeAt(0)
-            if item.layout():
-                while item.layout().count():
-                    widget = item.layout().takeAt(0).widget()
-                    if widget:
-                        widget.deleteLater()
-                item.layout().deleteLater()
+        """清除布局中的所有项目"""
+        while self.color_layout.count():
+            child = self.color_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
 
     def clear_color_layout_and_display(self, colors):
         # 移除并删除所有布局项
@@ -2661,6 +3946,57 @@ class LabelWithInteractivePlot(QWidget):
         # 返回标签和组合框
         return modelComboBoxLabel, modelComboBox
 
+    # # 创建模型组合框的方法
+    # def createModelComboBox(self):
+    #     # 创建标签
+    #     modelComboBoxLabel = QLabel('Select model:')
+
+    #     # 创建组合框
+    #     modelComboBox = QComboBox()
+    #     # 从deepview.utils导入辅助函数
+    #     # from deepview.utils import auxiliaryfunctions
+    #     # Read file path for pose_config file. >> pass it on
+    #     # 获取根对象配置
+    #     config = self.root.config
+    #     # 读取配置
+    #     cfg = read_config(config)
+    #     # 获取无监督模型文件夹路径
+    #     unsup_model_path = get_unsup_model_folder(cfg)
+
+    #     # 获取所有.pth文件路径
+    #     model_path_list = grab_files_in_folder_deep(
+    #         os.path.join(self.cfg["project_path"], unsup_model_path),
+    #         ext='*.pth')
+    #     # 保存模型路径列表
+    #     self.model_path_list = model_path_list
+    #     if model_path_list:
+    #         # 遍历路径列表
+    #         for path in model_path_list:
+    #             # 将文件名添加到组合框
+    #             modelComboBox.addItem(str(Path(path).name))
+    #         # modelComboBox.currentIndexChanged.connect(self.handleModelComboBoxChange)
+
+    #         self.modelComboBox = modelComboBox
+
+    #         # if selection changed, run this code
+    #         # 如果选择改变，运行这段代码
+    #         model_name, data_length, column_names = \
+    #             get_param_from_path(modelComboBox.currentText())  # 从路径获取模型参数
+    #         # 保存模型路径
+    #         self.model_path = modelComboBox.currentText()
+    #         # 保存模型名称
+    #         self.model_name = model_name
+    #         # 保存数据长度
+    #         self.data_length = data_length
+    #         # 保存列名列表
+    #         self.column_names = column_names
+    #     modelComboBox.currentTextChanged.connect(
+    #         # 连接组合框文本改变事件到get_model_param_from_path方法
+    #         self.get_model_param_from_path
+    #     )
+    #     # 返回标签和组合框
+    #     return modelComboBoxLabel, modelComboBox
+
     # 从路径获取模型参数的方法
     def get_model_param_from_path(self, model_path):
         # set model information according to model name
@@ -2796,27 +4132,50 @@ class LabelWithInteractivePlot(QWidget):
         self.backend.displayData(self.data, metadatas, self.label_colors)
         self.backend_map.displayMapData(self.data)
 
+    # 原版散点图逻辑
+    # def handle_compute_finished(self, data):
+    #     (spots, start_indice, end_indice) = data
+    #     # 设置训练状态为False
+    #     self.isTraining = False
+    #     self.updateBtn()
+    #     # 清除中央绘图区域
+    #     self.viewC.clear()
+    #     # 创建一个散点图项
+    #     scatterItem = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None))
+    #     self.start_indice = start_indice
+    #     self.end_indice = end_indice
+    #     # 在散点图中绘制点
+    #     scatterItem.addPoints(spots)
+    #     self.scatterItem = scatterItem
+    #     scatterItem.sigClicked.connect(self.handleScatterItemClick)
+    #     self.viewC.addItem(scatterItem)
+    #     return
+
+    # 移除ViewC调用
     def handle_compute_finished(self, data):
         (spots, start_indice, end_indice) = data
         # 设置训练状态为False
         self.isTraining = False
         self.updateBtn()
         # 清除中央绘图区域
-        self.viewC.clear()
+        # self.viewC.clear()
         # 创建一个散点图项
         scatterItem = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None))
         self.start_indice = start_indice
         self.end_indice = end_indice
         # 在散点图中绘制点
-        scatterItem.addPoints(spots)
-        self.scatterItem = scatterItem
-        scatterItem.sigClicked.connect(self.handleScatterItemClick)
-        self.viewC.addItem(scatterItem)
+        # scatterItem.addPoints(spots)
+        # self.scatterItem = scatterItem
+        # scatterItem.sigClicked.connect(self.handleScatterItemClick)
+        # self.viewC.addItem(scatterItem)
         return
 
     def handleScatterItemClick(self, scatterItem, points):
+        # TODO 点击散点图的点时的处理，现在有bug，需要在util里的plot_scatter_pg里改data字典
+        return
         if len(points) >= 1:
-            index, start, end = points[0].data()
+            # index, start, end = points[0].data()
+            start, end = points[0].data()  # original index
 
             # start为latent space的切片索引，index为原始索引（对应切片的开始索引）
             lat, lon = self.data.loc[start, 'latitude'], self.data.loc[start, 'longitude']
@@ -2839,10 +4198,12 @@ class LabelWithInteractivePlot(QWidget):
         # enabled 启用按钮
         if self.isTraining:
             # 如果在训练，设置按钮不可用
-            self.featureExtractBtn.setEnabled(False)
+            # self.featureExtractBtn.setEnabled(False)
+            pass
         else:
+            pass
             # 如果不在训练，设置按钮可用
-            self.featureExtractBtn.setEnabled(True)
+            # self.featureExtractBtn.setEnabled(True)
 
     # 渲染列列表的方法
     def renderColumnList(self):
@@ -2856,6 +4217,8 @@ class LabelWithInteractivePlot(QWidget):
         # 初始化复选框列表
         self.checkboxList = []
         # 遍历列名列表
+        # 添加一个伸缩项以填充剩余区域并保持复选框左对齐
+        self.checkbox_layout.addStretch()
         for column in self.all_sensor:
             # 创建复选框
             cb = QCheckBox(column)
@@ -2868,8 +4231,7 @@ class LabelWithInteractivePlot(QWidget):
             # 连接复选框状态改变事件到handleCheckBoxStateChange方法
             cb.stateChanged.connect(self.handleCheckBoxStateChange)
 
-        # 添加一个伸缩项以填充剩余区域并保持复选框左对齐
-        self.checkbox_layout.addStretch()
+        
 
     # 处理复选框状态改变的方法
     def handleCheckBoxStateChange(self):
@@ -3185,6 +4547,47 @@ class LabelWithInteractivePlot(QWidget):
 
     # TODO 点击过快可能报错    self._plot.updateSpots(self._data.reshape(1)) AttributeError: 'NoneType' object has no attribute 'updateSpots'
     def handle_highlight_scatter_dot_by_index(self, index, useRawIndex=False):
+        
+        # TODO 需要删除，点击给视频标签切换下一章图片
+        # 切换视频标签到下一张章节图片（从目标文件夹读取图片并轮换显示）
+        # try:
+        #     if not self.custom_image_dir or not os.path.isdir(self.custom_image_dir):
+        #         # 未设置有效图片目录则跳过（不再自动回退扫描）
+        #         pass
+        #     else:
+        #         if not hasattr(self, "thumbnail_paths"):
+        #             exts = ("*.png", "*.jpg", "*.jpeg", "*.bmp", "*.gif")
+        #             self.thumbnail_paths = []
+        #             for e in exts:
+        #                 self.thumbnail_paths.extend(
+        #                     glob.glob(os.path.join(self.custom_image_dir, "**", e), recursive=True)
+        #                 )
+        #             self.thumbnail_paths.sort()
+        #             self._thumbnail_idx = -1
+
+        #         if self.thumbnail_paths:
+        #             self._thumbnail_idx = (self._thumbnail_idx + 1) % len(self.thumbnail_paths)
+        #             img_path = self.thumbnail_paths[self._thumbnail_idx]
+
+        #             pix = QPixmap(img_path)
+        #             if pix.isNull():
+        #                 try:
+        #                     cv_img = cv2.imdecode(np.fromfile(img_path, dtype=np.uint8), cv2.IMREAD_COLOR)
+        #                     cv_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
+        #                     h, w, ch = cv_img.shape
+        #                     bytes_per_line = ch * w
+        #                     qimg = QImage(cv_img.data, w, h, bytes_per_line, QImage.Format_RGB888)
+        #                     pix = QPixmap.fromImage(qimg)
+        #                 except Exception:
+        #                     pix = QPixmap()
+
+        #             if not pix.isNull():
+        #                 scaled = pix.scaled(self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        #                 self.video_label.setPixmap(scaled)
+        #                 self.video_label.setScaledContents(False)
+        # except Exception as e:
+        #     print(f"切换缩略图时出错: {e}")
+
         self.jump_to_timestamp(index)
         indice = index
         if not useRawIndex:
@@ -3197,7 +4600,8 @@ class LabelWithInteractivePlot(QWidget):
         self.last_modified_points = []  # Clear the list
         if indice is not None:
             for spot in self.scatterItem.points():
-                i, start, end = spot.data()
+                # i, start, end = spot.data()
+                i, libel = spot.data()
                 if i == indice:
                     # Save current properties
                     original_size = spot.size()

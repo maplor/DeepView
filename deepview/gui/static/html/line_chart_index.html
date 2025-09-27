@@ -56,8 +56,8 @@
         .chart-box:first-child {
             position: sticky;
             top: 0px;
-            height: 80px;
-            min-height: 50px;
+            height: 120px;
+            min-height: 80px;
             /* 设置最小高度 */
             /* 固定高度 */
             flex: 0 0 auto;
@@ -93,6 +93,11 @@
         findDatastatus = false;
 
         markData = [];
+        // 第二个图表的markData
+        markData2 = [];
+        // 第三个图表的markData
+        markData3 = [];
+
         otherMarkData = [];
         selectedDataList = null;
         chartsTheme = 'light';
@@ -123,43 +128,280 @@
         isSyncing = false;
         // 第一个图表的特殊配置
         selectedOption = {
-            grid: {
-                top: 10,
-                bottom: 20
-            },
-            xAxis: {
-                type: 'category',
-                data: [] // 保持与原始图表一致的X轴数据
-            },
-            yAxis: {
-                type: 'value',
-                min: 1 // 设置y轴最小值为1
-            },
-            graphic: [],
-            series: [{
-                type: 'line',
-                markArea: {
-                    data: [],
-                    label: {
-                        show: true, // 显示标签
-                        position: 'inside', // 标签位置为区域内部
-                        color: '#000', // 标签颜色
-                        fontSize: 14, // 标签字体大小
-                        formatter: function (params) {
-                            return params.name; // 使用区域的名称作为标签内容
-                        }
+            grid: [
+                {
+                    top: '1%',
+                    bottom: '78%',
+
+                },
+                {
+                    top: '35%',
+                    bottom: '44%'
+                },
+                {
+                    top: '70%',
+                    bottom: '12%'
+                }
+            ],
+            title: [
+                {
+                    top: '6%',
+                    left: 'center',
+                    text: 'Current Label',
+                    textStyle: {
+                        color: 'rgba(0,0,0,0.6)', // 设置透明度为 0.6
+                        // fontSize: 16
                     }
                 },
-                data: [], // 空数据
-                showSymbol: false, // 不显示数据点
-                lineStyle: {
-                    opacity: 0 // 使线条透明
+                {
+                    top: '37%',
+                    left: 'center',
+                    text: 'Label propagation',
+                    textStyle: {
+                        color: 'rgba(0,0,0,0.6)',
+                        // fontSize: 14
+                    }
+                },
+                {
+                    top: '75%',
+                    left: 'center',
+                    text: 'Candidate label',
+                    textStyle: {
+                        color: 'rgba(0,0,0,0.6)',
+                        // fontSize: 14
+                    }
                 }
-            }],
+            ],
+            xAxis: [
+                {
+                    data: [], // 保持与原始图表一致的X轴数据
+                    axisLabel: {
+                        show: false // 默认隐藏x轴标签
+                    }
+                },
+                {
+                    data: [],
+                    gridIndex: 1,
+                    axisLabel: {
+                        show: false // 默认隐藏x轴标签
+                    }
+                },
+                {
+                    data: [],
+                    gridIndex: 2
+                }
+            ],
+            // yAxis: {
+            //     type: 'value',
+            //     min: 1 // 设置y轴最小值为1
+            // },
+            yAxis: [
+                {},
+                {
+                    gridIndex: 1
+                },
+                {
+                    gridIndex: 2
+                }
+            ],
+            graphic: [],
+            series: [
+                {
+                    type: 'line',
+                    markArea: {
+                        data: [],
+                        tooltip: {
+                            // 显示标签名字-intidx，和起始结束时间
+                            formatter: function (params) {
+                                // console.log(params);
+                                const startValue = params.data.coord[0][0];
+                                const endValue = params.data.coord[1][0];
+                                return params.name + '<br />' + `${startValue} <br /> ${endValue}`;
+                            },
+                            // 将 tooltip 显示在鼠标右下方，并在超出容器时自动调整
+                            position: function (point, params, dom, rect, size) {
+                                var offsetX = 12; // 鼠标右侧偏移
+                                var offsetY = 12; // 鼠标下方偏移
+                                var x = point[0] + offsetX;
+                                var y = point[1] + offsetY;
+                                // size.contentSize = [width, height], size.viewSize = [viewWidth, viewHeight]
+                                if (size && size.contentSize && size.viewSize) {
+                                    var contentW = size.contentSize[0];
+                                    var contentH = size.contentSize[1];
+                                    var viewW = size.viewSize[0];
+                                    var viewH = size.viewSize[1];
+                                    // 超出右边界则改为左侧显示
+                                    if (x + contentW > viewW) {
+                                        x = point[0] - contentW - offsetX;
+                                    }
+                                    // 超出下边界则改为上方显示
+                                    if (y + contentH > viewH) {
+                                        y = point[1] - contentH - offsetY;
+                                    }
+                                }
+                                return [x, y];
+                            }
+                        },
+
+                        label: {
+                            show: true, // 显示标签
+                            position: 'inside', // 标签位置为区域内部
+                            color: '#000', // 标签颜色
+                            fontSize: 14, // 标签字体大小
+                            formatter: function (params) {
+                                return params.name; // 使用区域的名称作为标签内容
+                            }
+                        }
+                    },
+                    data: [], // 空数据
+                    showSymbol: false, // 不显示数据点
+                    lineStyle: {
+                        opacity: 0 // 使线条透明
+                    }
+                },
+                {
+                    type: 'line',
+                    markArea: {
+                        data: [],
+                        tooltip: {
+                            // 显示标签名字-intidx，和起始结束时间
+                            formatter: function (params) {
+                                // console.log(params);
+                                const startValue = params.data.coord[0][0];
+                                const endValue = params.data.coord[1][0];
+                                return params.name + ' ' + params.data.labelId + '<br />' + `${startValue} <br /> ${endValue}`;
+                            },
+                            // 将 tooltip 显示在鼠标右下方，并在超出容器时自动调整（考虑容器偏移与页面滚动）
+                            position: function (point, params, dom, rect, size) {
+                                var offsetX = 12; // 鼠标右侧偏移
+                                var offsetY = 12; // 鼠标下方偏移
+
+                                // 获取容器在视口中的位置（rect 可能由 ECharts 提供）
+                                var containerLeft = 0, containerTop = 0;
+                                if (rect && (rect.left !== undefined || rect.x !== undefined)) {
+                                    containerLeft = rect.left !== undefined ? rect.left : rect.x;
+                                    containerTop = rect.top !== undefined ? rect.top : rect.y;
+                                } else if (dom && dom.parentNode) {
+                                    // 退回到通过 DOM 找到容器（tooltip 的 dom 在 chart 的根节点之内或 body 下）
+                                    try {
+                                        var parentRect = dom.parentNode.getBoundingClientRect();
+                                        containerLeft = parentRect.left;
+                                        containerTop = parentRect.top;
+                                    } catch (e) {
+                                        containerLeft = 0;
+                                        containerTop = 0;
+                                    }
+                                }
+
+                                // 将 container 的视口坐标转换为页面坐标（考虑页面滚动）
+                                var pageContainerLeft = containerLeft + (window.pageXOffset || document.documentElement.scrollLeft || 0);
+                                var pageContainerTop = containerTop + (window.pageYOffset || document.documentElement.scrollTop || 0);
+
+                                // 计算初始 tooltip 的页面坐标（基于容器左上角）
+                                var pageX = pageContainerLeft + point[0] + offsetX;
+                                var pageY = pageContainerTop + point[1] + offsetY;
+
+                                // 如果提供了 size（包含 contentSize 和 viewSize），用于越界判断（viewSize 是视口尺寸）
+                                if (size && size.contentSize && size.viewSize) {
+                                    var contentW = size.contentSize[0];
+                                    var contentH = size.contentSize[1];
+                                    var viewW = size.viewSize[0] + (window.pageXOffset || document.documentElement.scrollLeft || 0);
+                                    var viewH = size.viewSize[1] + (window.pageYOffset || document.documentElement.scrollTop || 0);
+
+                                    // 超出右边界则改为左侧显示（使用页面坐标比较）
+                                    if (pageX + contentW > viewW) {
+                                        pageX = pageContainerLeft + point[0] - contentW - offsetX;
+                                    }
+                                    // 超出下边界则改为上方显示
+                                    if (pageY + contentH > viewH) {
+                                        pageY = pageContainerTop + point[1] - contentH - offsetY;
+                                    }
+                                }
+
+                                // 将页面坐标转换回相对于容器左上角的坐标（ECharts 期望返回容器相对坐标）
+                                var finalX = pageX - pageContainerLeft;
+                                var finalY = pageY - pageContainerTop;
+
+                                return [finalX, finalY];
+                            }
+                        },
+                        label: {
+                            show: true, // 显示标签
+                            position: 'inside', // 标签位置为区域内部
+                            color: '#000', // 标签颜色
+                            fontSize: 14, // 标签字体大小
+                            formatter: function (params) {
+                                return params.name; // 使用区域的名称作为标签内容
+                            }
+                        }
+                    },
+                    data: [], // 空数据
+                    xAxisIndex: 1,
+                    yAxisIndex: 1,
+                    showSymbol: false, // 不显示数据点
+                    lineStyle: {
+                        opacity: 0 // 使线条透明
+                    }
+                },
+                {
+                    type: 'line',
+                    markArea: {
+                        data: [],
+                        tooltip: {
+                            // 显示标签名字-intidx，和起始结束时间
+                            formatter: function (params) {
+                                // console.log(params);
+                                const startValue = params.data.coord[0][0];
+                                const endValue = params.data.coord[1][0];
+                                return params.name + ' ' + params.data.labelId + '<br />' + `${startValue} <br /> ${endValue}`;
+                            },
+                            // 将 tooltip 显示在鼠标右下方，并在超出容器时自动调整
+                            position: function (point, params, dom, rect, size) {
+                                var offsetX = 12; // 鼠标右侧偏移
+                                var offsetY = 12; // 鼠标下方偏移
+                                var x = point[0] + offsetX;
+                                var y = point[1] + offsetY;
+                                // size.contentSize = [width, height], size.viewSize = [viewWidth, viewHeight]
+                                if (size && size.contentSize && size.viewSize) {
+                                    var contentW = size.contentSize[0];
+                                    var contentH = size.contentSize[1];
+                                    var viewW = size.viewSize[0];
+                                    var viewH = size.viewSize[1];
+                                    // 超出右边界则改为左侧显示
+                                    if (x + contentW > viewW) {
+                                        x = point[0] - contentW - offsetX;
+                                    }
+                                    // 超出下边界则改为上方显示
+                                    if (y + contentH > viewH) {
+                                        y = point[1] - contentH - offsetY;
+                                    }
+                                }
+                                return [x, y];
+                            }
+                        },
+                        label: {
+                            show: true, // 显示标签
+                            position: 'inside', // 标签位置为区域内部
+                            color: '#000', // 标签颜色
+                            fontSize: 14, // 标签字体大小
+                            formatter: function (params) {
+                                return params.name; // 使用区域的名称作为标签内容
+                            }
+                        }
+                    },
+                    data: [], // 空数据
+                    xAxisIndex: 2,
+                    yAxisIndex: 2,
+                    showSymbol: false, // 不显示数据点
+                    lineStyle: {
+                        opacity: 0 // 使线条透明
+                    }
+                }
+            ],
             dataZoom: [
                 {
                     type: 'inside',
-                    xAxisIndex: [0],
+                    xAxisIndex: [0, 1, 2],
                     start: 0,
                     end: 100
                 }
@@ -591,6 +833,15 @@
                                 type: 'line',
                                 data: dataFrame[seriesName],
                                 sampling: 'lttb',
+
+                                symbol: 'circle',         // 使用圆点
+                                showSymbol: false,        // 仅在悬浮/tooltip时显示点
+                                showAllSymbol: false,     // 不显示所有点的符号
+                                large: true,               // 启用 large 模式以优化大量点的渲染性能
+                                progressive: 4000,         // 渐进渲染每批绘制的点数，用于避免主线程阻塞
+                                progressiveThreshold: 10000, // 数据点超过该阈值时启用渐进渲染
+                                animation: false,          // 关闭初始动画以减少加载开销
+
                                 emphasis: {
                                     itemStyle: {
                                         color: 'red',
@@ -613,6 +864,17 @@
                         title: {
                             // text: 'Line Chart ' + (index + 1)
                             text: chartData.name
+                        },
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: { snap: true },  // 吸附最近点
+                            formatter: params => {
+                                const p = Array.isArray(params) ? params[0] : params;
+                                if (!p || !p.value) return '';
+                                const x = p.value[0];
+                                const y = p.value[1];
+                                return ``;
+                            }
                         },
                         // tooltip: {
                         //     trigger: 'axis',
@@ -698,12 +960,22 @@
                     //         });
                     // }
 
+                    // // 如果是第一个图表，添加特殊的配置
+                    // if (index === 0) {
+                    //     selectedOption.xAxis.data = dataFrame[chartData.xAxisName]
+                    //     chart.setOption(selectedOption);
+                    //     return;
+                    // }
                     // 如果是第一个图表，添加特殊的配置
                     if (index === 0) {
-                        selectedOption.xAxis.data = dataFrame[chartData.xAxisName]
+                        // selectedOption.xAxis.data = dataFrame[chartData.xAxisName]
+                        for (let i = 0; i < selectedOption.xAxis.length; i++) {
+                            selectedOption.xAxis[i].data = dataFrame[chartData.xAxisName];
+                        }
                         chart.setOption(selectedOption);
                         return;
                     }
+
 
                     // 如果是最后一个图表，添加 dataZoom 配置
                     if (index === chartsData.length - 1) {
@@ -1189,9 +1461,21 @@
                 }
 
                 charts[0].setOption(selectedOption);
+                // if (currentZoom) {
+                //     charts[0].setOption({
+                //         dataZoom: currentZoom
+                //     });
+                // }
                 if (currentZoom) {
                     charts[0].setOption({
-                        dataZoom: currentZoom
+                        dataZoom: [
+                            {
+                                type: 'inside',
+                                xAxisIndex: [0, 1, 2], // 同时控制所有三个x轴
+                                start: currentZoom[0].start,
+                                end: currentZoom[0].end
+                            }
+                        ]
                     });
                 }
 
@@ -1205,6 +1489,255 @@
 
             } else {
                 console.error('No brush areas available to apply as markArea.');
+            }
+        }
+
+        // 添加标签到第二个图表（Label propagation）
+        function addLabelToSecondChart(selectedValue) {
+            if (!labelColors[selectedValue]) {
+                // 找到第一个未使用的颜色
+                let nextColor = colorPalette.find(color => !usedColors.has(color));
+                if (nextColor) {
+                    labelColors[selectedValue] = nextColor;
+                    usedColors.add(nextColor); // 标记为已使用
+                } else {
+                    console.error('No available colors left in the palette.');
+                    return;
+                }
+            }
+
+            const currentTimestamp = Date.now();
+            const newArea = {
+                name: selectedValue,
+                xAxis: new Date(brushAreas[0].timestamp).toISOString(),
+                id: currentTimestamp,
+                itemStyle: {
+                    color: labelColors[selectedValue],  // 使用标签对应的颜色
+                },
+            };
+            const newAreaEnd = {
+                xAxis: new Date(brushAreas[brushAreas.length - 1].timestamp).toISOString(),
+            };
+            const newArray = [newArea, newAreaEnd];
+
+            // 检查是否与现有的数据重叠
+            let hasOverlap = false;
+            let overlappingIndexes = [];
+
+            markData2.forEach((existingArray, index) => {
+                const existingStart = existingArray[0].xAxis;
+                const existingEnd = existingArray[1].xAxis;
+                const newStart = newArea.xAxis;
+                const newEnd = newAreaEnd.xAxis;
+
+                // 判断是否有重叠
+                const isOverlapping = !(existingEnd <= newStart || existingStart >= newEnd);
+
+                if (isOverlapping) {
+                    hasOverlap = true;
+                    overlappingIndexes.push(index);
+                }
+            });
+
+            if (hasOverlap) {
+                // 调用 PySide6 的 confirmOverlap 方法
+                backend.confirmOverlap().then(userConfirmed => {
+                    if (userConfirmed) {
+                        // 去掉旧的重叠区域
+                        overlappingIndexes.reverse().forEach(index => {
+                            markData2.splice(index, 1);
+                        });
+                        // 添加新的数据
+                        markData2.push(newArray);
+                        otherMarkData.unshift(newArray);
+                        selectedOption.series[0].markArea.data = otherMarkData;
+                        charts.forEach((chart) => {
+                            chart.setOption({
+                                series: [{
+                                    markArea: {
+                                        data: otherMarkData
+                                    }
+                                }]
+                            });
+                        });
+                    }
+                });
+            } else {
+                // 如果没有重叠，直接添加新的数据
+                markData2.push(newArray);
+                otherMarkData.unshift(newArray);
+            }
+            selectedOption.series[1].markArea.data = markData2;
+            charts.forEach((chart) => {
+                chart.setOption({
+                    series: [{
+                        markArea: {
+                            data: markData2
+                        }
+                    }]
+                });
+            });
+            charts[0].setOption(selectedOption);
+            const currentZoom = charts[1].getOption().dataZoom;
+            if (currentZoom) {
+                charts[0].setOption({
+                    dataZoom: currentZoom
+                });
+            }
+            // 清除框选
+            charts.forEach((chart, i) => {
+                chart.dispatchAction({
+                    type: 'brush',
+                    areas: []
+                });
+            });
+        }
+
+
+        // 给第三个图表添加标签（候选标签）
+        function addCandidateLabel(selectedValue) {
+            if (!labelColors[selectedValue]) {
+                // 找到第一个未使用的颜色
+                let nextColor = colorPalette.find(color => !usedColors.has(color));
+                if (nextColor) {
+                    labelColors[selectedValue] = nextColor;
+                    usedColors.add(nextColor); // 标记为已使用
+                } else {
+                    console.error('No available colors left in the palette.');
+                    return;
+                }
+            }
+
+            const currentTimestamp = Date.now();
+            const newArea = {
+                name: selectedValue,
+                xAxis: new Date(brushAreas[0].timestamp).toISOString(),
+                id: currentTimestamp,
+                itemStyle: {
+                    color: labelColors[selectedValue],  // 使用标签对应的颜色
+                },
+            };
+            const newAreaEnd = {
+                xAxis: new Date(brushAreas[brushAreas.length - 1].timestamp).toISOString(),
+            };
+            const newArray = [newArea, newAreaEnd];
+
+            // 检查是否与现有的数据重叠
+            let hasOverlap = false;
+            let overlappingIndexes = [];
+
+            markData3.forEach((existingArray, index) => {
+                const existingStart = existingArray[0].xAxis;
+                const existingEnd = existingArray[1].xAxis;
+                const newStart = newArea.xAxis;
+                const newEnd = newAreaEnd.xAxis;
+
+                // 判断是否有重叠
+                const isOverlapping = !(existingEnd <= newStart || existingStart >= newEnd);
+
+                if (isOverlapping) {
+                    hasOverlap = true;
+                    overlappingIndexes.push(index);
+                }
+            });
+
+            if (hasOverlap) {
+                // 调用 PySide6 的 confirmOverlap 方法
+                backend.confirmOverlap().then(userConfirmed => {
+                    if (userConfirmed) {
+                        // 去掉旧的重叠区域
+                        overlappingIndexes.reverse().forEach(index => {
+                            markData3.splice(index, 1);
+                        });
+                        // 添加新的数据
+                        markData3.push(newArray);
+                        otherMarkData.unshift(newArray);
+                        selectedOption.series[2].markArea.data = otherMarkData;
+                        charts.forEach((chart) => {
+                            chart.setOption({
+                                series: [{
+                                    markArea: {
+                                        data: otherMarkData
+                                    }
+                                }]
+                            });
+                        });
+                    }
+                });
+            } else {
+                // 如果没有重叠，直接添加新的数据
+                markData3.push(newArray);
+                otherMarkData.unshift(newArray);
+            }
+            selectedOption.series[2].markArea.data = markData3;
+            charts.forEach((chart) => {
+                chart.setOption({
+                    series: [{
+                        markArea: {
+                            data: markData3
+                        }
+                    }]
+                });
+            });
+            charts[0].setOption(selectedOption);
+            // const currentZoom = charts[2].getOption().dataZoom;
+            // if (currentZoom) {
+            //     charts[0].setOption({
+            //         dataZoom: currentZoom
+            //     });
+            // }
+            // 清除框选
+            charts.forEach((chart, i) => {
+                chart.dispatchAction({
+                    type: 'brush',
+                    areas: []
+                });
+            });
+        }
+
+
+
+        // Label propagation 给第一个图表的第二个series设置数据（仅更新 series[1].markArea，不覆盖其它 series）
+        function setMarkDataToSecondChart(data) {
+            const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+            // 保留当前缩放状态
+            const opt = charts[0].getOption();
+            const dataZoomState = opt.dataZoom ? opt.dataZoom.map(z => ({ ...z })) : [];
+            charts[0].setOption({
+                series: [
+                    {},                                   // 占位，保持 series[0] 不变
+                    { markArea: { data: parsed } },       // 仅更新 series[1]
+                    {}                                    // 占位，保持 series[2] 不变
+                ],
+                dataZoom: dataZoomState
+            });
+            // 同步缓存的 selectedOption
+            if (selectedOption && selectedOption.series && selectedOption.series[1]) {
+                selectedOption.series[1].markArea.data = parsed;
+            }
+
+        }
+
+        //  给第一个图表的第三个series设置数据（仅更新 series[2].markArea，不覆盖其它 series）
+        function setMarkDataToThirdChart(data) {
+            const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+
+            // 保留当前缩放状态
+            const opt = charts[0].getOption();
+            const dataZoomState = opt.dataZoom ? opt.dataZoom.map(z => ({ ...z })) : [];
+
+            charts[0].setOption({
+                series: [
+                    {},                                   // 占位，保持 series[0] 不变
+                    {},                                   // 占位，保持 series[1] 不变
+                    { markArea: { data: parsed } }        // 仅更新 series[2]
+                ],
+                dataZoom: dataZoomState
+            });
+
+            // 同步缓存的 selectedOption
+            if (selectedOption && selectedOption.series && selectedOption.series[2]) {
+                selectedOption.series[2].markArea.data = parsed;
             }
         }
 
@@ -1514,6 +2047,8 @@
             // console.log(channel.objects)
             // console.log(channel.objects.backend)
             window.backend = channel.objects.backend;
+            backend.setSecondChartData.connect(setMarkDataToSecondChart);
+            backend.setThirdChartData.connect(setMarkDataToThirdChart);
         });
         // document.documentElement.style.overflow = "hidden";
     </script>
