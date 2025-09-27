@@ -112,27 +112,17 @@ labelcategory_dict = {
 }
 
 # 将行为类别映射为数值标签用于机器学习
-# label_dict = {
-#     'Resting': 0,
-#     'Swimming': 1,
-#     'Stay in surface': 2,
-#     'Gliding': 3,
-#     'Feeding': 4,
-#     'Scratching': 5,
-#     'Breathing': 6,
-#     'Unknown': -1,
-# }
-
 label_dict = {
-    'stationary': 0,
-    'preening': 1,
-    'bathing': 2,
-    'flight_take_off': 3,
-    'flight_cruising': 4,
-    'foraging_dive': 5,
-    'surface_seizing': 6,
-    'unknown': -1
+    'Resting': 0,
+    'Swimming': 1,
+    'Stay in surface': 2,
+    'Gliding': 3,
+    'Feeding': 4,
+    'Scratching': 5,
+    'Breathing': 6,
+    'Unknown': -1,
 }
+
 
 label_dict_omizu = {
     'stationary': 0,
@@ -207,99 +197,7 @@ def read_sensor_data(pkl_path: str = r'./test/turtle.pkl'):
 
 
 
-# def read_sensor_data_from_memory(pkl_objects):
-#     """
-#     直接接收已经通过 pickle.load(...) 得到的对象并完成合并与标签映射。
-#     使用的是copy的DataFrame，避免修改原始数据。
-#     支持：
-#       1) 单个 DataFrame
-#       2) list / tuple / 其它可迭代 (其元素为 DataFrame)
-#     参数:
-#         pkl_objects: DataFrame 或 可迭代的多个 DataFrame
-#     返回:
-#         DataFrame: 处理后的数据
-#     """
-#     if isinstance(pkl_objects, pd.DataFrame):
-#         df_all = pkl_objects.copy()
-#     elif isinstance(pkl_objects, (list, tuple)):
-#         if len(pkl_objects) == 0:
-#             raise ValueError("pkl_objects 为空。")
-#         df_all = pd.concat(pkl_objects, ignore_index=True)
-#     else:
-#         try:
-#             tmp_list = list(pkl_objects)
-#             if len(tmp_list) == 0:
-#                 raise ValueError("pkl_objects 可迭代为空。")
-#             df_all = pd.concat(tmp_list, ignore_index=True)
-#         except Exception as e:
-#             raise TypeError(
-#                 "pkl_objects 类型不支持，请传入 DataFrame 或 (list/tuple/可迭代) 且元素为 DataFrame。"
-#             ) from e
 
-#     # df_all['category'] = df_all['Label'].map(labelcategory_dict)
-#     # df_all['category'] = df_all['label'].map(labelcategory_dict)
-#     # df_all['label_id'] = df_all['category'].map(label_dict)
-#     df_all['label_id'] = df_all['label_id'].fillna(-2)
-
-#     # # 如果 label_id 存在 bytes/bytearray，需要先解码为 str 然后转为数值；不可解析的值视为 -2
-#     # if df_all['label_id'].dtype == object:
-#     #     def _decode_if_bytes(v):
-#     #         if isinstance(v, (bytes, bytearray)):
-#     #             try:
-#     #                 return v.decode()
-#     #             except Exception:
-#     #                 return v
-#     #         return v
-#     #     df_all['label_id'] = df_all['label_id'].map(_decode_if_bytes)
-
-#     # # 强制转换为数值，无法解析的置为 -2，最后转换为整数类型
-#     # df_all['label_id'] = pd.to_numeric(df_all['label_id'], errors='coerce').fillna(-2).astype(int)
-#     return df_all
-
-# def read_sensor_data_from_memory(pkl_objects):
-#     """
-#     直接接收已经通过 pickle.load(...) 得到的对象并完成合并与标签映射。
-#     使用的是copy的DataFrame，避免修改原始数据。
-#     支持：
-#       1) 单个 DataFrame
-#       2) list / tuple / 其它可迭代 (其元素为 DataFrame)
-#     参数:
-#         pkl_objects: DataFrame 或 可迭代的多个 DataFrame
-#     返回:
-#         DataFrame: 处理后的数据
-#     """
-#     if isinstance(pkl_objects, pd.DataFrame):
-#         df_all = pkl_objects.copy()
-#     elif isinstance(pkl_objects, (list, tuple)):
-#         if len(pkl_objects) == 0:
-#             raise ValueError("pkl_objects 为空。")
-#         df_all = pd.concat(pkl_objects, ignore_index=True)
-#     else:
-#         try:
-#             tmp_list = list(pkl_objects)
-#             if len(tmp_list) == 0:
-#                 raise ValueError("pkl_objects 可迭代为空。")
-#             df_all = pd.concat(tmp_list, ignore_index=True)
-#         except Exception as e:
-#             raise TypeError(
-#                 "pkl_objects 类型不支持，请传入 DataFrame 或 (list/tuple/可迭代) 且元素为 DataFrame。"
-#             ) from e
-
-#     # 统一将 label_id 转为数值；无法解析的一律视为 -2
-#     if 'label_id' not in df_all.columns:
-#         df_all['label_id'] = -2
-#     else:
-#         def _decode_if_bytes(v):
-#             if isinstance(v, (bytes, bytearray)):
-#                 try:
-#                     return v.decode()
-#                 except Exception:
-#                     return v
-#             return v
-#         df_all['label_id'] = df_all['label_id'].map(_decode_if_bytes)
-#         df_all['label_id'] = pd.to_numeric(df_all['label_id'], errors='coerce').fillna(-2).astype(int)
-
-#     return df_all
 
 
 def read_sensor_data_from_memory(pkl_objects):
@@ -1491,14 +1389,6 @@ def test_plot_scatter_pg(data_umap):
     plot_scatter_pg(data_umap, label_concat_vote_str, iteration=0, name='test_plot')
 
 
-# def _build_qapp():
-#     """确保 Qt Application 存在"""
-#     from PySide6.QtWidgets import QApplication
-#     import sys
-#     app = QApplication.instance()
-#     if app is None:
-#         app = QApplication(sys.argv)
-#     return app
 
 # def plot_scatter_pg(data_umap, label_str, iteration, name,
 #                     dataset_name='turtle',
@@ -1688,75 +1578,6 @@ def plot_scatter_pg_old(data_umap, label_str, iteration, name,
 
     return scatter
 
-# 修改适配GUI的版本，传入label_colors
-# def plot_scatter_pg(data_umap, label_np, iteration, name,
-#                     dataset_name='turtle',
-#                     point_size=6,
-#                     show=True,
-#                     save=False,
-#                     save_width=1000,
-#                     label_colors=None):
-#     """
-#     使用 pyqtgraph 绘制 UMAP 2D 散点。
-#     默认只显示窗口，不再保存文件；若需保存设 save=True。
-
-#     args:
-#         data_umap: ndarray [N,2]
-#         label_np: 长度 N 的标签数组
-#         iteration: 迭代次数
-#         name: 图表名称
-#         dataset_name: 数据集名称
-#         point_size: 点大小
-#         show: 是否显示图表
-#         save: 是否保存图表
-#         save_width: 保存图表的宽度
-#         label_list_str: 调色盘标签顺序
-
-#     """
-
-
-#     cmap_fixed = label_colors
-#     dynamic_map = {}
-#     next_color_idx = 0
-#     default_cycle = list(label_colors.values())
-
-#     colors_for_points = []
-#     for lbl in label_np:
-#         if lbl in cmap_fixed:
-#             if lbl in cmap_fixed:
-#                 colors_for_points.append(cmap_fixed[lbl])
-#             else:
-#                 # 支持 numpy 整数类型以及字符串标签
-#                 key = int(lbl) if isinstance(lbl, (np.integer,)) else lbl
-#                 colors_for_points.append(default_cycle[key])
-#         else:
-#             if lbl == '-2.0':
-#                 brush_color = brush_color.lighter(170)
-#         # if lbl in cmap_fixed:
-#         #     colors_for_points.append(cmap_fixed[lbl])
-#         # else:
-#         #     if lbl not in dynamic_map:
-#         #         dynamic_map[lbl] = default_cycle[next_color_idx % len(default_cycle)]
-#         #         next_color_idx += 1
-#         #     colors_for_points.append(dynamic_map[lbl])
-
-#     spots = []
-#     for i, (xy, lbl, color_hex) in enumerate(zip(data_umap, label_np, colors_for_points)):
-#         brush_color = pg.mkColor(color_hex)
-#         if lbl == '-2.0':
-#             brush_color = brush_color.lighter(170)
-#         spots.append({
-#             'pos': (float(xy[0]), float(xy[1])),
-#             'brush': pg.mkBrush(brush_color),
-#             'pen': None,
-#             'size': point_size,
-#             'data': {'index': i, 'label': lbl}
-#         })
-
-#     scatter = HoverScatter()
-#     scatter.addPoints(spots)
-
-#     return scatter
 
 def plot_scatter_pg(data_umap, label_np, iteration, name,
                     dataset_name='turtle',
@@ -1927,50 +1748,6 @@ def create_loader(data_b, label_b, batch_size=512, shuffle=False, device='cpu'):
                       drop_last=False)
 
 
-
-## initial plot
-# plot_loader = create_loader(data_b, label_b,
-#                                batch_size=512,
-#                                shuffle=False,
-#                                device=device)
-# data_umap = create_latent(plot_loader,
-#                   model,
-#                   dataset='turtle',
-#                   device=device,
-#                   name_label=name_label,
-#                   sensor_types=sensor_types)
-
-
-
-# if len(X_unlabeled) > 0:  # 数据中必须存在label的条件
-#     labeled_loader = create_loader(X_labeled, y_labeled,
-#                                 batch_size=512,
-#                                 shuffle=True,
-#                                 device=device)
-
-#     # contrastive learning
-#     # epoch = 50
-#     contrastiveCount = 10
-#     unfreeze_encoders(model)
-#     for i in range(contrastiveCount):
-#         model, _ = train_model(model, labeled_loader, supContrast_criterion, optimizer,
-#                            epochs=50, device=device, if_contrast=True)
-
-#     # supervised learning
-#     supervisedCount = 50
-#     freeze_encoders(model)  # only classifier is trainable
-#     model, avg_loss1 = train_model(model, labeled_loader, classify_criterion, optimizer,
-#                                    epochs=supervisedCount, device=device, if_contrast=False)
-#     unfreeze_all(model)  # only projector is NOT trainable
-#     model, avg_loss2 = train_model(model, labeled_loader, classify_criterion, optimizer,
-#                                    epochs=supervisedCount, device=device, if_contrast=False)
-
-#     data_umap = create_latent(plot_loader,
-#                   model,
-#                   dataset='turtle',
-#                   device=device,
-#                   name_label=name_label,
-#                   sensor_types=sensor_types)
 
 ################################## create latent ##########################
 
@@ -2517,17 +2294,6 @@ def data_sampling(sampling_method, X_labeled, y_labeled,
     else:
         raise ValueError(f"Unknown sampling method: {sampling_method}")
 
-# 进行数据采样
-# X_labeled, y_labeled, X_unlabeled, y_unlabeled, selected_data = (
-#             data_sampling(sampling_method, X_labeled, y_labeled,
-#                           X_unlabeled, y_unlabeled,
-#                           model, select_size,
-#                           majority_label=majority_label,
-#                           minority_label=minority_label,
-#                           device=device))
-
-
-
 
 
 
@@ -2912,70 +2678,6 @@ if __name__ == "__main__":
             )
 
             
-        # # 构建第三个图推荐新标签Sampling的markData
-        # def build_third_mark_data(self, selected_data_df):
-        #     """
-        #     将推荐的新标签索引列表转换为 ECharts markArea 数据并下发到前端。
-        #     要求:
-        #     - selected_data 中的索引均为 self.data 的有效索引
-        #     """
-        #     selected_data = selected_data_df['selected_label']
-        #     label_str_list = list(self.label_dict.keys())
-
-        #     if self.data is None or len(self.data) == 0:
-        #         print("build_third_mark_data: 后端没有可用的数据 DataFrame。")
-        #         return []
-
-        #     if not selected_data:
-        #         print("build_third_mark_data: selected_data 为空。")
-        #         return []
-
-        #     selected_set = set()
-        #     for idx in selected_data:
-        #         try:
-        #             i = int(idx)
-        #             if 0 <= i < len(self.data):
-        #                 selected_set.add(i)
-        #         except Exception:
-        #             continue
-
-        #     if not selected_set:
-        #         print("build_third_mark_data: selected_data 中没有有效索引。")
-        #         return []
-
-        #     markData = []
-        #     curr_segment = []
-            
-        #     def flush_segment():
-        #         if not curr_segment:
-        #             return
-        #         start_i = curr_segment[0]
-        #         end_i = curr_segment[-1]
-        #         # 位置索引用 iloc，避免非 RangeIndex 时出错
-        #         start_ts = self.data.iloc[start_i]["timestamp"]
-        #         end_ts = self.data.iloc[end_i]["timestamp"]
-        #         markData.append([
-        #             {
-        #                 "name": 
-        #                 "xAxis": start_ts,
-        #                 "itemStyle": {"color": "rgba(255, 165, 0, 0.6)"}
-        #             },
-        #             {"xAxis": end_ts}
-        #         ])
-        #         curr_segment.clear()
-
-        #     for i in sorted(selected_set):
-        #         if not curr_segment:
-        #             curr_segment.append(i)
-        #         elif i == curr_segment[-1] + 1:
-        #             curr_segment.append(i)
-        #         else:
-        #             flush_segment()
-        #             curr_segment.append(i)
-
-        #     flush_segment()
-        #     return markData
-
         # 构建第三个图推荐新标签Sampling的markData
         def build_third_mark_data(self, selected_data_df):
             """
