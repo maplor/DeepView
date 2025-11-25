@@ -322,14 +322,14 @@ def create_new_project(
                     label_name TEXT
                     )''')
 
-    cursor.execute('''CREATE TABLE IF NOT EXISTS videos (
-                    animal_tag TEXT,
-                video_stt DATETIME, 
-                    video_stp DATETIME,
-                framerate INTEGER,
-                frame_count INTEGER,
-                video_id INTEGER
-                    )''')
+    # cursor.execute('''CREATE TABLE IF NOT EXISTS videos (
+    #                 animal_tag TEXT,
+    #             video_stt DATETIME, 
+    #                 video_stp DATETIME,
+    #             framerate INTEGER,
+    #             frame_count INTEGER,
+    #             video_id INTEGER
+    #                 )''')
 
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS raw_data (
@@ -359,9 +359,48 @@ def create_new_project(
                 label_flag INTEGER
                     )''')
 
+    cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS videos_path (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT,
+                path TEXT UNIQUE,
+                file_hash TEXT UNIQUE,
+                duration REAL,
+                width INTEGER,
+                height INTEGER,
+                start_time TEXT,
+                stop_time TEXT,
+                start_unixtime REAL,
+                created_at TEXT,
+                file_size INTEGER,
+                mtime REAL
+            )
+            """
+        )
+    cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE
+            )
+            """
+        )
+    cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS video_tags (
+                video_id INTEGER,
+                tag_id INTEGER,
+                PRIMARY KEY(video_id, tag_id),
+                FOREIGN KEY(video_id) REFERENCES videos_path(id) ON DELETE CASCADE,
+                FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
+            )
+            """
+        )
+
     # 创建索引
     cursor.execute('''CREATE INDEX IF NOT EXISTS raw_data_index ON raw_data (logger_id, timestamp)''')
-    cursor.execute('''CREATE INDEX IF NOT EXISTS videos_index ON videos (animal_tag, video_stt, video_stp)''')
+    # cursor.execute('''CREATE INDEX IF NOT EXISTS videos_index ON videos (animal_tag, video_stt, video_stp)''')
 
 
     conn.commit()

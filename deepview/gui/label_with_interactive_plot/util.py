@@ -228,49 +228,52 @@ def read_sensor_data_from_memory(pkl_objects):
             raise TypeError(
                 "pkl_objects 类型不支持，请传入 DataFrame 或 (list/tuple/可迭代) 且元素为 DataFrame。"
             ) from e
+        
+    # 标签映射和处理
+    df_all['label_id'] = df_all['label_id'].fillna(-2)  # 用-2表示未知标签
 
     # 统一将 label_id 转为数值；支持 bytes → 小端无符号整数
-    if 'label_id' not in df_all.columns:
-        df_all['label_id'] = -2
-    else:
-        def _parse_label_id(v):
-            try:
-                # NaN
-                if pd.isna(v):
-                    return -2
-            except Exception:
-                pass
+    # if 'label_id' not in df_all.columns:
+    #     df_all['label_id'] = -2
+    # else:
+    #     def _parse_label_id(v):
+    #         try:
+    #             # NaN
+    #             if pd.isna(v):
+    #                 return -2
+    #         except Exception:
+    #             pass
 
-            # bytes/bytearray/numpy bytes_
-            if isinstance(v, (bytes, bytearray, np.bytes_)):
-                b = bytes(v)
-                if len(b) == 0:
-                    return -2
-                try:
-                    # 典型格式：b'\x03\x00\x00\x00\x00\x00\x00\x00' → 3
-                    return int.from_bytes(b, byteorder='little', signed=False)
-                except Exception:
-                    return -2
+    #         # bytes/bytearray/numpy bytes_
+    #         if isinstance(v, (bytes, bytearray, np.bytes_)):
+    #             b = bytes(v)
+    #             if len(b) == 0:
+    #                 return -2
+    #             try:
+    #                 # 典型格式：b'\x03\x00\x00\x00\x00\x00\x00\x00' → 3
+    #                 return int.from_bytes(b, byteorder='little', signed=False)
+    #             except Exception:
+    #                 return -2
 
-            # 数值
-            if isinstance(v, (np.integer, int)):
-                return int(v)
-            if isinstance(v, (np.floating, float)):
-                return int(v) if np.isfinite(v) else -2
+    #         # 数值
+    #         if isinstance(v, (np.integer, int)):
+    #             return int(v)
+    #         if isinstance(v, (np.floating, float)):
+    #             return int(v) if np.isfinite(v) else -2
 
-            # 其他转字符串再尝试
-            s = str(v).strip()
-            if s == '':
-                return -2
-            try:
-                return int(s)
-            except Exception:
-                try:
-                    return int(float(s))
-                except Exception:
-                    return -2
+    #         # 其他转字符串再尝试
+    #         s = str(v).strip()
+    #         if s == '':
+    #             return -2
+    #         try:
+    #             return int(s)
+    #         except Exception:
+    #             try:
+    #                 return int(float(s))
+    #             except Exception:
+    #                 return -2
 
-        df_all['label_id'] = df_all['label_id'].apply(_parse_label_id).astype('int64')
+    #     df_all['label_id'] = df_all['label_id'].apply(_parse_label_id).astype('int64')
 
     return df_all
 
@@ -2546,6 +2549,23 @@ class DeepViewPipeline:
 # 特征 = 输入数据（如传感器数值）
 # 标签 = 输出类别（如行为类型）
 ################################## 主动学习采样策略 ##########################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ################################## 主程序入口和完整运行流程 ##########################

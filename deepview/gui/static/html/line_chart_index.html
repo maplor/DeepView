@@ -92,6 +92,8 @@
 
         findDatastatus = false;
 
+
+        // 第一排现有label
         markData = [];
         // 第二个图表的markData
         markData2 = [];
@@ -1209,9 +1211,11 @@
 
                                     // TODO 需要修改pyside6的按键状态
                                     delectState = false;
+                                    sendMarkDataToBackend(markData);
                                 }
                             });
                         }
+                        
                     }
                     else {
                         // TODO 加入start和end时间
@@ -1323,7 +1327,8 @@
             });
         }
         // 函数：将框选的x轴数据作为markArea添加到第一个图表
-        function addLabel(selectedValue) {
+        // function addLabel(selectedValue) {
+        function addLabel(selectedValue, label_id) {
             const currentTimestamp = Date.now();
 
             // if (!labelColors[selectedValue]) {
@@ -1344,6 +1349,7 @@
             }
             if (brushAreas.length > 0) {
                 const newArea = {
+                    labelId: label_id,
                     name: selectedValue,
                     xAxis: new Date(brushAreas[0].timestamp).toISOString(),
                     // yAxis: '10',// 或者具体的值，比如 '10'
@@ -1424,6 +1430,8 @@
                                     });
                                 });
                             }
+                            // 将标记数据发送到后端
+                            sendMarkDataToBackend(markData);
                         }
                     });
                 } else {
@@ -1432,6 +1440,9 @@
                     // 同时将数据添加到otherMarkData
                     otherMarkData.unshift(newArray);
                     // otherMarkData.push(newArray);
+                    
+                    // 将标记数据发送到后端
+                    sendMarkDataToBackend(markData);
                 }
 
                 const currentZoom = charts[0].getOption().dataZoom;
@@ -1490,6 +1501,8 @@
             } else {
                 console.error('No brush areas available to apply as markArea.');
             }
+
+
         }
 
         // 添加标签到第二个图表（Label propagation）
@@ -1696,6 +1709,14 @@
         }
 
 
+        // 绑定到backend的函数：
+        function sendMarkDataToBackend(markData) {
+            const currentMarkdata = markData || selectedOption.series[0].markArea.data;
+            const markDataString = JSON.stringify(currentMarkdata);
+            backend.receiveMarkDataFromJS(markDataString);
+        }
+
+
 
         // Label propagation 给第一个图表的第二个series设置数据（仅更新 series[1].markArea，不覆盖其它 series）
         function setMarkDataToSecondChart(data) {
@@ -1776,6 +1797,100 @@
 
             initialize();
 
+            // 根据data里的label_id和label字段初始化MarkArea
+            initializeMarkAreasFromData();
+
+        }
+
+        // 根据data里的label_id和label字段初始化MarkArea
+        function initializeMarkAreasFromData() {
+            const data = [...org_data].sort((a, b) => {
+                const ai = Number.isFinite(a?.index) ? a.index : 0;
+                const bi = Number.isFinite(b?.index) ? b.index : 0;
+                return ai - bi;
+            });
+
+            const segments = [];
+            let current = null; // { label_id, label, startISO, endISO, lastIndex, itemStyle, startUnixtime, endUnixtime }
+            let idCounter = 1;
+
+            const flush = () => {
+                if (!current) return;
+                segments.push([
+                    {
+                        id: idCounter++,
+                        name: current.label,
+                        xAxis: current.startISO,
+                        itemStyle: current.itemStyle,
+                        labelId: current.label_id,
+                        timestamp: {
+                            start: current.startUnixtime,
+                            end: current.endUnixtime
+                        }
+                    },
+                    {
+                        xAxis: current.endISO
+                    }
+                ]);
+                current = null;
+            };
+
+            for (let i = 0; i < data.length; i++) {
+                const item = data[i];
+                const hasLabel = item && item.label_id != null && item.label;
+                if (!hasLabel) {
+                    flush();
+                    continue;
+                }
+
+                const idx = Number.isFinite(item.index) ? item.index : i;
+                const iso = new Date(item.timestamp).toISOString();
+                const unixtime = item.unixtime != null ? item.unixtime : (item._timestamp != null ? item._timestamp : null);
+
+                if (!current) {
+                    current = {
+                        label_id: item.label_id,
+                        label: item.label,
+                        startISO: iso,
+                        endISO: iso,
+                        lastIndex: idx,
+                        itemStyle: {
+                            color: (labelColors && labelColors[item.label]) || '#000000'
+                        },
+                        startUnixtime: unixtime,
+                        endUnixtime: unixtime
+                    };
+                    continue;
+                }
+
+                const isSameLabel = item.label_id === current.label_id;
+                const isConsecutive = idx === current.lastIndex + 1;
+
+                if (isSameLabel && isConsecutive) {
+                    current.endISO = iso;
+                    current.lastIndex = idx;
+                    current.endUnixtime = unixtime;
+                } else {
+                    flush();
+                    current = {
+                        label_id: item.label_id,
+                        label: item.label,
+                        startISO: iso,
+                        endISO: iso,
+                        lastIndex: idx,
+                        itemStyle: {
+                            color: (labelColors && labelColors[item.label]) || '#000000'
+                        },
+                        startUnixtime: unixtime,
+                        endUnixtime: unixtime
+                    };
+                }
+            }
+            flush();
+
+            markData = segments;
+            selectedOption.series[0].markArea.data = markData;
+            charts[0].setOption(selectedOption);
         }
 
         // 点击图表高亮地图对应的标记

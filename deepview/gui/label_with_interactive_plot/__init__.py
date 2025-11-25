@@ -73,9 +73,19 @@ from deepview.gui.label_with_interactive_plot.utils import (
     generate_filename
 )
 
+from deepview.gui.label_with_interactive_plot.videos_utils import (
+    get_conn,
+    add_video_path,
+    import_videos_from_csv,
+    _parse_iso8601_to_unixtime,
+    find_frame_by_timestamp
+
+)
+
 from deepview.gui.label_with_interactive_plot.styles import combobox_style_light, combobox_style_dark
 import glob
 import shutil
+import tempfile  
 
 
 class ClickableLabel(QLabel):
@@ -98,7 +108,48 @@ class HorizontalScrollArea(QScrollArea):
             super().wheelEvent(event)
 
 
+class StableClickableLabel(ClickableLabel):
+    """
+    - 始终由布局控制大小
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._qimage: QImage | None = None
+        self.setScaledContents(False)
+        self.setAlignment(Qt.AlignCenter)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setMinimumSize(320, 180)  # 可按需调整默认显示区域
+        # 标签背景透明（显示父级背景）
+        self.setStyleSheet("background-color: transparent;")
+        self.setAutoFillBackground(False)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
 
+    def set_qimage(self, img: QImage):
+        if not img or img.isNull():
+            return
+        # 深拷贝，确保不依赖外部内存
+        self._qimage = img.copy()
+        self.update()
+
+    def set_ndarray(self, frame: np.ndarray, is_bgr: bool = True):
+        if frame is None:
+            return
+        if is_bgr:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        h, w, ch = frame.shape
+        qimg = QImage(frame.data, w, h, ch * w, QImage.Format_RGB888).copy()
+        self.set_qimage(qimg)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), self.palette().window())
+        if self._qimage:
+            target = self.contentsRect()
+            pix = QPixmap.fromImage(self._qimage)
+            scaled = pix.scaled(target.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            x = target.x() + (target.width() - scaled.width()) // 2
+            y = target.y() + (target.height() - scaled.height()) // 2
+            painter.drawPixmap(x, y, scaled)
 
 
 # 日历
@@ -235,7 +286,7 @@ class TimeSelectorWidget(QLabel):
         # 重新设置预定义的时间段
         self.update()
 
-    def parse_time_segments(self):
+    def parse_time_segments_old(self):
         segments = []
         for start_str, end_str in self.video_time_list:  # PySide6.QtCore.QTime(7, 55, 24, 0) PySide6.QtCore.QTime(7, 56, 24, 0)
             start_str = start_str.split()[1]
@@ -246,6 +297,48 @@ class TimeSelectorWidget(QLabel):
             if start_time.isValid() and end_time.isValid():
                 segments.append((start_time, end_time))
         return segments
+    
+    def parse_time_segments(self):
+        segments = []
+        for start_str, end_str in self.video_time_list:
+            start_hms = extract_hms(start_str)
+            end_hms = extract_hms(end_str)
+            if not start_hms or not end_hms:
+                continue
+            start_time = QTime.fromString(start_hms, "HH:mm:ss")
+            end_time = QTime.fromString(end_hms, "HH:mm:ss")
+            if start_time.isValid() and end_time.isValid():
+                segments.append((start_time, end_time))
+        return segments
+
+
+
+
+def extract_hms(timestr):
+    """
+    支持:
+    - 'YYYY-MM-DD HH:MM:SS'
+    - 'YYYY-MM-DDTHH:MM:SSZ'
+    - 'YYYY-MM-DDTHH:MM:SS.mmmZ'
+    - 已经是 'HH:MM:SS'
+    返回 'HH:MM:SS' 或 None
+    """
+    if not timestr:
+        return None
+    ts = timestr.strip()
+    # 拆分日期与时间
+    if ' ' in ts:
+        candidate = ts.split(' ', 1)[1]
+    elif 'T' in ts:
+        candidate = ts.split('T', 1)[1]
+    else:
+        candidate = ts
+    candidate = candidate.rstrip('Z')            # 去掉尾部 Z
+    candidate = candidate.split('.')[0]          # 去掉毫秒
+    # 验证格式
+    if re.match(r'^\d{2}:\d{2}:\d{2}$', candidate):
+        return candidate
+    return None
 
 
 # 视频数据处理线程
@@ -254,74 +347,110 @@ class VideoDataHandlerThread(QThread):
     error_signal = Signal(str)
     success_signal = Signal(str)
 
-    def __init__(self, main_window):
+    def __init__(self, main_window, status='normal'):
         super().__init__()
         self.main_window = main_window
+        self.status = status
 
     def run(self):
-        folder_path = QFileDialog.getExistingDirectory(None, "select videos folder")
-        destination_path = self.main_window.video_path
-        if folder_path and destination_path:
+        if self.status ==  'normal':
+            # video_path = QFileDialog.getExistingDirectory(None, "select video")
+            # 返回 (文件路径, 过滤器)
+            video_file, _ = QFileDialog.getOpenFileName(
+                None, "Select video file", "", "Video Files (*.mp4 *.avi *.mov *.mkv)"
+            )
+            destination_dir = self.main_window.video_path
+            start_time_iso = self.main_window.video_start_time
+            start_time_unixtime = self.main_window.video_start_unixtime
+            dataset_name = self.main_window.dataset_name
+
+            if not video_file:
+                self.error_signal.emit("No video file selected.")
+                return
+            if not destination_dir:
+                self.error_signal.emit("Destination path is not set.")
+                return
+
+            # 将单个文件复制到项目的 videos 目录
             try:
-                shutil.copytree(folder_path, destination_path, dirs_exist_ok=True)
+                os.makedirs(destination_dir, exist_ok=True)
+                dest_file = os.path.join(destination_dir, os.path.basename(video_file))
+                shutil.copy2(video_file, dest_file)
             except Exception as e:
-                self.error_signal.emit(f"Error copying folder: {e}")
-        else:
-            self.error_signal.emit("No folder selected or destination path is not set.")
+                self.error_signal.emit(f"Error copying file: {e}")
+                return
 
+            # 写入数据库时使用复制后的文件路径
+            try:
+                add_video_path(
+                    path=dest_file,
+                    tags=dataset_name,
+                    start_time=start_time_iso,
+                    start_unixtime=start_time_unixtime,
+                    db_path=self.main_window.db_path
+                )
+            except Exception as e:
+                self.error_signal.emit(f"Error adding video to database: {e}")
+                return
 
-        if folder_path:
-            sqlite3_path = self.main_window.db_path
+            self.success_signal.emit("Video added successfully.")
+        elif self.status == 'from_csv':
+            csv_paths = self.main_window.csv_paths
+            destination_path = self.main_window.video_path
+            if not csv_paths or not destination_path:
+                self.error_signal.emit("No CSV files selected or destination path is not set.")
+                return
+            # 读取csv文件，复制csv里path对应的视频到目标路径，保留上一级目录，复制csv并修改文件路径并导入数据库
+            for csv_path in csv_paths:
+                df = pd.read_csv(csv_path)
+                if 'path' not in df.columns:
+                    self.error_signal.emit(f"CSV file {csv_path} does not contain 'path' column.")
+                    continue
+                csv_dir = os.path.dirname(csv_path)
+                for _, row in df.iterrows():
+                    video_file_path = row['path']
+                    if not os.path.isabs(video_file_path):
+                        video_file_path = os.path.join(csv_dir, video_file_path)
+                    if not os.path.exists(video_file_path):
+                        self.error_signal.emit(f"Video file {video_file_path} does not exist.")
+                        continue
+                    # 仅保留上一级目录 + 文件名，避免 destination_path 下重复出现 'videos'
+                    parent_dir = os.path.basename(os.path.dirname(video_file_path))
+                    file_name = os.path.basename(video_file_path)
+                    relative_path = os.path.join(parent_dir, file_name)
+                    dest_video_path = os.path.join(destination_path, relative_path)
+                    dest_video_dir = os.path.dirname(dest_video_path)
+                    os.makedirs(dest_video_dir, exist_ok=True)
+                    try:
+                        shutil.copy2(video_file_path, dest_video_path)
+                    except Exception as e:
+                        self.error_signal.emit(f"Error copying video file {video_file_path}: {e}")
+                        continue
+                # 修改csv里的path为新的路径（同样仅保留上一级目录 + 文件名）
+                def _remap_path(p):
+                    abs_p = p if os.path.isabs(p) else os.path.join(csv_dir, p)
+                    parent_dir = os.path.basename(os.path.dirname(abs_p))
+                    file_name = os.path.basename(abs_p)
+                    return os.path.join(destination_path, parent_dir, file_name)
+                df['path'] = df['path'].apply(_remap_path)
 
-            conn = sqlite3.connect(sqlite3_path)
-            db_cursor = conn.cursor()
-            for root, dirs, files in os.walk(folder_path):
-                for filename in files:
-                    if filename.endswith('.csv'):
-                        file_path = os.path.join(root, filename)
-                        CSV_name = filename
+                # 使用临时文件导入数据库，用完即删
+                tmp_file = None
+                try:
+                    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.csv', prefix='import_')
+                    tmp_file = tmp.name
+                    tmp.close()
+                    df.to_csv(tmp_file, index=False)
+                    import_videos_from_csv(csv_path=tmp_file, db_path=self.main_window.db_path)
+                except Exception as e:
+                    self.error_signal.emit(f"Error importing CSV to database: {e}")
+                    continue
+                finally:
+                    if tmp_file and os.path.exists(tmp_file):
                         try:
-                            df = self.main_window.load_csv_to_dataframe(file_path)
-                            print(file_path)
-                            print(CSV_name)
-
-                            camera_count_unique_values_df = df['CameraCount'].unique()
-                            camera_count_unique_values = list(range(len(camera_count_unique_values_df) - 2))
-
-                            camera_count_segments = self.main_window.extract_segments_for_values(df,
-                                                                                                 values=camera_count_unique_values)
-
-                            for idx, cameradf in camera_count_segments.items():
-                                try:
-                                    cameraID, frame_rate, frame_count, start_time, end_time = self.main_window.extract_seg_information(
-                                        idx, cameradf)
-                                    if start_time is None or end_time is None:
-                                        self.error_signal.emit(f"摄像头 ID {cameraID} 的时间格式不正确，跳过该记录")
-                                        continue
-
-                                    print('成功获取摄像头信息')
-                                    print(cameraID, frame_rate, frame_count, start_time, end_time)
-                                    self.main_window.insert_camera_info(conn, db_cursor, CSV_name, cameraID, frame_rate, frame_count,
-                                                                        start_time, end_time)
-
-                                    try:
-                                        time_diff = pd.to_datetime(end_time) - pd.to_datetime(start_time)
-                                        print(time_diff)
-                                    except Exception as e:
-                                        self.error_signal.emit(f"计算时间差异时发生错误，错误：{e}")
-                                        continue
-                                except Exception as e:
-                                    self.error_signal.emit(f"处理摄像头 ID {cameraID} 时发生错误，跳过该摄像头的处理。错误：{e}")
-                                    continue
-                        except Exception as e:
-                            self.error_signal.emit(f"处理文件 {CSV_name} 时发生错误，跳过该文件。错误：{e}")
-                            continue
-
-            conn.close()
-            self.success_signal.emit("处理完成")
-        else:
-            self.error_signal.emit("未选择文件夹")
-
+                            os.remove(tmp_file)
+                        except Exception:
+                            pass
 # 日期时间选择器
 class DateTimeSelector(QWidget):
     def __init__(self, main_window):
@@ -375,6 +504,7 @@ class DateTimeSelector(QWidget):
 
         self.ok_button = QPushButton("OK", self)
         self.add_videos_button = QPushButton("Add Videos", self)
+        self.add_videos_from_csv_button = QPushButton("Add Videos from CSV", self)
 
         self.time_selector = TimeSelectorWidget(self.begin_input, self.end_input, self.video_time_list)
 
@@ -389,23 +519,105 @@ class DateTimeSelector(QWidget):
         button_layout = QVBoxLayout()
         # layout.addWidget(self.ok_button)
         button_layout.addWidget(self.add_videos_button)
+        button_layout.addWidget(self.add_videos_from_csv_button)
         button_layout.addWidget(self.ok_button)
         layout.addLayout(button_layout)
         self.ok_button.clicked.connect(self.ok_button_clicked)
         self.add_videos_button.clicked.connect(self.handle_add_video_data)
+        self.add_videos_from_csv_button.clicked.connect(self.handle_add_videos_from_csv)
+
+    # def handle_add_video_data(self):
+    #     year, ok = QInputDialog.getInt(self, 'Input Year', 'Enter the year:', value=2024, minValue=1900, maxValue=2100)
+    #     if ok:
+    #         # self.year = year
+    #         self.video_start_time = 
+    #     else:
+    #         QMessageBox.warning(self, 'Input Error', 'Please enter a valid year.')
+    #         return
+    #     self.add_video_thread = VideoDataHandlerThread(self,status='normal')
+    #     self.add_video_thread.error_signal.connect(self.handle_error)
+    #     self.add_video_thread.success_signal.connect(self.handle_success)
+    #     self.add_video_thread.finished.connect(self.thread_finished)
+    #     self.add_video_thread.start()
+
 
     def handle_add_video_data(self):
-        year, ok = QInputDialog.getInt(self, 'Input Year', 'Enter the year:', value=2024, minValue=1900, maxValue=2100)
-        if ok:
-            self.year = year
-        else:
-            QMessageBox.warning(self, 'Input Error', 'Please enter a valid year.')
+        # 使用 QDateTimeEdit 选择视频起始时间，直接得到 ISO8601 和 Unix 时间戳
+        from PySide6.QtWidgets import QDateTimeEdit, QDialogButtonBox
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Select Video Start Time")
+        layout = QVBoxLayout(dlg)
+        layout.addWidget(QLabel("Please select video start time (ISO 8601, UTC)"))
+
+        dt_edit = QDateTimeEdit(dlg)
+        dt_edit.setCalendarPopup(True)
+        dt_edit.setDisplayFormat("yyyy-MM-dd'T'HH:mm:ss")  # ISO-8601 基本格式
+        # 以当前选中的日历日期为初值；否则用今天
+        sel_date = self.calendar.selectedDate() if hasattr(self, "calendar") else QDate.currentDate()
+        dt_edit.setDate(sel_date)
+        dt_edit.setTime(QTime.currentTime())
+        layout.addWidget(dt_edit)
+
+        # tag 数据集名称
+        layout.addWidget(QLabel("Please enter dataset name:"))
+        self.dataset_name_input = QLineEdit(dlg)
+
+        layout.addWidget(self.dataset_name_input)
+        self.dataset_name_input.setPlaceholderText("Enter dataset name")
+
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=dlg)
+        layout.addWidget(btns)
+        btns.accepted.connect(dlg.accept)
+        btns.rejected.connect(dlg.reject)
+
+        if dlg.exec() != QDialog.Accepted:
+            QMessageBox.warning(self, 'Input Cancelled', 'No time selected.')
             return
-        self.add_video_thread = VideoDataHandlerThread(self)
+
+        qdt_local = dt_edit.dateTime()          # 选中的本地时间
+        qdt_utc = qdt_local.toUTC()             # 转换为 UTC
+        # 生成 ISO8601（UTC，带 Z）
+        iso_str = qdt_utc.toString("yyyy-MM-dd'T'HH:mm:ss'Z'")
+        # 秒级时间戳
+        ts = float(qdt_utc.toSecsSinceEpoch())
+
+
+
+        # 保存
+        self.video_start_time = iso_str
+        self.video_start_unixtime = ts
+        self.dataset_name = self.dataset_name_input.text().strip()
+
+        # 尽量让日历选中该日期（本地日期）
+        try:
+            self.calendar.setSelectedDate(qdt_local.date())
+        except Exception:
+            pass
+
+        # 启动添加视频线程
+        self.add_video_thread = VideoDataHandlerThread(self, status='normal')
         self.add_video_thread.error_signal.connect(self.handle_error)
         self.add_video_thread.success_signal.connect(self.handle_success)
         self.add_video_thread.finished.connect(self.thread_finished)
         self.add_video_thread.start()
+
+
+
+    def handle_add_videos_from_csv(self):
+        csv_paths, _ = QFileDialog.getOpenFileNames(None, "Select CSV files", "", "CSV Files (*.csv)")
+        if csv_paths:
+            self.csv_paths = csv_paths
+        else:
+            QMessageBox.warning(self, 'Input Error', 'Please select at least one CSV file.')
+            return
+        self.add_videos_from_csv_thread = VideoDataHandlerThread(self,status='from_csv')
+        self.add_videos_from_csv_thread.error_signal.connect(self.handle_error)
+        self.add_videos_from_csv_thread.success_signal.connect(self.handle_success)
+        self.add_videos_from_csv_thread.finished.connect(self.thread_finished)
+        self.add_videos_from_csv_thread.start()
+
 
     def thread_finished(self):
         self.date_changed()
@@ -526,11 +738,11 @@ class DateTimeSelector(QWidget):
             minute = f"{int(row['Min']):02}"
             second = f"{int(row['Sec']):02}"
             # year = "2024"
-            year = self.year
-            time_str = f"{year}{month}{day}T{hour}:{minute}:{second}"
-            if not self.is_valid_time_format(time_str):
-                raise ValueError(f"生成的时间字符串格式不正确：{time_str}")
-            return time_str
+            # year = self.year
+            # time_str = f"{year}{month}{day}T{hour}:{minute}:{second}"
+            # if not self.is_valid_time_format(time_str):
+            #     raise ValueError(f"生成的时间字符串格式不正确：{time_str}")
+            # return time_str
         except Exception as e:
             print(f"合并时间字段失败，错误：{e}")
             return None
@@ -580,23 +792,23 @@ class DateTimeSelector(QWidget):
                 # 规范化 label_id：TEXT('1.0')、空值、以及 bytes 都转换为整数；失败置为 -2
         
         # TODO 完善后删除，数据库字段有问题
-        if 'label_id' in df.columns:
-            def _parse_label_id(v):
-                if v is None:
-                    return -2
-                # 处理 bytes（极少见于 DB，但做兜底）
-                if isinstance(v, (bytes, bytearray, np.bytes_)):
-                    try:
-                        return int.from_bytes(bytes(v), byteorder='little', signed=False)
-                    except Exception:
-                        return -2
-                try:
-                    return int(float(str(v)))
-                except Exception:
-                    return -2
-            df['label_id'] = df['label_id'].apply(_parse_label_id).astype(int)
-        else:
-            df['label_id'] = -2
+        # if 'label_id' in df.columns:
+        #     def _parse_label_id(v):
+        #         if v is None:
+        #             return -2
+        #         # 处理 bytes（极少见于 DB，但做兜底）
+        #         if isinstance(v, (bytes, bytearray, np.bytes_)):
+        #             try:
+        #                 return int.from_bytes(bytes(v), byteorder='little', signed=False)
+        #             except Exception:
+        #                 return -2
+        #         try:
+        #             return int(float(str(v)))
+        #         except Exception:
+        #             return -2
+        #     df['label_id'] = df['label_id'].apply(_parse_label_id).astype(int)
+        # else:
+        #     df['label_id'] = -2
 
         df['index'] = df.index
 
@@ -615,10 +827,54 @@ class DateTimeSelector(QWidget):
         # print(end_of_day) # 2024-05-29 00:00:00
 
         # 查询特定日期的数据
+        # cursor.execute('''
+        # SELECT video_stt, video_stp FROM videos
+        # WHERE video_stt >= ? AND video_stt < ?
+        # ''', (start_of_day, end_of_day))
+        '''
+                c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS videos_path (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT,
+                path TEXT UNIQUE,
+                file_hash TEXT UNIQUE,
+                duration REAL,
+                width INTEGER,
+                height INTEGER,
+                start_time TEXT,
+                stop_time TEXT,
+                start_unixtime REAL,
+                created_at TEXT,
+                file_size INTEGER,
+                mtime REAL
+            )
+            """
+        )
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE
+            )
+            """
+        )
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS video_tags (
+                video_id INTEGER,
+                tag_id INTEGER,
+                PRIMARY KEY(video_id, tag_id),
+                FOREIGN KEY(video_id) REFERENCES videos_path(id) ON DELETE CASCADE,
+                FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
+            )
+            """
+        )'''
+
         cursor.execute('''
-        SELECT video_stt, video_stp FROM videos
-        WHERE video_stt >= ? AND video_stt < ?
-        ''', (start_of_day, end_of_day))
+                       SELECT start_time, stop_time FROM videos_path
+                        WHERE start_time >= ? AND start_time < ?        
+                       ''', (start_of_day, end_of_day))
 
         # 获取查询结果
         results = cursor.fetchall()
@@ -664,10 +920,18 @@ class DateTimeSelector(QWidget):
         # 将结果添加到text_edit里
         self.text_edit.clear()
         # print(time_list)
+        # for start_time, end_time, label in time_list:
+        #     start_time_str = start_time.split()[1]  # Extract time part
+        #     end_time_str = end_time.split()[1]  # Extract time part
+        #     self.text_edit.append(f"{start_time_str}-{end_time_str} {label}")
         for start_time, end_time, label in time_list:
-            start_time_str = start_time.split()[1]  # Extract time part
-            end_time_str = end_time.split()[1]  # Extract time part
+            start_time_str = extract_hms(start_time)
+            end_time_str = extract_hms(end_time)
+            if not start_time_str or not end_time_str:
+                continue
             self.text_edit.append(f"{start_time_str}-{end_time_str} {label}")
+
+
 
         # 关闭连接
         conn.close()
@@ -992,7 +1256,7 @@ class SaveCsvTask(QRunnable):
             self.data.loc[
                 (self.data['unixtime'] >= int(first_timestamp)) &
                 (self.data['unixtime'] <= int(second_timestamp)), 'label'] = name
-
+            
         # Handle saving the data
         os.makedirs(os.path.join(self.cfg["project_path"], "edit-data"), exist_ok=True)
         edit_data_path = os.path.join(self.cfg["project_path"], "edit-data", self.combo_box_text)
@@ -1194,11 +1458,16 @@ class Backend(QObject):
     highlightDotByindex = Signal(int, float, float)
     # TODO 参数待定
     highlightScatterDotByindexSign = Signal(int)
+    # 处理markDataChange信号
+    markDataChangeSign = Signal(object)
+
+
     getSelectedAreaByHtml = Signal(str)
     setStartEndTime = Signal(str, str)
     setStartAndEndDataSign = Signal(str, str, str, str, str, str)
     getSelectedAreaToSaveSign = Signal(str)
     getSelectedAreaToSaveTimerSign = Signal(str)
+
 
     # 后端触发前端函数信号
     # 添加第一个图表标签
@@ -1288,9 +1557,9 @@ class Backend(QObject):
 
     # add label按钮点击事件
     @Slot()
-    def handleAddLabel(self, selected_option):
+    def handleAddLabel(self, selected_option, label_id):
         print("Adding label...")
-        self.view.page().runJavaScript(f"addLabel('{selected_option}')")
+        self.view.page().runJavaScript(f"addLabel('{selected_option}', {label_id})")
 
     # delete label按钮点击事件
     @Slot(int)
@@ -1380,7 +1649,7 @@ class Backend(QObject):
             # data = data.drop(columns=columns_to_drop, errors='ignore')
 
             # 根据传入信号选择需要的列
-            series_combined = ["timestamp", "unixtime", "index", "latitude", "longitude"] + [item for data in metadata
+            series_combined = ["timestamp", "unixtime", "index", "latitude", "longitude", "label_id", "label"] + [item for data in metadata
                                                                                              for item in
                                                                                              data["series"]]
             data = data[series_combined]
@@ -1448,6 +1717,20 @@ class Backend(QObject):
     @Slot()
     def triggerUpdate(self):
         self.view.page().runJavaScript("getInputValue()")  # 调用前端的getInputValue函数
+
+
+    # 接收来自前端的markdatachange事件
+    @Slot(str)
+    def receiveMarkDataFromJS(self, message):
+        """接收来自前端的数据"""
+        try:
+            # 尝试解析JSON并格式化打印
+            json_data = json.loads(message)
+            self.markDataChangeSign.emit(json_data)
+        except json.JSONDecodeError:
+            # 如果不是JSON格式，直接打印
+            print(f"收到的普通文本: {message}")
+
 
     # 设置第二个图表数据
     @Slot(str)
@@ -1564,6 +1847,9 @@ class LabelWithInteractivePlot(QWidget):
         self.backend.getSelectedAreaToSaveSign.connect(self.getSelectedAreaToSave)
         self.backend.getSelectedAreaToSaveTimerSign.connect(self.getSelectedAreaToSaveTimer)
 
+        # 处理markDataChange信号
+        self.backend.markDataChangeSign.connect(self.handleMarkDataChange)
+
         self.button_style = """QPushButton {
             background-color: #1ea123; 
             border: none;
@@ -1650,6 +1936,7 @@ class LabelWithInteractivePlot(QWidget):
         
         self.label_propagated_data = None
 
+        self.scatterItem = None
         # 模拟路径设置
         # self.gps_data_path = r"project\unsupervised-datasets\allDataSet\Omizunagidori2018_raw_data_9B36365_lb0006_25Hz.pkl"
         # self.video_data_path = r"project\videos"
@@ -1661,10 +1948,12 @@ class LabelWithInteractivePlot(QWidget):
             first_key = next(iter(file_sets))
         else:
             first_key = ""
-        self.gps_data_path = os.path.join(first_key)
+        # self.gps_data_path = os.path.join(first_key)
+        self.gps_data_path = self.db_path
         # self.video_data_path = os.path.join(self.cfg["file_sets"][0])
         self.video_data_path = self.video_path
-        self.time_series_data_path = os.path.join(first_key)
+        self.time_series_data_path = self.db_path
+        # self.time_series_data_path = os.path.join(first_key)
 
         # 自定义图片文件夹（用于切换缩略图显示），外部可手动赋值或调用 set_custom_image_dir
         self.custom_image_dir = r"C:\Users\user\Desktop\fast-ttt-2024-10-11\test_img"   # 例如 r"D:\my_images"
@@ -2033,7 +2322,8 @@ class LabelWithInteractivePlot(QWidget):
 
         # 视频标签
         # self.video_label = QLabel(self)
-        self.video_label = ClickableLabel(self)
+        # self.video_label = ClickableLabel(self)
+        self.video_label = StableClickableLabel(self)
         self.video_label.setAlignment(Qt.AlignCenter)
         self.video_layout.addWidget(self.video_label)
         self.video_layout.addLayout(self.video_time_layout)
@@ -2174,7 +2464,11 @@ class LabelWithInteractivePlot(QWidget):
         # add label，del label，save csv按钮
         # add label按钮
         add_label_btn = QPushButton('Add label')
-        add_label_btn.clicked.connect(lambda: self.backend.handleAddLabel(self.label_combobox.currentText()))
+        # add_label_btn.clicked.connect(lambda: self.backend.handleAddLabel(self.label_combobox.currentText()))
+
+        # 传递当前选中的标签文本和对应的id给handleAddLabel方法
+        add_label_btn.clicked.connect(lambda: self.backend.handleAddLabel(self.label_combobox.currentText(), self.label_dict[self.label_combobox.currentText()]))
+
         # 设置按钮样式
         add_label_btn.setStyleSheet(self.button_style)
 
@@ -3149,7 +3443,13 @@ class LabelWithInteractivePlot(QWidget):
         if ok and key:
             if key not in self.label_dict:
                 # value = f"{self.label_combobox.count() + 1}"
-                value = self.label_combobox.count() + 1
+                # value 取count加1
+                # value = self.label_combobox.count() + 1
+
+                # value 取最大值加1
+                max_value = max(self.label_dict.values(), default=0)
+
+                value = max_value + 1
                 self.label_dict[key] = value
                 self.addItem(key)
                 # self.comboBoxHandler.addItem(key) updateLabelColors
@@ -3177,6 +3477,137 @@ class LabelWithInteractivePlot(QWidget):
     def setStartEndTime(self, start_time, end_time):
         self.start_input_box.setText(start_time)
         self.end_input_box.setText(end_time)
+
+    
+    #  处理markdatachange信号，将数据保存到数据库
+    def handleMarkDataChange(self, markData):
+        """
+        markData: 
+        [
+          [
+            {'id': 1, 'itemStyle': {'color': '#91cc75'}, 'labelId': 6, 'name': 'stationary', 'xAxis': '2018-08-28T06:00:00.000Z'},
+            {'xAxis': '2018-08-28T06:06:24.960Z'}
+          ],
+          ...
+        ]
+        - 将 markData 转为 DataFrame（self.markdata_df）
+        - 清空 self.data 的 label_id/label，然后用区间写回
+          xAxis 对应 self.data['timestamp']（内部统一用 unixtime 做区间筛选）
+          labelId -> self.data['label_id']，name -> self.data['label']
+          label_id 为空填充为 -2
+        """
+        try:
+            # 1) 归一化 markData 形态（支持 dict 包裹）
+            md = markData
+            if isinstance(md, str):
+                try:
+                    md = json.loads(md)
+                except Exception:
+                    print("handleMarkDataChange: 输入为字符串但解析 JSON 失败，已忽略。")
+                    return
+            if isinstance(md, dict) and "markData" in md:
+                md = md["markData"]
+
+            if not isinstance(md, list):
+                print("handleMarkDataChange: 非法的 markData 类型，期望 list。")
+                return
+
+            # 2) 转换为 DataFrame
+            rows = []
+            for seg in md:
+                if not isinstance(seg, (list, tuple)) or len(seg) < 2:
+                    continue
+                start_obj, end_obj = seg[0], seg[1]
+                st_iso = (start_obj or {}).get("xAxis")
+                en_iso = (end_obj or {}).get("xAxis")
+                name = (start_obj or {}).get("name") or ""
+                label_id_raw = (start_obj or {}).get("labelId")
+                try:
+                    label_id = int(label_id_raw) if label_id_raw not in (None, "", "null") else -2
+                except Exception:
+                    label_id = -2
+                color = ((start_obj or {}).get("itemStyle") or {}).get("color")
+                rid = (start_obj or {}).get("id")
+
+                if not st_iso or not en_iso:
+                    continue
+
+                rows.append({
+                    "stt_timestamp": st_iso,
+                    "stp_timestamp": en_iso,
+                    "label_id": label_id,
+                    "label": name,
+                    "color": color,
+                    "id": rid
+                })
+
+            mark_df = pd.DataFrame(rows, columns=[
+                "stt_timestamp", "stp_timestamp", "label_id", "label", "color", "id"
+            ])
+            self.markdata_df = mark_df  # TODO: 后续保存至数据库
+
+            if self.data is None or len(self.data) == 0:
+                print("handleMarkDataChange: 当前没有可写入的 self.data。")
+                return
+
+            # 3) 准备 unixtime 列
+            if "unixtime" not in self.data.columns:
+                if "timestamp" in self.data.columns:
+                    ts = pd.to_datetime(self.data["timestamp"], errors="coerce", utc=True)
+                    self.data["unixtime"] = ts.view("int64") / 1e9  # 秒
+                elif "datetime" in self.data.columns:
+                    ts = pd.to_datetime(self.data["datetime"], errors="coerce", utc=True)
+                    self.data["unixtime"] = ts.view("int64") / 1e9
+                else:
+                    print("handleMarkDataChange: self.data 缺少 unixtime/timestamp/datetime，无法对齐区间。")
+                    return
+
+            # 4) 清空 label_id 与 label
+            if "label_id" not in self.data.columns:
+                self.data["label_id"] = -2
+            else:
+                self.data["label_id"] = -2
+
+            if "label" not in self.data.columns:
+                self.data["label"] = ""
+            else:
+                self.data["label"] = ""
+
+            # 5) 应用区间标注
+            def _iso_to_unix(iso_str: str) -> float:
+                # 复用类内工具，兼容末尾 'Z'
+                try:
+                    return float(self.iso_to_timestamp(iso_str))
+                except Exception:
+                    # 兜底：直接用 pandas 解析
+                    try:
+                        return pd.to_datetime(iso_str, utc=True).value / 1e9
+                    except Exception:
+                        return np.nan
+
+            for _, r in mark_df.iterrows():
+                st = _iso_to_unix(r["stt_timestamp"])
+                en = _iso_to_unix(r["stp_timestamp"])
+                if np.isnan(st) or np.isnan(en):
+                    continue
+                if en < st:
+                    st, en = en, st
+                m = (self.data["unixtime"] >= st) & (self.data["unixtime"] <= en)
+                if m.any():
+                    self.data.loc[m, "label_id"] = int(r["label_id"]) if pd.notna(r["label_id"]) else -2
+                    self.data.loc[m, "label"] = r["label"] if pd.notna(r["label"]) else ""
+
+
+            # 6) 前端数据更新（刷新可视化）
+            # self.dataChanged.emit(self.data)
+
+            # 立即刷新折线/地图：
+            # metadatas = find_charts_data_columns(self.sensor_dict, self.column_names)
+            # self.backend.displayData(self.data, metadatas, self.label_colors)
+
+            print("handleMarkDataChange: 已根据 markData 更新 self.data 的 label_id/label。")
+        except Exception as e:
+            print(f"handleMarkDataChange 处理失败: {e}")
 
     # 定义一个函数将ISO格式的时间字符串转换为Unix时间戳
     def iso_to_timestamp(self, iso_str):
@@ -3426,7 +3857,11 @@ class LabelWithInteractivePlot(QWidget):
             self.video_label.setPixmap(scaled_pixmap)
             self.video_label.setScaledContents(True)
 
-    def jump_to_timestamp(self, index):
+
+
+#  TODO 需要将 jump_to_timestamp 方法改成调用util里的方法 
+# 用指定时间戳去查数据库，得到对应视频名，然后打开视频根据时间戳减去视频开始时间，然后跳转到对应帧
+    def jump_to_timestamp_old(self, index):
         try:
             if self.cap is not None:
                 self.cap.release()
@@ -3507,7 +3942,59 @@ class LabelWithInteractivePlot(QWidget):
         except Exception as e:
             print(f"An error occurred: {e}")
 
-    # def jump_to_timestamp(self, index):
+    def jump_to_timestamp(self, index):
+        try:
+            unixtime_raw = self.data.loc[index, 'unixtime']
+            # Coerce to a real float; handle pandas/NumPy scalar, complex, or bad types.
+            if isinstance(unixtime_raw, complex):
+                unixtime_raw = unixtime_raw.real
+            unixtime_ = pd.to_numeric(unixtime_raw, errors='coerce')
+            if pd.isna(unixtime_):
+                print(f"Invalid unixtime value: {unixtime_raw}")
+                return
+            '''
+    result = {
+        "video_id": vid,
+        "video_path": vpath,
+        "timestamp": ts_f,
+        "video_start": vstart,
+        "offset_in_video": offset,
+        "actual_time_in_video": actual_time,
+        "frame_index": frame_idx,
+        "tags": tag_list,
+        "frame": frame,
+    }'''
+            result = find_frame_by_timestamp(ts=float(unixtime_), db_path=self.db_path)
+            if not result:
+                print("No video mapping found for timestamp.")
+                return
+            if "video_path" not in result or "frame_index" not in result:
+                print("Incomplete video lookup result.")
+                return
+
+            video_path = result["video_path"]
+            frame = result["frame"]
+            if frame is None:
+                print("Failed to retrieve frame from video.")
+                return
+            # frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # h, w, ch = frame_rgb.shape
+            # bytes_per_line = ch * w
+            # self.qt_image = QImage(frame_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
+
+            # # 缩放图像以适应 QLabel
+            # scaled_pixmap = QPixmap.fromImage(self.qt_image).scaled(
+            #     self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+            # )
+            # # self.video_label.setPixmap(QPixmap.fromImage(self.qt_image))
+            # self.video_label.setPixmap(scaled_pixmap)
+            # self.video_label.setScaledContents(True)
+            self.video_label.set_ndarray(frame, is_bgr=True)
+
+
+        except Exception as e:
+            print(f"Failed to jump to timestamp: {e}")
+  # def jump_to_timestamp(self, index):
     #     try:
     #         if self.cap is None:
     #             return
@@ -4598,6 +5085,8 @@ class LabelWithInteractivePlot(QWidget):
                 p.setBrush(original_brush)
 
         self.last_modified_points = []  # Clear the list
+        if self.scatterItem is None:
+            return
         if indice is not None:
             for spot in self.scatterItem.points():
                 # i, start, end = spot.data()
