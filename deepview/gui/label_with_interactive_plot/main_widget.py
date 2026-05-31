@@ -1,106 +1,28 @@
-# 导入数学模块
-# 从typing模块导入List类型
-# 导入torch模块
-import datetime
-import json
 import logging
 import os
-import pickle
-from functools import partial
-from pathlib import Path
-from ruamel.yaml import YAML
-from PySide6 import QtGui
-import cv2
-import time
 
-import matplotlib
-import numpy as np
+from ruamel.yaml import YAML
 import pandas as pd
 import pyqtgraph as pg
-import torch
-from PySide6.QtCore import (
-    QObject, Signal, Slot, QTime, QTimer, Qt
-)
-# 从PySide6.QtCore导入QTimer, QRectF, Qt
-from PySide6.QtCore import QRectF
-from PySide6.QtCore import QRunnable, QThreadPool, Slot, QThread, QObject, Signal, QFileSystemWatcher
-# 从PySide6.QtWidgets导入多个类
-from PySide6.QtWidgets import (
-    QCheckBox,
-    QDialog,
-    QRadioButton,
-    QSplitter,
-    QFrame,
-    QWidget, QHBoxLayout, QVBoxLayout, QLabel,
-    QComboBox, QPushButton, QSpacerItem, QSizePolicy, QLineEdit,
-    QMessageBox, QDoubleSpinBox, QFileDialog, QCalendarWidget
-)
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QMouseEvent, QStandardItemModel, QStandardItem, QColor, QPainter
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QComboBox, QHBoxLayout, QPushButton, QMessageBox, QInputDialog
+from PySide6.QtCore import QFileSystemWatcher, QThreadPool, QTimer, Signal
+from PySide6.QtWidgets import QWidget
 
-from PySide6.QtGui import QImage, QPixmap
-from datetime import datetime, timedelta
-import sys
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QCalendarWidget, QLabel
-from PySide6.QtCore import QTime, Qt, QRectF
-from PySide6.QtGui import QMouseEvent, QPainter, QColor
-import sqlite3
-from PySide6.QtCore import QDate
-from PySide6.QtGui import QTextCharFormat
-from PySide6.QtWidgets import QTextEdit, QTimeEdit, QPushButton
-
-
-# 从deepview.utils.auxiliaryfunctions导入多个函数
 from deepview.utils.auxiliaryfunctions import (
+    get_db_folder,
     read_config,
-    get_param_from_path,
-    get_unsupervised_set_folder,
-    get_raw_data_folder,
-    get_unsup_model_folder,
-    grab_files_in_folder_deep,
-    get_db_folder
 )
-
-from deepview.gui.label_with_interactive_plot.utils import (
-    get_data_from_pkl,
-    featureExtraction,
-    find_data_columns,
-    generate_filename
-)
-
-from deepview.gui.label_with_interactive_plot.styles import combobox_style_light, combobox_style_dark
 from deepview.gui.label_with_interactive_plot.backend import Backend, BackendMap
-from deepview.gui.label_with_interactive_plot._video import VideoControlsMixin
+from deepview.gui.label_with_interactive_plot._center_plot import CenterPlotMixin
+from deepview.gui.label_with_interactive_plot._compute import ComputeMixin
+from deepview.gui.label_with_interactive_plot._data_controls import DataControlsMixin
+from deepview.gui.label_with_interactive_plot._interaction_controls import InteractionControlsMixin
 from deepview.gui.label_with_interactive_plot._labeling import LabelControlsMixin
 from deepview.gui.label_with_interactive_plot._layout import LayoutMixin
-from deepview.gui.label_with_interactive_plot._selection_area import SelectionAreaMixin
-from deepview.gui.label_with_interactive_plot._data_controls import DataControlsMixin
-from deepview.gui.label_with_interactive_plot._settings_area import SettingsAreaMixin
-from deepview.gui.label_with_interactive_plot._compute import ComputeMixin
-from deepview.gui.label_with_interactive_plot._interaction_controls import InteractionControlsMixin
 from deepview.gui.label_with_interactive_plot._left_plot import LeftPlotMixin
-from deepview.gui.label_with_interactive_plot._center_plot import CenterPlotMixin
 from deepview.gui.label_with_interactive_plot._right_settings import RightSettingsMixin
-from deepview.gui.label_with_interactive_plot._chart_utils import (
-    combine_rectangles,
-    find_charts_data_columns,
-)
-from deepview.gui.label_with_interactive_plot.widgets.combo import (
-    LabelOption,
-    ReComboBox,
-)
-from deepview.gui.label_with_interactive_plot.widgets.time_selector import (
-    ClickableLabel,
-    DateTimeSelector,
-)
-from deepview.gui.label_with_interactive_plot.video import VideoEditor, VideoProcessor
-from deepview.gui.label_with_interactive_plot.workers import (
-    HandleComputeWorker,
-    SaveCsvTask,
-    TaskSignals,
-    find_nearest_index,
-)
+from deepview.gui.label_with_interactive_plot._selection_area import SelectionAreaMixin
+from deepview.gui.label_with_interactive_plot._settings_area import SettingsAreaMixin
+from deepview.gui.label_with_interactive_plot._video import VideoControlsMixin
 
 
 # 创建一个蓝色的pg.mkPen对象，宽度为2
