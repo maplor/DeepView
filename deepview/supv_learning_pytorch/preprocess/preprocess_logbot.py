@@ -4,9 +4,14 @@
 
 import os
 import glob
+import logging
 import pandas as pd
 from process_utils import *
 from tqdm import tqdm
+
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
 
 #--------------------prepare paths-------------------------
 species = "omizunagidori"
@@ -67,29 +72,23 @@ for raw_data_path in tqdm(raw_data_path_list, total=len(raw_data_path_list)):
                                 method="none",
                                 check_df=False)
 
-    # if debug_test_mode == True:
-    #     print(f"| debug mode -> do not save data |")
-    # else:
     save_preprocessed_data(df,
                            output_dir_path,
                            species,
                            animal_id,
                            label_id_path)
 
-print(f"-----------------------------------")
-print(f"raw data preprocessing completed !")
-print(f"-----------------------------------")
+logger.info("Raw data preprocessing completed")
 
 #--------------------generate segment data-----------------------------
 # load files
 target_path = os.path.join(output_dir_path, species, "**.csv")
 preprocessed_data_path_list = sorted(glob.glob(target_path))
 ##-------------------1 for labeled data--------------------------------
-print("Extract sliding windows from preprocessed data (.csv) and save them as .npz files")
+logger.info("Extract sliding windows from preprocessed data (.csv) and save them as .npz files")
 for preprocessed_data_path in tqdm(preprocessed_data_path_list, total=len(preprocessed_data_path_list)):
-    print("-----------------------------------------------------------------------")
     animal_id = os.path.basename(preprocessed_data_path).replace(".csv", "")
-    print(animal_id, end=": ")
+    logger.info("Processing animal_id: %s", animal_id)
 
     # extract windows
     (
@@ -104,33 +103,27 @@ for preprocessed_data_path in tqdm(preprocessed_data_path_list, total=len(prepro
     ) = extract_sliding_windows(preprocessed_data_path,
                                 sliding_window_size=50,
                                 sliding_window_step_size=25)
-    print(f"N of extracted windows: {len(X_list)}")
-    print(f"N of labelled windows:  {len(labelled_X_list)}")
-    print(f"N of timestamp gaps:    {len(timestamp_gap_idx_list)}")
+    logger.info("N of extracted windows: %s", len(X_list))
+    logger.info("N of labelled windows: %s", len(labelled_X_list))
+    logger.info("N of timestamp gaps: %s", len(timestamp_gap_idx_list))
 
     if len(labelled_X_list) > 0:
         # save labelled data
         npz_file_dir = os.path.join(labelled_data_base_dir, animal_id)
-        print("Saving labelled windows as npz ...")
+        logger.info("Saving labelled windows as npz")
 
-        # if debug_test_mode == True:
-        #     print(f"| debug mode -> do not save data |")
-        # else:
         save_labelled_windows_as_npz(animal_id,
                                      npz_file_dir,
                                      labelled_X_list,
                                      labelled_label_id_list,
                                      labelled_timestamp_list)
 
-print(f"----------------------------------------")
-print(f"Labelled window extraction completed !")
-print(f"----------------------------------------")
+logger.info("Labelled window extraction completed")
 
 ##-------------------2 for unlabeled data------------------------------
 for preprocessed_data_path in tqdm(preprocessed_data_path_list, total=len(preprocessed_data_path_list)):
-    print("-----------------------------------------------------------------------")
     animal_id = os.path.basename(preprocessed_data_path).replace(".csv", "")
-    print(animal_id, end=": ")
+    logger.info("Processing animal_id: %s", animal_id)
 
     # extract windows
     (
@@ -164,11 +157,8 @@ for preprocessed_data_path in tqdm(preprocessed_data_path_list, total=len(prepro
     # save all data as npz (1 file 20 windows)
     num_windows_per_npz_file = 20
     npz_file_dir = os.path.join(unlabelled_data_base_dir, animal_id)
-    print(f"npz_file_dir: {npz_file_dir}")
-    print("Saving all windows as npz ...")
-    # if debug_test_mode == True:
-    #     print(f"| debug mode -> do not save data |")
-    # else:
+    logger.info("npz_file_dir: %s", npz_file_dir)
+    logger.info("Saving all windows as npz")
     save_blocks_of_windows_as_npz(num_windows_per_npz_file,
                                   animal_id,
                                   npz_file_dir,
@@ -178,6 +168,4 @@ for preprocessed_data_path in tqdm(preprocessed_data_path_list, total=len(prepro
                                   timestamp_list_random,
                                   labelled_flag_list_random)
 
-print(f"----------------------------------------")
-print(f"Unlabelled window extraction completed !")
-print(f"----------------------------------------")
+logger.info("Unlabelled window extraction completed")
