@@ -1,10 +1,14 @@
 import os
 import pickle
+import logging
 from pathlib import Path
 
 import pandas as pd
 
 from deepview.utils import conversioncode
+
+
+logger = logging.getLogger(__name__)
 
 
 def _robust_path_split(path):
@@ -47,20 +51,20 @@ def merge_annotateddatasets(cfg, trainingsetfolder_full):
             data = pickle.load(f)
         conversioncode.guarantee_multiindex_rows(data)
         if data.columns.levels[0][0] != cfg["scorer"]:
-            print(
+            logger.warning(
                 f"{file_path} labeled by a different scorer. This data will not be utilized in training dataset creation. If you need to merge datasets across scorers, see https://github.com/DeepLabCut/DeepLabCut/wiki/Using-labeled-data-in-DeepLabCut-that-was-annotated-elsewhere-(or-merge-across-labelers)"
             )
         AnnotationData.append(data)
     except FileNotFoundError:
-        print(file_path, " not found (perhaps not annotated).")
+        logger.warning("%s not found (perhaps not annotated).", file_path)
 
     if not len(AnnotationData):
-        print(
+        logger.warning(
             "Annotation data was not found by splitting video paths (from config['video_sets']). An alternative route is taken..."
         )
         AnnotationData = conversioncode.merge_windowsannotationdataONlinuxsystem(cfg)
         if not len(AnnotationData):
-            print("No data was found!")
+            logger.error("No data was found")
             return
 
     AnnotationData = pd.concat(AnnotationData).sort_index()

@@ -1,8 +1,12 @@
 import os
 import random
+import logging
 
 import numpy as np
 import pandas as pd
+
+
+logger = logging.getLogger(__name__)
 
 
 def extract_sliding_windows(preprocessed_data_path,
@@ -17,13 +21,12 @@ def extract_sliding_windows(preprocessed_data_path,
         Data of extracted windows as lists
     '''
 
-    # # print("Preprocessed data: ", os.path.basename(preprocessed_data_path))
     # species = os.path.basename(os.path.dirname(preprocessed_data_path))
     # animal_id = os.path.basename(preprocessed_data_path).replace('.csv', '')
     # read preprocessed data
     df = pd.read_csv(preprocessed_data_path, low_memory=False)
-    print("length of df: ", len(df))
-    print("Extracting sliding windows ...")
+    logger.info("Length of df: %s", len(df))
+    logger.info("Extracting sliding windows")
 
     window_size = sliding_window_size
     window_step_size = sliding_window_step_size
@@ -252,7 +255,6 @@ def save_blocks_of_windows_as_npz(num_windows_per_npz_file,
             label_id_block_array = np.array(label_id_block).astype("float64")
             timestamp_block_array = np.array(timestamp_block).astype("float64")
             # animal_id_block_array = np.array(animal_id_block)
-            # print(f"npz saved X: {X_block_array.shape} label_id: {label_id_block_array.shape}")
 
             if os.path.exists(npz_file_dir) == False:
                 os.makedirs(npz_file_dir)
@@ -273,9 +275,3 @@ def save_blocks_of_windows_as_npz(num_windows_per_npz_file,
             animal_id_block = []
 
             block_counter += 1
-
-        # if (i+1) % 10000 == 0:
-        # print(f"{i+1} -> npz saved X: {X_block_array.shape} label_id: {label_id_block_array.shape}")import os
-import random
-
-import numpy as np

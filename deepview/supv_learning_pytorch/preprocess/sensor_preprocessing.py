@@ -1,7 +1,11 @@
 import os
+import logging
 
 import pandas as pd
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
+
+
+logger = logging.getLogger(__name__)
 
 
 def preprocess_sensor_data(df,
@@ -16,7 +20,7 @@ def preprocess_sensor_data(df,
     '''
 
     if len(df) == 0:
-        print("No Sensor Data")
+        logger.warning("No sensor data")
     else:
         # clipping (just to make sure that measurement errors are removed)
         # Note: ±8G
@@ -28,17 +32,13 @@ def preprocess_sensor_data(df,
         #                                    upper=clipping_threshold)
         #     df["acc_z"] = df["acc_z"].clip(lower=-clipping_threshold,
         #                                    upper=clipping_threshold)
-        # else:
-        #     print("No Clipping")
 
         # if check_df == True:
         #     display(df[:5])
-        #     print(df.describe())
 
         # Note: we implemented the below pre-processing methods,
         # but did not use the standardization nor normalizetion in dl-wabc study
         if method == "standardization":
-            # print("Applying standardizing to all sensor data")
             scaling_columns = ["acc_x", "acc_y", "acc_z"]
             sensor_data = df[scaling_columns]
             scaler = StandardScaler().fit(sensor_data.values)
@@ -46,9 +46,7 @@ def preprocess_sensor_data(df,
             df[scaling_columns] = scaled_sensor_data
             # if check_df == True:
             #     display(df[:5])
-            #     print(df.describe())
         elif method == "normalization":
-            # print("Applying min-max normalization to all sensor data")
             scaling_columns = ["acc_x", "acc_y", "acc_z"]
             sensor_data = df[scaling_columns]
             scaler = MinMaxScaler().fit(sensor_data.values)
@@ -56,9 +54,6 @@ def preprocess_sensor_data(df,
             df[scaling_columns] = scaled_sensor_data
             # if check_df == True:
             #     display(df[:5])
-            #     print(df.describe())
-        # elif method == "none":
-        # print("No standardization nor normalization method applied")
 
     return df
 
@@ -78,7 +73,7 @@ def save_preprocessed_data(df, output_dir_path, species, animal_id, label_id_pat
     '''
 
     if len(df) == 0:
-        print("No Sensor Data -> No Data Saved")
+        logger.warning("No sensor data; no data saved")
     else:
         df = df.loc[:, ['datetime', 'unixtime',
                         'acc_x', 'acc_y', 'acc_z', 'label']]
@@ -101,5 +96,4 @@ def save_preprocessed_data(df, output_dir_path, species, animal_id, label_id_pat
         df_save_path = os.path.join(save_dir, str(animal_id) + ".csv")
 
         df.to_csv(df_save_path, index=False)
-        print("Preprocessed Data Saved")
-        print("-----------------------------------------------------")
+        logger.info("Preprocessed data saved: %s", df_save_path)

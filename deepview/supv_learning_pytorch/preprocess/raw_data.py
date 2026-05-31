@@ -1,7 +1,11 @@
 import os
+import logging
 
 import numpy as np
 import pandas as pd
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_raw_date_information(raw_data_path, animal_id_path):
@@ -29,11 +33,9 @@ def get_raw_date_information(raw_data_path, animal_id_path):
     target = "_raw_data_"
     index = s.find(target)
     animal_tag = s[index + 10:]
-    # print(animal_tag)
     target = "_lb"
     index = animal_tag.find(target)
     animal_tag = animal_tag[:index]
-    # print(animal_tag)
 
     df_animal_id = pd.read_csv(animal_id_path, low_memory=False)
     df_target_row = df_animal_id[(df_animal_id["animal_tag"] == animal_tag) \
@@ -62,8 +64,7 @@ def read_raw_data_and_refine_timestamp(raw_data_path, correct_timestamp):
     Returns:
         df (DataFrame): a data frame with refined timestamps
     '''
-    # Message
-    print("Reading raw data -> ", end="")
+    logger.info("Reading raw data")
 
     # load csv
     column_list = ['timestamp', 'acc_x', 'acc_y', 'acc_z', 'label']
@@ -82,7 +83,7 @@ def read_raw_data_and_refine_timestamp(raw_data_path, correct_timestamp):
     # Refine timestamp data if needed. (because some csv files have different sampling rate)
     # Strange timestamp (that of OM1901) should be corrected here.
     if correct_timestamp == 1:
-        print("Strange timestamp -> Correcting timestamp ...")
+        logger.info("Strange timestamp detected; correcting timestamp")
         SAMPLING_RATE_25Hz = 25
         SAMPLING_RATE_31Hz = 31
         l_datetime_ = list(df['datetime'])
@@ -107,7 +108,7 @@ def read_raw_data_and_refine_timestamp(raw_data_path, correct_timestamp):
         df['datetime'] = pd.to_datetime(df['unixtime'], unit='s')
         df['datetime'] = df['datetime'].dt.round('1L')  # round at 1 millisecond
 
-    print("Length of df: ", len(df))
+    logger.info("Length of df: %s", len(df))
 
     return df
 
@@ -127,8 +128,7 @@ def divide_df_if_timestamp_gap_detected_2(
     Returns:
         df_list (list): a list of divided data frames
     '''
-    # message
-    print("Checking timestamp gap -> ", end="")
+    logger.info("Checking timestamp gap")
 
     # settings
     # SAMPLING_RATE = acc_sampling_rate
@@ -144,18 +144,15 @@ def divide_df_if_timestamp_gap_detected_2(
         if diff > GAP_SEC_LIMIT:  # gap_min_limit = 125
             large_gap_detector.append(True)
             large_gap_detect_index_list.append(i)
-            # print(i)
         else:
             large_gap_detector.append(False)
-    # print(large_gap_detect_index_list)
 
     # If there is more than one timestamp gap,
     # split the data frame and save them as a list
     df_list = []
     if len(large_gap_detect_index_list) > 1:
-        print(str(len(large_gap_detect_index_list) - 1), "timestamp gap(s) detected -> ", end="")
+        logger.info("%s timestamp gap(s) detected", len(large_gap_detect_index_list) - 1)
         for i in range(0, len(large_gap_detect_index_list)):
-            # print(i)
             if i == 0:
                 df_tmp = df[0:large_gap_detect_index_list[i + 1]]
                 df_list.append(df_tmp)
@@ -165,14 +162,13 @@ def divide_df_if_timestamp_gap_detected_2(
             else:
                 df_tmp = df[large_gap_detect_index_list[i]:]
                 df_list.append(df_tmp)
-            # print("df:", i)
             # display(df_tmp.head(3))
             # display(df_tmp.tail(3))
     else:
         df_list.append(df)
-        print("No timestamp gap detected -> ", end="")
+        logger.info("No timestamp gap detected")
 
-    print("N of dataframe:", len(df_list))
+    logger.info("N of dataframe: %s", len(df_list))
 
     return df_list
 
@@ -215,9 +211,9 @@ def run_resampling_and_concat_df(df_list, acc_sampling_rate, remove_sec=3, check
                     )
                     df_concat = pd.concat([df_concat, df_resampled])
                     if check_df == True:
-                        print("Length of current df: ", len(df_resampled))
+                        logger.info("Length of current df: %s", len(df_resampled))
                 else:
-                    print("Recording time is too short -> discard the current df")
+                    logger.warning("Recording time is too short; discarding the current df")
         else:
             # If the original dataframe was not divided into multiple dfs
             # resample the first dataframe in df_list
@@ -245,9 +241,9 @@ def run_resampling_and_concat_df(df_list, acc_sampling_rate, remove_sec=3, check
                     #     display(df_list[i].head(5))
                     df_concat = pd.concat([df_concat, df_list[i]])
                     if check_df == True:
-                        print("Length of current df: ", len(df_list[i]))
+                        logger.info("Length of current df: %s", len(df_list[i]))
                 else:
-                    print("Recording time is too short -> discard the current df")
+                    logger.warning("Recording time is too short; discarding the current df")
         else:
             df_list[0] = df_list[0][start_index:]
             df_list[0].reset_index(inplace=True)
@@ -255,7 +251,7 @@ def run_resampling_and_concat_df(df_list, acc_sampling_rate, remove_sec=3, check
             #     display(df_list[0].head(5))
             df_concat = pd.concat([df_concat, df_list[0]])
     else:
-        print("Unknonw acc_sampling_rate")
+        logger.warning("Unknown acc_sampling_rate: %s", acc_sampling_rate)
 
     df = df_concat
     # Reset index because we removed the first several seconds
@@ -263,7 +259,6 @@ def run_resampling_and_concat_df(df_list, acc_sampling_rate, remove_sec=3, check
     df = df.drop("index", axis=1)
     # if check_df == True:
     #     display(df.head(5))
-    #     print("Length of concatenated df: ", len(df))
 
     return df
 
@@ -279,8 +274,7 @@ def resampling(df, intermediate_sampling_rate=100, output_sampling_rate=25):
     Return:
         df (DataFrame): a resampled data frame with sampling rate = output_sampling_rate
     '''
-    # Message
-    print("Resampling -> ", end="")
+    logger.info("Resampling")
 
     # Settings
     if intermediate_sampling_rate == 100:
@@ -288,24 +282,22 @@ def resampling(df, intermediate_sampling_rate=100, output_sampling_rate=25):
     elif intermediate_sampling_rate == 1000:
         asfreq_param_intermediate = "1L"
     else:
-        print("invalid intermediate_sampling_rate")
+        logger.warning("Invalid intermediate_sampling_rate: %s", intermediate_sampling_rate)
 
     if output_sampling_rate == 25:
         asfreq_param_output = "40L"
     elif output_sampling_rate == 50:
         asfreq_param_output = "20L"
     else:
-        print("invalid output_sampling_rate")
+        logger.warning("Invalid output_sampling_rate: %s", output_sampling_rate)
 
     # If there are any duplicate rows, delete them all (basically delete the last second)
     # If there is no milliseconds after the timstamp, the index will be duplicated.
     if np.sum(df['unixtime'].duplicated()) > 1:
-        # print(len(df[df['unixtime'].duplicated()]))
         df.drop_duplicates(subset='datetime', keep=False, inplace=True)
-        # print(len(df[df['unixtime'].duplicated()]))
-        print("duplicated index detected -> duplicates removed")
+        logger.info("Duplicated index detected; duplicates removed")
     else:
-        print("No duplicates")
+        logger.info("No duplicates")
 
     # up-sampling to 1000Hz and interpolate data
     df.set_index("datetime", inplace=True, drop=False)
@@ -331,8 +323,6 @@ def resampling(df, intermediate_sampling_rate=100, output_sampling_rate=25):
     df.reset_index(inplace=True)
     unixtime = df['datetime'].apply(lambda t: t.timestamp())
     df.insert(loc=1, column='unixtime', value=unixtime)
-    # print("resampling completed")
-    # print(len(df) % SAMPLING_RATE_25Hz)
     # display(df[:32])
 
     return df

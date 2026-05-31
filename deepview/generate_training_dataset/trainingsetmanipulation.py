@@ -68,6 +68,9 @@ from deepview.generate_training_dataset.yaml_config import (
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 def preprocess_datasets(root, progress_update, cfg, allsetfolder, sample_rate):
     """
     for each sensor data file, preprocess it and save as pkl file into
@@ -93,7 +96,7 @@ def preprocess_datasets(root, progress_update, cfg, allsetfolder, sample_rate):
         # TODO 这里有个bug，当sampling rate变化时，不会触发重新处理数据的bug
         try:
             if os.path.isfile(file_path):
-                print('Raw sensor data already exists at %s ' % file_path)
+                logger.info("Raw sensor data already exists at %s", file_path)
                 # with open(file_path, 'rb') as f:
                 #     data = pickle.load(f)
             else:
@@ -160,9 +163,9 @@ def preprocess_datasets(root, progress_update, cfg, allsetfolder, sample_rate):
                     ''', data)
                     # 提交事务
                     conn.commit()
-                except Exception as e:
+                except Exception:
                     conn.rollback()
-                    print(f"错误: {e}")
+                    logger.exception("Failed to insert raw sensor data into database")
                 conn.close()
 
                 # with open(file_path, 'wb') as f:
@@ -170,11 +173,8 @@ def preprocess_datasets(root, progress_update, cfg, allsetfolder, sample_rate):
             # conversioncode.guarantee_multiindex_rows(data)
             # AnnotationData.append(data)
         except FileNotFoundError:
-            print(file_path, " not found raw sensor data, please create data first.")
+            logger.warning("%s not found raw sensor data, please create data first.", file_path)
 
-    # if not len(AnnotationData):
-    #     print("No data was found!")
-    #     return
     return
 
 
@@ -228,9 +228,6 @@ def create_training_dataset(
     auxiliaryfunctions.attempt_to_make_folder(
         Path(os.path.join(project_path, str(trainingsetfolder))), recursive=True
     )  # WindowsPath('C:/Users/dell/Desktop/xia-logbot-2024-04-19/unsupervised-datasets/allDataSet')
-
-    # preprocess data
-    # print('preprocessing data using min-max norm...')
 
     preprocess_datasets(
         root,
@@ -331,7 +328,7 @@ def create_training_dataset(
         "init_weights",
     ]
     MakeTest_pose_yaml(trainingdata, keys2save, path_test_config)
-    print(
+    logger.info(
         "The training dataset is successfully created. Use the function 'train_network' to start training. Happy training!"
     )
     return
