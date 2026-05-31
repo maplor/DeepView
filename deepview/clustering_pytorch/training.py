@@ -1,7 +1,11 @@
 
 
 import os
+import logging
 from pathlib import Path
+
+
+logger = logging.getLogger(__name__)
 
 
 def return_train_network_path(config, trainingsetindex=0, modelprefix=""):
@@ -78,20 +82,17 @@ def train_network(
         )
     )
     if not poseconfigfile.is_file():
-        print("The training datafile ", poseconfigfile, " is not present.")
-        print(
-            "Probably, the training dataset for this specific shuffle index was not created."
-        )
-        print(
-            "Try with a different trainingsetfraction or use function 'create_training_dataset' to create a new trainingdataset."
-            # "Try with a different shuffle/trainingsetfraction or use function 'create_training_dataset' to create a new trainingdataset with this shuffle index."
+        logger.warning("The training datafile %s is not present", poseconfigfile)
+        logger.warning("Probably, the training dataset for this specific shuffle index was not created")
+        logger.warning(
+            "Try with a different trainingsetfraction or use function 'create_training_dataset' to create a new trainingdataset"
         )
 
     try:
         # remove if/elif for multianimal and animalzoo, keep simplist one
         from deepview.clustering_pytorch.core.train import train
 
-        print("Selecting single-animal trainer")
+        logger.info("Selecting single-animal trainer")
         train(
             sensor_dict,
             progress_update,
@@ -110,6 +111,4 @@ def train_network(
         raise e
     finally:
         os.chdir(str(start_path))
-    print(
-        "The network is now trained and ready to evaluate. Use the function 'evaluate_network' to evaluate the network."
-    )
+    logger.info("The network is now trained and ready to evaluate. Use the function 'evaluate_network' to evaluate the network")

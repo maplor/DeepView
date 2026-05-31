@@ -9,6 +9,7 @@
 # Licensed under GNU Lesser General Public License v3.0
 #
 import abc
+import logging
 import tensorflow as tf
 from deepview.clustering_pytorch.datasets import Batch
 # from deeplabcut.pose_estimation_tensorflow.core1 import predict_multianimal
@@ -18,6 +19,9 @@ import torch.nn as nn
 from common_config import adjust_learning_rate
 from train_utils import AE_train_time_series, AE_eval_time_series
 from prepare_data.time_series_preparation import *
+
+
+logger = logging.getLogger(__name__)
 
 
 class BaseNet(metaclass=abc.ABCMeta):
@@ -44,9 +48,9 @@ class BaseNet(metaclass=abc.ABCMeta):
         for epoch in range(1, p['epochs']):
             # Adjust lr
             lr = adjust_learning_rate(p, optimizer, epoch)
-            print('Adjusted learning rate to {:.5f}'.format(lr))
+            logger.info("Adjusted learning rate to %.5f", lr)
             loss_value = AE_train_time_series(train_dataloaders[0], model, criterion, optimizer, epoch, device)
-            print('loss of the ' + str(epoch) + '-th training epoch is :' + loss_value.__str__())
+            logger.info("Loss of the %s-th training epoch is: %s", epoch, loss_value)
 
         # batch[Batch.part_score_targets], heads[pred_layer]
 

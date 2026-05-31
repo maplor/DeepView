@@ -18,6 +18,9 @@ import pprint
 import yaml
 
 
+logger = logging.getLogger(__name__)
+
+
 def _merge_a_into_b(a, b):
     """
     Merge config dictionary a into config dictionary b, clobbering the
@@ -36,7 +39,7 @@ def _merge_a_into_b(a, b):
                 try:
                     _merge_a_into_b(a[k], b[k])
                 except:
-                    print("Error under config key: {}".format(k))
+                    logger.exception("Error under config key: %s", k)
                     raise
         else:
             b[k] = v
@@ -73,4 +76,5 @@ def load_config(filename="model_cfg.yaml"):
 
 
 if __name__ == "__main__":
-    print(load_config())
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    logger.info("%s", load_config())

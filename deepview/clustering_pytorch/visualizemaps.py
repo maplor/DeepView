@@ -1,5 +1,6 @@
 
 import os
+import logging
 import matplotlib.pyplot as plt
 import numpy as np
 # from skimage.transform import resize
@@ -8,6 +9,9 @@ from sklearn.cluster import DBSCAN
 from sklearn.manifold import TSNE
 # from datetime import datetime
 import pandas as pd
+
+
+logger = logging.getLogger(__name__)
 
 def extract_save_all_maps(
     config,
@@ -46,7 +50,7 @@ def extract_save_all_maps(
         config, gputouse, Indices, modelprefix
     )  # return dict
 
-    print("Saving plots...")  # comparisonbodyparts算出数据后开始画图
+    logger.info("Saving plots")  # comparisonbodyparts算出数据后开始画图
     dest_path = ''
     timestamp = np.array([])
     for frac, values in data.items():  # data is a dictionary

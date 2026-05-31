@@ -1,4 +1,5 @@
 import os
+import logging
 # import numpy as np
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
@@ -23,6 +24,7 @@ import pandas as pd
 
 
 GRAVITATIONAL_ACCELERATION = 9.80665
+logger = logging.getLogger(__name__)
 
 def convert_unit_system(args, df):
     """
@@ -42,7 +44,7 @@ def convert_unit_system(args, df):
     elif args.dataset=='neji':
         cols = ["x", "y", "z"]
     else:
-        print('In time_series_preparation.py, convert_unit_system function, data column not matching.')
+        logger.warning("In time_series_preparation.py, convert_unit_system function, data column not matching")
         NotImplementedError
     # allcols = list(df.columns.values)
     # cols = list(set(allcols) - set(['time']))
@@ -142,11 +144,11 @@ def prep_dataset_umineko(args):
     if False:
         # the pickle file is a list of dataframes, each dataframe is a segment with a label
         datapath = os.path.join(root_path, 'umineko_labeled_data_segment.pkl')
-        print('path to load pkl data: ' + datapath)
+        logger.debug("Path to load pkl data: %s", datapath)
         with open(datapath, 'rb') as f:
             datalist = pickle.load(f)  # 2634 labeled segments (dataframe)
 
-        print('generating segment batch data...')
+        logger.info("Generating segment batch data")
         # sliding window length
         len_sw = 90
         data, timestamps, labels, domains = [], [], [], []
@@ -162,7 +164,7 @@ def prep_dataset_umineko(args):
         with open(os.path.join(root_path, 'umineko_label_segment_batch.pkl'), 'wb') as f:
             pickle.dump([data, timestamps, labels, domains], f)
 
-    print('load segment batch data...')
+    logger.info("Load segment batch data")
     with open(os.path.join(root_path, args.batch_data), 'rb') as f:
         [data, timestamps, labels, domains] = pickle.load(f)  # return list of batch(,,)
         # print(timestamps.shape)  # acc+gyro (15961, 90, 1)
@@ -189,7 +191,7 @@ def generate_dataloader_overlap(data, target, domains, timestamps):
     xlist = np.stack(data_batch, axis=0)  # [B, Len, dim]
     # [samples, timestamps, labels] = xlist
     x_win_train = xlist.reshape((batch_size, xlist.shape[1], xlist.shape[-1]))  # [B, Len, dim]
-    print(" ..after sliding window: train inputs {0}".format(x_win_train.shape))
+    logger.debug("After sliding window: train inputs %s", x_win_train.shape)
 
     # dataloader
     train_set_r = data_loader_umineko(x_win_train, target, domains, timestamps)
@@ -222,7 +224,7 @@ def prepare_data_file(args):
             train_loader_r.append(train_loader)
 
     else:
-        print('TODO prepare_data')
+        logger.warning("TODO prepare_data")
 
     return train_loader_r  # return train_loader list
 

@@ -1,5 +1,6 @@
 
 import argparse
+import logging
 import os
 import pickle
 from pathlib import Path
@@ -23,6 +24,9 @@ from deepview.clustering_pytorch.datasets import (
     # prepare_all_data,
     prepare_single_data,
 )
+
+
+logger = logging.getLogger(__name__)
 
 def evaluate_network(
     config,
@@ -70,7 +74,7 @@ def evaluate_network(
     device = 'cpu'
     model = get_model(p_backbone=net_type, p_setup='autoencoder')  # set backbone model=ResNet18, SSL=simclr, weight
     model = model.to(device)
-    print('Restart from checkpoint')
+    logger.info("Restart from checkpoint")
     checkpoint = torch.load(model_path, map_location='cpu')
     model.load_state_dict(checkpoint)
     model.to(device)

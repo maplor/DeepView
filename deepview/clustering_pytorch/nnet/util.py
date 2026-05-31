@@ -3,11 +3,15 @@ Authors: Wouter Van Gansbeke, Simon Vandenhende
 Licensed under the CC BY-NC 4.0 license (https://creativecommons.org/licenses/by-nc/4.0/)
 """
 import os
+import logging
 import torch
 import numpy as np
 import errno
 import scipy
 import random
+
+
+logger = logging.getLogger(__name__)
 
 def mkdir_if_missing(directory):
     if not os.path.exists(directory):
@@ -50,7 +54,7 @@ class ProgressMeter(object):
     def display(self, batch):
         entries = [self.prefix + self.batch_fmtstr.format(batch)]
         entries += [str(meter) for meter in self.meters]
-        print('\t'.join(entries))
+        logger.info("\t".join(entries))
 
     def _get_batch_fmtstr(self, num_batches):
         num_digits = len(str(num_batches // 1))
@@ -69,7 +73,7 @@ def fill_memory_bank(loader, model, memory_bank):
         output = model(images)
         memory_bank.update(output, targets)
         if i % 100 == 0:
-            print('Fill Memory Bank [%d/%d]' % (i, len(loader)))
+            logger.info("Fill Memory Bank [%d/%d]", i, len(loader))
 
 
 def confusion_matrix(predictions, gt, class_names, output_file=None):
@@ -145,7 +149,7 @@ def gen_aug(sample, ssh_type):
     elif ssh_type == 'ap_f':
         return ifft_amp_phase_pert_fully(sample)
     else:
-        print('The task is not available!\n')
+        logger.warning("The task is not available")
 
 
 

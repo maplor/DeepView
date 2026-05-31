@@ -31,6 +31,9 @@ import json
 from PySide6.QtWidgets import QProgressBar
 from PySide6.QtCore import QCoreApplication
 
+
+logger = logging.getLogger(__name__)
+
 class LearningRate(object):
     def __init__(self, cfg):
         self.steps = cfg["multi_step"]
@@ -140,18 +143,18 @@ def train(
         progress_update.emit(int((epoch+1)/num_epochs * 100))
         # Adjust lr
         lr = adjust_learning_rate(lr, optimizer, epoch, p_scheduler='cosine', p_epochs=num_epochs)
-        print('Adjusted learning rate to {:.5f}'.format(lr))
+        logger.info("Adjusted learning rate to %.5f", lr)
 
         # Train: the same as simclr
-        print('Train ...')
+        logger.info("Train")
         if p_setup == 'autoencoder':
             losses = AE_train_time_series(train_dataloader, model, criterion, optimizer, epoch, device)
             if (epoch % 10 == 0) or (epoch == num_epochs-1):
-                print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
+                logger.info("Loss of the %s-th training epoch is: %s", epoch, losses)
 
         elif p_setup == 'simclr':
             losses = simclr_train_time_series(train_dataloader, model, criterion, optimizer, epoch, device)
-        print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
+        logger.info("Loss of the %s-th training epoch is: %s", epoch, losses)
         QCoreApplication.processEvents()
     if not stop_callback():
         return
@@ -170,11 +173,13 @@ def train(
 
     # Save final model, xx\aaa-bbb-2024-04-24\unsup-models\iteration-0\aaaApr24\train
     # column_list = '-'.join(data_column).replace('_','')
-    print('Saving model at: ' + net_type + '_epoch%s' % str(epoch)\
-          + '_datalen%s_' % str(cfg['data_length']) \
-          + sensor_str[:-1] + '.pth')
-    torch.save(model.state_dict(), net_type + '_epoch%s' % str(epoch) +\
-               '_datalen%s_' % str(cfg['data_length']) + sensor_str[:-1] + '.pth')
+    model_filename = (
+        net_type + '_epoch%s' % str(epoch)
+        + '_datalen%s_' % str(cfg['data_length'])
+        + sensor_str[:-1] + '.pth'
+    )
+    logger.info("Saving model at: %s", model_filename)
+    torch.save(model.state_dict(), model_filename)
 
     # return to original path.
     os.chdir(str(start_path))    # training

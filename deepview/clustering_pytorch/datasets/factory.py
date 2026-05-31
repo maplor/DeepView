@@ -15,6 +15,7 @@
 
 import warnings
 import os
+import logging
 import torch
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
@@ -25,6 +26,9 @@ from pathlib import Path
 from deepview.clustering_pytorch.nnet.util import (
     gen_aug,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class DatasetFactory:
@@ -105,7 +109,7 @@ def prep_dataset_umineko(data_path,
     for filename in filenames:
         full_file_path = os.path.join(data_path, filename)
         if os.path.exists(full_file_path):
-            print('path to load pkl data: ' + data_path)
+            logger.debug("Path to load pkl data: %s", data_path)
             with open(Path(full_file_path), 'rb') as f:
                 data = pickle.load(f)  # 2634 labeled segments (dataframe)
 
@@ -130,7 +134,7 @@ def prep_dataset_umineko_single(data_path):
     with open(data_path, 'rb') as f:
         datalist = pickle.load(f)  # 2634 labeled segments (dataframe)
 
-    print('generating segment batch data...')
+    logger.info("Generating segment batch data")
     # sliding window length
     len_sw = 90
     data, timestamps, labels, domains, timestr = [], [], [], [], []
