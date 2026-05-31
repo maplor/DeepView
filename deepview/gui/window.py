@@ -1,7 +1,7 @@
 import logging
 import sys
 
-from PySide6.QtWidgets import QMessageBox, QMainWindow
+from PySide6.QtWidgets import QMainWindow
 from PySide6 import QtCore
 from PySide6 import QtWidgets
 
@@ -19,6 +19,7 @@ from deepview.gui.widgets import StreamReceiver, StreamWriter
 # from deepview.gui.tabs.evaluate_network import EvaluateNetwork
 # from deepview.gui.tabs.label_data import LabelData
 # from deepview.gui.tabs.interaction_plot import InteractionPlot
+from deepview.gui.window_help import WindowHelpMixin
 from deepview.gui.window_menu import WindowMenuMixin
 from deepview.gui.window_project import WindowProjectMixin
 from deepview.gui.window_shell import WindowShellMixin
@@ -28,6 +29,7 @@ from deepview.gui.window_theme import WindowThemeMixin
 
 class MainWindow(
     WindowMenuMixin,
+    WindowHelpMixin,
     WindowProjectMixin,
     WindowShellMixin,
     WindowTabsMixin,
@@ -79,19 +81,3 @@ class MainWindow(
         self._progress_bar.setMaximum(0)
         self._progress_bar.hide()
         self.status_bar.addPermanentWidget(self._progress_bar)
-
-    def _ask_for_help(self):
-        dlg = QMessageBox(self)
-        dlg.setWindowTitle("Ask for help")
-        dlg.setText(
-            """Ask our community for help on <a href='https://forum.image.sc/tag/deepview'>the forum</a>!"""
-        )
-        _ = dlg.exec()
-
-    def _learn_dlc(self):
-        dlg = QMessageBox(self)
-        dlg.setWindowTitle("Learn DLC")
-        dlg.setText(
-            """Learn DLC with <a href='https://deepview.github.io/UseOverviewGuide.html'>our docs and how-to guides</a>!"""
-        )
-        _ = dlg.exec()
