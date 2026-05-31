@@ -1,7 +1,12 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import sqlite3
+import logging
 from datetime import datetime
+
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
 
 # Load the CSV file to inspect its contents
 # file_path = "/Users/cassie/Downloads/LB11.csv"
@@ -75,7 +80,7 @@ camera_count_unique_values = list(range(len(camera_count_unique_values_df) - 2))
 
 # Extract the segments for values larger than -1
 camera_count_segments = extract_segments_for_values(df, values=camera_count_unique_values)
-print(camera_count_segments)
+logger.debug("camera_count_segments: %s", camera_count_segments)
 
 # Function to combine values from 'Month', 'Day', 'Hour', 'Min', 'Sec' columns in the given format
 def combine_time_columns(row):
@@ -110,13 +115,13 @@ def extract_seg_information(idx, cameradf):
 for idx, cameradf in camera_count_segments.items():
     cameraID, frame_rate, frame_count, start_time, end_time = \
         extract_seg_information(idx, cameradf)
-    print('sucessfully get camera info')
-    print(cameraID, frame_rate, frame_count, start_time, end_time)
+    logger.info("Successfully got camera info")
+    logger.info("%s %s %s %s %s", cameraID, frame_rate, frame_count, start_time, end_time)
     # 插入数据库
     insert_camera_info(CSV_name, cameraID, frame_rate, frame_count, start_time, end_time)
     
     # 打印开始减去结束时间
-    print(pd.to_datetime(end_time) - pd.to_datetime(start_time))
+    logger.info("%s", pd.to_datetime(end_time) - pd.to_datetime(start_time))
 
 
 conn.close()

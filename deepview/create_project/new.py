@@ -15,6 +15,7 @@ import os
 import shutil
 import sqlite3
 import warnings
+import logging
 from pathlib import Path
 from datetime import datetime as dt
 
@@ -23,6 +24,9 @@ from deepview.utils import auxiliaryfunctions
 from deepview import DEBUG
 from deepview.utils.auxfun_files import fileReader
 from deepview.utils.auxiliaryfunctions import get_db_folder
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_new_project(
@@ -132,7 +136,7 @@ def create_new_project(
 
     # Create project and sub-directories
     if not DEBUG and project_path.exists():
-        print('Project "{}" already exists!'.format(project_path))
+        logger.warning('Project "%s" already exists', project_path)
         return os.path.join(str(project_path), "config.yaml")
     file_path = project_path / "raw-data"
     label_path = project_path / "labeled-data"
@@ -141,7 +145,7 @@ def create_new_project(
     unsupervised_path = project_path / "unsupervised-datasets"
     for p in [file_path, label_path, shuffles_path, unsupervised_path, unsupervised_path / "allDataSet"]:
         p.mkdir(parents=True, exist_ok=DEBUG)
-        print('Created "{}"'.format(p))
+        logger.info('Created "%s"', p)
 
     # Add all videos in the folder. Multiple folders can be passed in a list, similar to the video files. Folders and video files can also be passed!
     fids = []
@@ -153,18 +157,17 @@ def create_new_project(
             ]
             fids = fids + fids_in_dir
             if len(fids_in_dir) == 0:
-                print("No files found in", i)
-                print(
-                    "Perhaps change the filetype, which is currently set to:",
+                logger.warning("No files found in %s", i)
+                logger.warning(
+                    "Perhaps change the filetype, which is currently set to: %s",
                     filetype,
                 )
             else:
                 files = fids
-                print(
+                logger.info(
+                    "%s files from the directory %s were added to the project",
                     len(fids_in_dir),
-                    " files from the directory",
                     i,
-                    "were added to the project.",
                 )
         else:
             if os.path.isfile(i):
@@ -181,14 +184,14 @@ def create_new_project(
 
     destinations = [file_path.joinpath(vp.name) for vp in files]
     if copy_videos:
-        print("Copying the files")
+        logger.info("Copying the files")
         for src, dst in zip(files, destinations):
             shutil.copy(
                 os.fspath(src), os.fspath(dst)
             )  # https://www.python.org/dev/peps/pep-0519/
     else:
         # creates the symlinks of the video and puts it in the videos directory.
-        print("Attempting to create a symbolic link of the file ...")
+        logger.info("Attempting to create a symbolic link of the file")
         for src, dst in zip(files, destinations):
             if dst.exists() and not DEBUG:
                 raise FileExistsError("File {} exists already!".format(dst))
@@ -196,19 +199,18 @@ def create_new_project(
                 src = str(src)
                 dst = str(dst)
                 os.symlink(src, dst)
-                print("Created the symlink of {} to {}".format(src, dst))
+                logger.info("Created the symlink of %s to %s", src, dst)
             except OSError:
                 try:
                     import subprocess
 
                     subprocess.check_call("mklink %s %s" % (dst, src), shell=True)
                 except (OSError, subprocess.CalledProcessError):
-                    print(
-                        "Symlink creation impossible (exFat architecture?): "
-                        "copying the video instead."
+                    logger.warning(
+                        "Symlink creation impossible (exFat architecture?): copying the video instead"
                     )
                     shutil.copy(os.fspath(src), os.fspath(dst))
-                    print("{} copied to {}".format(src, dst))
+                    logger.info("%s copied to %s", src, dst)
             files = destinations
 
     if copy_videos:
@@ -217,7 +219,7 @@ def create_new_project(
     # adds the video list to the config.yaml file
     file_sets = {}
     for file in files:
-        print(file)
+        logger.debug("Adding file to config: %s", file)
         try:
             # For windows os.path.realpath does not work and does not link to the real video. [old: rel_video_path = os.path.realpath(video)]
             rel_video_path = str(Path.resolve(Path(file)))
@@ -367,9 +369,10 @@ def create_new_project(
     conn.commit()
     conn.close()
 
-    print('Generated "{}"'.format(project_path / "config.yaml"))
-    print(
-        "\nA new project with name %s is created at %s and a configurable file (config.yaml) is stored there. Change the parameters in this file to adapt to your project's needs.\n Once you have changed the configuration file, use the function 'extract_frames' to select frames for labeling.\n. [OPTIONAL] Use the function 'add_new_videos' to add new videos to your project (at any stage)."
-        % (project_name, str(wd))
+    logger.info('Generated "%s"', project_path / "config.yaml")
+    logger.info(
+        "A new project with name %s is created at %s and a configurable file (config.yaml) is stored there. Change the parameters in this file to adapt to your project's needs. Once you have changed the configuration file, use the function 'extract_frames' to select frames for labeling. [OPTIONAL] Use the function 'add_new_videos' to add new videos to your project (at any stage).",
+        project_name,
+        str(wd),
     )
     return projconfigfile
