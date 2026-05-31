@@ -5,6 +5,21 @@
 > 节奏：全职冲刺，连续工作日，起始 2026-06-01（周一）
 > 配套地图：见 [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)
 
+> 当前进度（2026-06-01）：已完成 Phase 1、Phase 2、Phase 3、Phase 4.1；当前停在代码审查/风险排查阶段，暂不继续执行 Phase 4.2 及后续重构。
+
+## 当前完成情况
+
+| 阶段 | 状态 | 说明 |
+|---|---|---|
+| Phase 0 安全网 | 未完成 | 本机缺少可运行环境，未完成 GUI `/run` 与烟雾回归基线。 |
+| Phase 1 拆解头号 god-file | ✅ 已完成 | 已抽离交互标注主组件、子组件、视频处理、后台任务、WebChannel 后端与各职责 mixin。 |
+| Phase 2 GUI 其他大文件 | ✅ 已完成 | 已拆分 `window.py`、`train_network.py`、`new_scatter_map.py` / `supervised_cl` 相关逻辑。 |
+| Phase 3 训练/数据层 | ✅ 已完成 | 已拆分 preprocessing、supervised utils、training dataset 处理模块。 |
+| Phase 4.1 `print()` → `logging` | ✅ 已完成 | 非 `calculate_results/` 范围内的活动 `print()` 已迁移到 logging 或移除。 |
+| Phase 4.2 TODO/FIXME 分类清理 | 未开始 | 已暂停，待后续单独处理。 |
+| Phase 4.3 复用组件落位 | 未开始 | 已暂停，待后续单独处理。 |
+| Phase 5 收尾验收 | 未开始 | 需在具备运行环境后执行全量烟雾回归、全分支审查与文档更新。 |
+
 ---
 
 ## 0. 重构原则（贯穿始终）
@@ -82,14 +97,14 @@ label_with_interactive_plot/
 └── styles.py            # 既有
 ```
 
-| Day | 子任务 | 抽取内容 | 风险 |
-|---|---|---|---|
-| Day 2 (06-02) | 1.1 抽离纯展示小组件 | `ClickableLabel` / `TimeSelectorWidget` / `DateTimeSelector` → `widgets/time_selector.py` | 低（基本不依赖主类） |
-| Day 2 (06-02) | 1.2 抽离下拉/标签组件 | `ReComboBox` / `LabelOption` → `widgets/combo.py` | 低 |
-| Day 3 (06-03) | 1.3 抽离视频处理 | `VideoProcessor`(QThread) / `VideoEditor`(QDialog) → `video.py` | 中（线程信号） |
-| Day 4 (06-04) | 1.4 抽离后台任务 | `TaskSignals` / `SaveCsvTask` / `HandleComputeWorker` / `find_nearest_index` → `workers.py` | 中（QRunnable/信号槽） |
-| Day 5 (06-05) | 1.5 抽离 WebChannel 后端 | `Backend` / `BackendMap` → `backend.py` | 高（与 JS 双向通信，回归要重点测散点图/地图联动） |
-| Day 6–7 (06-06~07) | 1.6 主类瘦身 | `LabelWithInteractivePlot` → `main_widget.py`，再按职责切分助手模块：`_layout`（init/create* 布局方法）、`_plotting`（左/中/右图与 region）、`_compute`（handleCompute*）、`_labeling`（save/label）、`_video`（播放控制） | 高（70 方法相互引用，建议用 mixin 或委托类，逐组迁移 + 每组跑 Skill 循环） |
+| Day | 子任务 | 抽取内容 | 风险 | 状态 |
+|---|---|---|---|---|
+| Day 2 (06-02) | 1.1 抽离纯展示小组件 | `ClickableLabel` / `TimeSelectorWidget` / `DateTimeSelector` → `widgets/time_selector.py` | 低（基本不依赖主类） | ✅ 已完成 |
+| Day 2 (06-02) | 1.2 抽离下拉/标签组件 | `ReComboBox` / `LabelOption` → `widgets/combo.py` | 低 | ✅ 已完成 |
+| Day 3 (06-03) | 1.3 抽离视频处理 | `VideoProcessor`(QThread) / `VideoEditor`(QDialog) → `video.py` | 中（线程信号） | ✅ 已完成 |
+| Day 4 (06-04) | 1.4 抽离后台任务 | `TaskSignals` / `SaveCsvTask` / `HandleComputeWorker` / `find_nearest_index` → `workers.py` | 中（QRunnable/信号槽） | ✅ 已完成 |
+| Day 5 (06-05) | 1.5 抽离 WebChannel 后端 | `Backend` / `BackendMap` → `backend.py` | 高（与 JS 双向通信，回归要重点测散点图/地图联动） | ✅ 已完成 |
+| Day 6–7 (06-06~07) | 1.6 主类瘦身 | `LabelWithInteractivePlot` → `main_widget.py`，再按职责切分助手模块：`_layout`（init/create* 布局方法）、`_plotting`（左/中/右图与 region）、`_compute`（handleCompute*）、`_labeling`（save/label）、`_video`（播放控制） | 高（70 方法相互引用，建议用 mixin 或委托类，逐组迁移 + 每组跑 Skill 循环） | ✅ 已完成 |
 
 > Phase 1 是整个重构的核心，占 6 天。1.6 若发现耦合过深，宁可保留主类但拆出无状态助手函数，不强求一次到位。
 
@@ -97,21 +112,21 @@ label_with_interactive_plot/
 
 ### Phase 2 — GUI 其他大文件（Day 8–10，06-08 ~ 06-10）
 
-| Day | 子任务 | 文件 | 方向 |
-|---|---|---|---|
-| Day 8 (06-08) | 2.1 拆 `window.py`(586) | `gui/window.py` | 分离 Tab 注册逻辑、设置加载、菜单/状态栏 |
-| Day 9 (06-09) | 2.2 拆 `train_network.py`(538) | `gui/tabs/train_network.py` | 分离参数 UI 构建 与 训练任务调度 |
-| Day 10 (06-10) | 2.3 拆 `new_scatter_map.py`(505) + `supervised_cl/__init__.py`(339) | `gui/supervised_cl/*` | 散点图组件与数据装配分离 |
+| Day | 子任务 | 文件 | 方向 | 状态 |
+|---|---|---|---|---|
+| Day 8 (06-08) | 2.1 拆 `window.py`(586) | `gui/window.py` | 分离 Tab 注册逻辑、设置加载、菜单/状态栏 | ✅ 已完成 |
+| Day 9 (06-09) | 2.2 拆 `train_network.py`(538) | `gui/tabs/train_network.py` | 分离参数 UI 构建 与 训练任务调度 | ✅ 已完成 |
+| Day 10 (06-10) | 2.3 拆 `new_scatter_map.py`(505) + `supervised_cl/__init__.py`(339) | `gui/supervised_cl/*` | 散点图组件与数据装配分离 | ✅ 已完成 |
 
 ---
 
 ### Phase 3 — 训练/数据层（Day 11–12，06-11 ~ 06-12）
 
-| Day | 子任务 | 文件 | 方向 |
-|---|---|---|---|
-| Day 11 (06-11) | 3.1 拆 `process_utils.py`(716) | `supv_learning_pytorch/preprocess/process_utils.py` | 按预处理步骤分函数文件 |
-| Day 11 (06-11) | 3.2 拆 `supv_learning_pytorch/utils/utils.py`(566) | 同上 | 按职责（度量/IO/张量工具）分组 |
-| Day 12 (06-12) | 3.3 拆 `trainingsetmanipulation.py`(598) | `generate_training_dataset/` | `merge_annotateddatasets` / `read_process_csv` 等拆为独立模块 |
+| Day | 子任务 | 文件 | 方向 | 状态 |
+|---|---|---|---|---|
+| Day 11 (06-11) | 3.1 拆 `process_utils.py`(716) | `supv_learning_pytorch/preprocess/process_utils.py` | 按预处理步骤分函数文件 | ✅ 已完成 |
+| Day 11 (06-11) | 3.2 拆 `supv_learning_pytorch/utils/utils.py`(566) | 同上 | 按职责（度量/IO/张量工具）分组 | ✅ 已完成 |
+| Day 12 (06-12) | 3.3 拆 `trainingsetmanipulation.py`(598) | `generate_training_dataset/` | `merge_annotateddatasets` / `read_process_csv` 等拆为独立模块 | ✅ 已完成 |
 
 > 训练层重构后必须用一个小数据集**实跑一轮无监督+有监督训练**确认数值无变化（不只是 `/run` 启动）。
 
@@ -119,22 +134,22 @@ label_with_interactive_plot/
 
 ### Phase 4 — 全仓清理（Day 13–14，06-13 ~ 06-14）
 
-| Day | 子任务 | 内容 |
-|---|---|---|
-| Day 13 (06-13) | 4.1 `print()` → `logging` | 385 处分批迁移；建立统一 logger 配置；调试用的临时 print 直接删 |
-| Day 14 (06-14) | 4.2 TODO/FIXME 分类清理 | 411 处过一遍：能立即修的修、过时的删、需跟进的转成 issue/任务清单 |
-| Day 14 (06-14) | 4.3 复用组件落位 | 把 `widgets.py` 的 `StreamWriter`/`ConfigEditor`/`DragDropListView` 等确认被各 Tab 复用，消除重复实现 |
+| Day | 子任务 | 内容 | 状态 |
+|---|---|---|---|
+| Day 13 (06-13) | 4.1 `print()` → `logging` | 385 处分批迁移；建立统一 logger 配置；调试用的临时 print 直接删 | ✅ 已完成 |
+| Day 14 (06-14) | 4.2 TODO/FIXME 分类清理 | 411 处过一遍：能立即修的修、过时的删、需跟进的转成 issue/任务清单 | 未开始 |
+| Day 14 (06-14) | 4.3 复用组件落位 | 把 `widgets.py` 的 `StreamWriter`/`ConfigEditor`/`DragDropListView` 等确认被各 Tab 复用，消除重复实现 | 未开始 |
 
 ---
 
 ### Phase 5 — 收尾验收（Day 15，06-15）
 
-| 子任务 | 内容 |
-|---|---|
-| 5.1 全量烟雾回归 | 按 0.2 清单逐步对照基线截图，确认行为一致 |
-| 5.2 `/code-review` 全分支扫一遍 | 对整个 `refactor/decompose` vs `master` 的 diff |
-| 5.3 更新 `PROJECT_STRUCTURE.md` | 反映新的包结构与文件索引 |
-| 5.4 整理 commit、准备合并 PR | PR 描述列出拆分前后对照 |
+| 子任务 | 内容 | 状态 |
+|---|---|---|
+| 5.1 全量烟雾回归 | 按 0.2 清单逐步对照基线截图，确认行为一致 | 未开始 |
+| 5.2 `/code-review` 全分支扫一遍 | 对整个 `refactor/decompose` vs `master` 的 diff | 未开始 |
+| 5.3 更新 `PROJECT_STRUCTURE.md` | 反映新的包结构与文件索引 | 未开始 |
+| 5.4 整理 commit、准备合并 PR | PR 描述列出拆分前后对照 | 未开始 |
 
 ---
 
