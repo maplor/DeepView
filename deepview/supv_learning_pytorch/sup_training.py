@@ -1,3 +1,4 @@
+import logging
 import torch
 import numpy as np
 from pathlib import Path
@@ -28,6 +29,9 @@ import pickle
 from deepview.utils import (
     auxiliaryfunctions,
 )
+
+
+logger = logging.getLogger(__name__)
 
 def replace_str2int(label_dict, array):
     new_array = np.full((len(array),), 0, dtype=int)
@@ -97,7 +101,7 @@ def prepare_data(root, batch_size, window_len, label_dict, filenames, DEVICE, tr
         targets.append(tmpdata['label'])
 
     if (len(samples)==0) or (len(targets)==0):
-        print('Please select files for training and test.')
+        logger.warning("Please select files for training and test")
         return None, None, None
 
     concat_samples = np.concatenate(samples)
@@ -151,7 +155,7 @@ def train_sup_network(
 ):
     # DEVICE = 'cpu'
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print('device using %s' % DEVICE)
+    logger.info("Device using %s", DEVICE)
 
     root_cfg = read_config(root.config)
     project_folder = root.project_folder
@@ -164,7 +168,7 @@ def train_sup_network(
                                                   label_dict, train_filenames,
                                                   DEVICE, train_labels=[], iftrain=True)
     if train_loader == None:
-        print('No labels in training set, try other files again.')
+        logger.warning("No labels in training set, try other files again")
         return
 
     test_loader, _, _ = prepare_data(root, batch_size, windowlen,
@@ -172,7 +176,7 @@ def train_sup_network(
                                      DEVICE, train_labels, iftrain=False)
 
     if test_loader == None:
-        print('No labels in test sets, try other files again.')
+        logger.warning("No labels in test sets, try other files again")
         return
 
     uniquelabels = np.unique(list(label_dict.values()))
@@ -180,7 +184,7 @@ def train_sup_network(
     if net_type == 'DeepConvLSTM':
         model = DeepConvLstmV3(in_ch=data_dim, num_classes=num_classes)
     else:
-        print('no model available')
+        logger.warning("No model available")
     model.to(DEVICE)
 
     # initialize the optimizer and loss

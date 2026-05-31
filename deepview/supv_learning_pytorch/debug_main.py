@@ -1,3 +1,4 @@
+import logging
 import torch
 import hydra
 from omegaconf import DictConfig
@@ -5,6 +6,9 @@ from utils.utils import setup_train_val_test_animal_id_list, setup_dataloaders_s
 from deepview.supv_learning_pytorch.core.supv_trainer import setup_model
 from deepview.supv_learning_pytorch.core.trainer import train
 from pathlib import Path
+
+
+logger = logging.getLogger(__name__)
 
 all_animal_id_list = ["OM1802"
     , "OM1803"
@@ -49,7 +53,7 @@ all_animal_id_list = ["OM1802"
 def main(cfg: DictConfig):
     # DEVICE = 'cpu'
     DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    print('device using %s' % DEVICE)
+    logger.info("Device using %s", DEVICE)
     # initialization of train, val, and test animal id list
     test_animal_id_list = ["OM2214"]
     (
@@ -78,7 +82,7 @@ def main(cfg: DictConfig):
     # setup model
     model = setup_model(cfg)
     model.to(DEVICE)  # send model to GPU
-    print(f'model:\n {model}')
+    logger.debug("Model:\n%s", model)
 
     # initialize the optimizer and loss
     if cfg.train.optimizer == "Adam":

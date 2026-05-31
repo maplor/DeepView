@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -17,6 +19,9 @@ else:
     from label_utils import generate_class_labels_for_vis, return_species_jp_name
 
 
+logger = logging.getLogger(__name__)
+
+
 def plot_confusion_matrix(y_gt, y_pred, cfg, figsize=(9, 7)):
     species_jp_name = return_species_jp_name(cfg)
     class_labels = generate_class_labels_for_vis(species_jp_name)
@@ -26,7 +31,7 @@ def plot_confusion_matrix(y_gt, y_pred, cfg, figsize=(9, 7)):
     cm = confusion_matrix(y_gt, y_pred, labels=labels_int)
 
     df_cm = pd.DataFrame(data=cm, index=class_labels, columns=class_labels)
-    print(df_cm)
+    logger.debug("Confusion matrix:\n%s", df_cm)
 
     fig = plt.figure(figsize=figsize)
     group_counts = ["{0:0.0f}".format(value) for value in cm.flatten()]
@@ -75,7 +80,7 @@ def plot_window_ax(ax, X, label, npz_file_name):
     ax = sns.lineplot(ax=ax, x=data_number, y=acc_y, label="y", color=color_list[1])
     ax = sns.lineplot(ax=ax, x=data_number, y=acc_z, label="z", color=color_list[2])
     if npz_file_name is None:
-        print("No title")
+        logger.debug("No title")
     else:
         if label is None:
             ax.set_title(f"{npz_file_name}", pad=10)

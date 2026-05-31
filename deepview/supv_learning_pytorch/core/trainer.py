@@ -9,6 +9,7 @@ Otsuka et al., (2024) Methods in Ecology and Evolution
 import os
 import glob
 import copy
+import logging
 from pathlib import Path
 # from omegaconf import OmegaConf
 import numpy as np
@@ -27,6 +28,9 @@ from deepview.supv_learning_pytorch.utils import utils
 from deepview.supv_learning_pytorch.utils.pytorchtools import EarlyStopping
 from tqdm import tqdm
 import sklearn.metrics as metrics
+
+
+logger = logging.getLogger(__name__)
 
 MODEL_LIST_01 = [
     "mlp",
@@ -171,7 +175,12 @@ def train(
                                    top_class.cpu(),
                                    average='weighted') * 100.0
 
-        print(f'Train Loss     : {np.mean(train_losses):.4f} \t| \t train accuracy     : {accuracy:2.4f}| \t weighted macro f1     : {f1score:2.4f}\n')
+        logger.info(
+            "Train Loss: %.4f | train accuracy: %.4f | weighted macro f1: %.4f",
+            np.mean(train_losses),
+            accuracy,
+            f1score,
+        )
 
 
         # ---------------------------------------------------------------------------
@@ -226,8 +235,12 @@ def train(
                                        top_class.cpu(),
                                        average='weighted') * 100.0
 
-            print(
-                f'Test Loss     : {total_loss / n_batches:.4f}\t | \tTest Accuracy     : {acc_test:2.4f} \t| \t macro f1     : {f1score:2.4f}\n')
+            logger.info(
+                "Test Loss: %.4f | Test Accuracy: %.4f | macro f1: %.4f",
+                total_loss / n_batches,
+                acc_test,
+                f1score,
+            )
 
         early_stopping_coutner_list.append(early_stopping.counter)
         patience_list.append(early_stopping.patience)
@@ -254,7 +267,7 @@ def generate_condition_list(issue, ex, dataset, model_name):
     path3 = f"*"
     
     condition_target = os.path.join(common_base_dir, path0, path1, path2, path3)
-    print(f"condition_target: {condition_target}")
+    logger.debug("condition_target: %s", condition_target)
     condition_list = sorted(glob.glob(condition_target))
     condition_list = [os.path.basename(s) for s in condition_list]
     
@@ -299,8 +312,8 @@ def generate_results_save_path(path_list, checkpoints_fname=None):
         f_basename = f"{f_basename}_{_checkpoints_fname}"
     f_basename = f_basename.replace("-", "_")
 
-    print(f"results_save_dir: {results_save_dir}")
-    print(f"f_basename: {f_basename}")
+    logger.debug("results_save_dir: %s", results_save_dir)
+    logger.debug("f_basename: %s", f_basename)
     
     return results_save_dir, f_basename
 
@@ -309,27 +322,29 @@ def load_and_setup_test_config(config_path, TEST_CUDA_ID, checkpoints_fname=None
     
     # cfg = OmegaConf.load(config_path)
     cfg = np.load(config_path)
-    print(f"test_animal_id: {cfg.dataset.test_animal_id}")
-    print(cfg.dataset.labelled.animal_id_list.test)
+    logger.debug("test_animal_id: %s", cfg.dataset.test_animal_id)
+    logger.debug("test animal id list: %s", cfg.dataset.labelled.animal_id_list.test)
 
     cfg.train.cuda = TEST_CUDA_ID
     DEVICE = torch.device('cuda:' + str(cfg.train.cuda) if torch.cuda.is_available() else 'cpu')
-    print(f"DEVICE: {DEVICE}")
+    logger.info("DEVICE: %s", DEVICE)
     
     cfg.train.data_augmentation = False
     cfg.dataset.da_type = None
 
     if cfg.debug == True:
-        print("Note: You are loading a config file for debug !")
+        logger.info("Note: You are loading a config file for debug")
         cfg.debug = False
-    # print(cfg.debug)
     
     if checkpoints_fname is None:
         if cfg.path.log.checkpoints.fname != "best_model_weights.pt":
             cfg.path.log.checkpoints.fname = "best_model_weights.pt"
     else:
         cfg.path.log.checkpoints.fname = checkpoints_fname
-        print(f"cfg.path.log.checkpoints.fname is overwritten as: {cfg.path.log.checkpoints.fname}")
+        logger.info(
+            "cfg.path.log.checkpoints.fname is overwritten as: %s",
+            cfg.path.log.checkpoints.fname,
+        )
 
     return cfg, DEVICE
 
@@ -339,8 +354,8 @@ def setup_test_loader(cfg):
     (
         _, _, test_loader
     ) = prep_dataloaders_for_supervised_learning(cfg, test_only=True)
-    print("len(test_loader): ", len(test_loader))
-    print("len(test_loader.dataset): ", len(test_loader.dataset))
+    logger.debug("len(test_loader): %s", len(test_loader))
+    logger.debug("len(test_loader.dataset): %s", len(test_loader.dataset))
     if hasattr(test_loader, "load"): 
         test_loader.load()
         
@@ -350,8 +365,6 @@ def setup_test_loader(cfg):
 def setup_test_model(cfg, config_path, DEVICE):
     
     model = setup_model(cfg)
-    # if i == 0:
-    #     print(model)
     best_model = copy.deepcopy(model)
     best_model.to(DEVICE)
         
@@ -360,11 +373,9 @@ def setup_test_model(cfg, config_path, DEVICE):
         cfg.path.log.checkpoints.dir, 
         cfg.path.log.checkpoints.fname
     )
-    print(f"best_model_path: {best_model_path}")
+    logger.debug("best_model_path: %s", best_model_path)
     
     checkpoint = torch.load(best_model_path, map_location=DEVICE)
-    
-    # print(checkpoint.keys())
     
     if "model_state_dict" in checkpoint:
         best_model.load_state_dict(checkpoint['model_state_dict'])
