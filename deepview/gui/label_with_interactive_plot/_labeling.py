@@ -198,7 +198,7 @@ class LabelControlsMixin:
                 self.label_dict[key] = value
                 self.addItem(key)
                 # self.comboBoxHandler.addItem(key) updateLabelColors
-                print(self.label_dict)
+                self.logger.debug("Label dictionary updated: %s", self.label_dict)
                 self.init_label_colors()
                 self.backend.updateLabelColors(self.label_colors)
                 # self.clear_color_layout()
@@ -220,7 +220,7 @@ class LabelControlsMixin:
         config['label_dict'] = self.label_dict
         with open(config_path, 'w') as f:
             self.yaml.dump(config, f)
-        print("Saving label Successfully")
+        self.logger.info("Saving label successfully")
 
 
 
@@ -239,12 +239,10 @@ class LabelControlsMixin:
 
     # 更新右侧散点图的颜色
     def handleReflectToLatent(self, areaData):
-        # print(areaData)
         try:
             areaData = json.loads(areaData)  # 解析 JSON 字符串
-            # print("Parsed data:", areaData)
-        except json.JSONDecodeError as e:
-            print("Failed to decode JSON:", e)
+        except json.JSONDecodeError:
+            self.logger.exception("Failed to decode JSON")
         spots = []
         for spot in self.scatterItem.points():
             pos = spot.pos()

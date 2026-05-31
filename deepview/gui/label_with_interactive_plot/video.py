@@ -1,4 +1,5 @@
 import os
+import logging
 
 import cv2
 import numpy as np
@@ -12,6 +13,9 @@ from PySide6.QtWidgets import (
     QPushButton,
     QVBoxLayout,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class VideoProcessor(QThread):
@@ -53,7 +57,7 @@ class VideoProcessor(QThread):
             if frames_to_fill > 0:
                 ret, frame = cap.read()
                 if not ret:
-                    print(f"Cannot read video {video_path}")
+                    logger.warning("Cannot read video %s", video_path)
                     return
                 blank_frame = np.zeros_like(frame)
                 output_frames.extend([blank_frame] * frames_to_fill)
@@ -71,7 +75,7 @@ class VideoProcessor(QThread):
             cap.release()
 
         if not output_frames:
-            print("No available output frames")
+            logger.warning("No available output frames")
             return
 
         height, width, _ = output_frames[0].shape
@@ -83,7 +87,6 @@ class VideoProcessor(QThread):
             output_video.write(frame)
 
         output_video.release()
-        # print("视频处理完成，已保存为 output.mp4")
 
         # self.finished.emit(time_series)
         self.finished.emit(time_series, output_path)
@@ -140,7 +143,6 @@ class VideoEditor(QDialog):
 
         # start_times = list(map(int, self.start_time_input.text().split(',')))
         # if len(start_times) != len(self.video_paths):
-        #     print("Number of start times does not match the number of videos")
         #     return
 
     def process_videos(self):
@@ -150,7 +152,7 @@ class VideoEditor(QDialog):
         start_times = self.start_time_input.text().split(',')
         self.test_times(start_times)
         if len(start_times) != len(self.video_paths):
-            print("Number of start times does not match the number of videos")
+            logger.warning("Number of start times does not match the number of videos")
             return
 
         if not self.output_folder:

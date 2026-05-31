@@ -108,7 +108,7 @@ class LeftPlotMixin:
                 self.regions[i].append(region)
                 # 获取选中的索引范围
                 start_idx, end_idx = self._to_idx(int(region.getRegion()[0]), int(region.getRegion()[1]))
-                print(f'Selected range: from index {start_idx} to index {end_idx}')
+                self.logger.debug("Selected range: from index %s to index %s", start_idx, end_idx)
 
     def _region_changed(self, region):
         idx = 0
@@ -131,7 +131,7 @@ class LeftPlotMixin:
                     self.regions[i].remove(reg)
 
                     start_idx, end_idx = self._to_idx(int(reg.getRegion()[0]), int(reg.getRegion()[1]))
-                    print(f'Delete region({start_idx}, {int(end_idx)})')
+                    self.logger.debug("Delete region(%s, %s)", start_idx, int(end_idx))
                     break
 
     def _edit_region(self, pos):
@@ -153,12 +153,11 @@ class LeftPlotMixin:
                     reg.label = set_val
 
                     start_idx, end_idx = self._to_idx(int(reg.getRegion()[0]), int(reg.getRegion()[1]))
-                    print(f'Edit region({start_idx}, {end_idx}) label: {set_val}')
+                    self.logger.debug("Edit region(%s, %s) label: %s", start_idx, end_idx, set_val)
 
     def mouse_clicked(self, event):
         if event.button() == Qt.LeftButton and hasattr(self, 'scatterItem'):
             pos = self.plot_widgets[0].plotItem.vb.mapToView(event.pos())
-            # print(f'Clicked at {event.pos()} mapSceneToView {pos.x()},{pos.y()} mapToView {pos2.x()},{pos2.y()}')
 
             if self.mode == 'add':
                 self._add_region(pos)

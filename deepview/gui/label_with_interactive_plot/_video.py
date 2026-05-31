@@ -138,7 +138,6 @@ class VideoControlsMixin:
     def handle_finished(self,time_series, video_path):
         self.plot_time_series(time_series)
         self.update_video(video_path)
-        # print("处理完成:", video_path)
 
 
     # 新建一个窗口，选择视频文件夹
@@ -212,7 +211,6 @@ class VideoControlsMixin:
 
             self.offset = self.timestamp_input.value()
             datetime_org = self.data.loc[index, 'datetime'] # 2018-08-27 21:19:23.880000
-            # print(type(unixtime))
             datetime_str = datetime_org.strftime('%Y-%m-%d %H:%M:%S.%f')
 
 
@@ -230,7 +228,7 @@ class VideoControlsMixin:
             video_info = cursor.fetchone()
 
             if video_info is None:
-                print("No video found for the specified timestamp.")
+                self.logger.warning("No video found for the specified timestamp")
                 return
 
             animal_tag, video_stt, video_stp, framerate, frame_count, video_id = video_info
@@ -276,9 +274,9 @@ class VideoControlsMixin:
 
             conn.close()
         except ValueError:
-            print("Please enter a valid timestamp.")
-        except Exception as e:
-            print(f"An error occurred: {e}")
+            self.logger.warning("Please enter a valid timestamp")
+        except Exception:
+            self.logger.exception("An error occurred while jumping to timestamp")
 
     # def jump_to_timestamp(self, index):
     #     try:
@@ -309,16 +307,11 @@ class VideoControlsMixin:
     #         total_duration_str = self.format_time(total_duration)
 
     #         self.video_time_label.setText(f"{current_time_str} / {total_duration_str}")
-    #         # # Print current and total time
-    #         # print(f"当前时间: {current_time:.2f} 秒 / 总时间: {total_duration:.2f} 秒")
-
     #         self.display_frame(frame_number)
     #     except ValueError:
-    #         print("Please enter a valid timestamp.")
-
+    #         pass
 
     # def update_video(self, video_path):
-        # print(video_path)
         # self.video_label.setPixmap(QPixmap(video_path))
         # self.video_label.setScaledContents(True)
         # self.video_label.setFixedSize(600, 400)
