@@ -1,8 +1,12 @@
 import sys
+import logging
 import cv2
 from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, QPushButton, QLineEdit, QHBoxLayout
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtCore import Qt
+
+
+logger = logging.getLogger(__name__)
 
 class VideoPlayer(QMainWindow):
     def __init__(self):
@@ -70,7 +74,7 @@ class VideoPlayer(QMainWindow):
             frame_number = int(fps * (timestamp + self.offset))
             self.display_frame(frame_number)
         except ValueError:
-            print("Please enter a valid timestamp.")
+            logger.warning("Please enter a valid timestamp")
 
     def increase_offset(self):
         self.offset += 0.1
@@ -82,6 +86,7 @@ class VideoPlayer(QMainWindow):
         self.cap.release()
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     app = QApplication(sys.argv)
     player = VideoPlayer()
     player.show()

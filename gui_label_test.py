@@ -1,4 +1,5 @@
 import sys
+import logging
 import pandas as pd
 import pyqtgraph as pg
 from functools import partial
@@ -13,6 +14,9 @@ from PySide6.QtWidgets import (
     QRadioButton,
     QWidget,
 )
+
+
+logger = logging.getLogger(__name__)
 
 class LabelOption(QDialog):
     def __init__(self):
@@ -96,7 +100,7 @@ class InteractivePlot(QMainWindow):
         self.del_mode.clicked.connect(partial(self._change_mode, "del"))
 
     def _change_mode(self, mode: str):
-        print(f'Change mode to "{mode}"')
+        logger.info('Change mode to "%s"', mode)
         self.mode = mode
 
     def plot_data(self):
@@ -144,7 +148,7 @@ class InteractivePlot(QMainWindow):
                 self.regions[i].append(region)
 
             start_idx, end_idx = self._to_idx(int(region.getRegion()[0]), int(region.getRegion()[1]))
-            print(f'Selected range: from index {start_idx} to index {end_idx}')
+            logger.info("Selected range: from index %s to index %s", start_idx, end_idx)
 
     def _region_changed(self, region):
         idx = 0
@@ -164,7 +168,7 @@ class InteractivePlot(QMainWindow):
                     self.regions[i].remove(reg)
                     break
         start_idx, end_idx = self._to_idx(int(reg.getRegion()[0]), int(reg.getRegion()[1]))
-        print(f'Delete region({start_idx}, {int(end_idx)})')
+        logger.info("Delete region(%s, %s)", start_idx, int(end_idx))
 
     def _edit_region(self, pos):
         set_val = None
@@ -182,7 +186,7 @@ class InteractivePlot(QMainWindow):
                     elif set_val == 'stand':
                         reg.setBrush(QColor(0, 255, 0, 100))
         start_idx, end_idx = self._to_idx(int(reg.getRegion()[0]), int(reg.getRegion()[1]))
-        print(f'Edit region({start_idx}, {end_idx}) label: {set_val}')
+        logger.info("Edit region(%s, %s) label: %s", start_idx, end_idx, set_val)
 
     def mouse_clicked(self, event):
         if event.button() == Qt.LeftButton:
@@ -205,6 +209,7 @@ class InteractivePlot(QMainWindow):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     app = QApplication(sys.argv)
     window = InteractivePlot()
     window.show()
