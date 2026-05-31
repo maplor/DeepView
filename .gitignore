@@ -134,3 +134,14 @@ Thumbs.db
 # Project specific
 deepview/calculate_results/
 test-data/
+
+# Large data / model files
+*.npz
+*.npy
+*.pkl
+*.pth
+*.pt
+*.h5
+*.hdf5
+*.onnx
+*.bin
