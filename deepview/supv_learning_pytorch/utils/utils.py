@@ -1,4 +1,4 @@
-try:
+if __package__:
     from .dataloaders import (
         BaseDataset,
         DatasetLogbot2,
@@ -20,7 +20,7 @@ try:
         return_species_jp_name,
         to_one_hot,
     )
-except ImportError:
+else:
     from dataloaders import (
         BaseDataset,
         DatasetLogbot2,

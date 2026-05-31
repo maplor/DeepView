@@ -11,9 +11,9 @@ from sklearn.metrics import (
     jaccard_score,
 )
 
-try:
+if __package__:
     from .label_utils import generate_class_labels_for_vis, return_species_jp_name
-except ImportError:
+else:
     from label_utils import generate_class_labels_for_vis, return_species_jp_name
 
 
