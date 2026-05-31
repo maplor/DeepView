@@ -13,7 +13,7 @@ class InteractionControlsMixin:
             lat, lon = self.data.loc[start, 'latitude'], self.data.loc[start, 'longitude']
 
             if pd.isna(lat) or pd.isna(lon):
-                print("Latitude or longitude is missing.")
+                self.logger.warning("Latitude or longitude is missing")
                 return
 
             # 点击散点图高亮地图散点
@@ -72,9 +72,8 @@ class InteractionControlsMixin:
             if self.checkboxList[i].isChecked():
                 # 添加列到新选择列列表
                 newSelectColumn.append(column)
-        # 打印选择列
         # self.selectColumn = newSelectColumn
-        print('selectColumn: %s' % (newSelectColumn))
+        self.logger.debug("Selected columns: %s", newSelectColumn)
         # self.current_select_sensor_column = newSelectColumn
 
         metadata = find_charts_data_columns(self.sensor_dict, newSelectColumn)

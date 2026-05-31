@@ -6,6 +6,9 @@ from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtWidgets import QMessageBox
 
 
+logger = logging.getLogger(__name__)
+
+
 class Backend(QObject):
     highlightDotByindex = Signal(int, float, float)
     # TODO 参数待定
@@ -25,8 +28,6 @@ class Backend(QObject):
     @Slot(pd.DataFrame)
     def handle_data_changed(self, data):
         self.data = data  # Update the data attribute
-        # print("Backend's DataFrame has been updated:")
-        # print(self.data)
 
     @Slot()
     def handle_label_change(self, option):
@@ -35,30 +36,28 @@ class Backend(QObject):
     @Slot(result='QString')
     def get_label_option(self):
         result = self.select_option if self.select_option is not None else ""
-        # print(f"Returning: {result}")
         return result
 
     # 通过索引高亮散点，点击地图散点高亮折线图散点
     @Slot()
     def triggeLineChartHighlightDotByIndex(self, index):
-        print(f"Triggering highlight dot({index})...")
+        logger.debug("Triggering highlight dot(%s)", index)
         self.view.page().runJavaScript(f"highlightLineChartDotByIndex('{index}')")
 
     # 设置开始结束时间到标签
     @Slot(str, str)
     def setStartEndTimeToLabel(self, start_time, end_time):
-        print(f"Setting start time: {start_time}, end time: {end_time}")
+        logger.debug("Setting start time: %s, end time: %s", start_time, end_time)
         self.setStartEndTime.emit(start_time, end_time)
 
     @Slot(str, str, str, str, str, str)
     def setStartAndEndData(self, id1, lon1, lat1, id2, lon2, lat2):
-        # print("Setting start and end data...")
         self.setStartAndEndDataSign.emit(id1, lon1, lat1, id2, lon2, lat2)
 
     # 通过索引高亮散点，点击折线图散点高亮散点图散点
     @Slot(int)
     def handleHighlightScatterDotByIndex(self, index):
-        print(f"Triggering highlight dot({index})...")
+        logger.debug("Triggering highlight dot(%s)", index)
         self.highlightScatterDotByindexSign.emit(index)
 
     # 通过索引高亮散点，点击折线图散点高亮地图散点
@@ -67,41 +66,41 @@ class Backend(QObject):
         lat, lon = self.data.loc[index, 'latitude'], self.data.loc[index, 'longitude']
 
         if pd.isna(lat) or pd.isna(lon):
-            print("Latitude or longitude is missing.")
+            logger.warning("Latitude or longitude is missing")
             return
 
-        print("handleing highlight dot...")
+        logger.debug("Handling highlight dot")
         self.highlightDotByindex.emit(index, lat, lon)
 
     # add label按钮点击事件
     @Slot()
     def handleAddLabel(self, selected_option):
-        print("Adding label...")
+        logger.debug("Adding label")
         self.view.page().runJavaScript(f"addLabel('{selected_option}')")
 
     # delete label按钮点击事件
     @Slot(int)
     def handleDeleteLabel(self, status):
-        print("Deleting label...")
+        logger.debug("Deleting label")
         self.view.page().runJavaScript(f"deleteLabel('{status}')")
 
     # 从框选的散点图设置折线图markData
     @Slot(str)
     def setMarkData(self, data):
-        print("Setting mark data...")
+        logger.debug("Setting mark data")
         self.view.page().runJavaScript(f"setMarkData('{data}')")
 
     # 清空折线图markData
     @Slot()
     def clearMarkData(self):
-        print("Clearing mark data...")
+        logger.debug("Clearing mark data")
         self.view.page().runJavaScript("clearMarkData()")
 
     # 从html获取折线图框选区域
     # @Slot(result='QVariant')
     @Slot()
     def getSelectedArea(self):
-        print("etSelectedArea..")
+        logger.debug("Getting selected area")
         return self.view.page().runJavaScript("getSelectedArea()", 0, self.test_callback)
 
     def test_callback(self, result):
@@ -109,7 +108,7 @@ class Backend(QObject):
 
     @Slot()
     def getSelectedAreaToSave(self, is_timer):
-        print("getSelectedAreaToSave..")
+        logger.debug("Getting selected area to save")
         # 使用lambda传递参数给save_callback
         self.view.page().runJavaScript("getSelectedArea()", 0, lambda result: self.save_callback(result, is_timer))
 
@@ -129,7 +128,6 @@ class Backend(QObject):
         msg_box.setText("Labels overlapped, Over write?")
         msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
         result = msg_box.exec() == QMessageBox.Yes
-        # print(result)
         # 返回布尔值
         return result
 
@@ -143,7 +141,6 @@ class Backend(QObject):
         # msg_box.setText("是否删除选中的标记区域？")
         msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
         result = msg_box.exec() == QMessageBox.Yes
-        # print(result)
         # 返回布尔值
         return result
 
@@ -186,7 +183,6 @@ class Backend(QObject):
             result = data
         # 将结果转换为 JSON 格式
         json_data = json.dumps(result)
-        # print(json_data)
         self.view.page().runJavaScript(f"displayData('{json_data}')")
 
     # 更新labelColors
@@ -199,15 +195,16 @@ class Backend(QObject):
     @Slot()
     def handleComboxSelection(self, charts_data):
         charts_data = json.dumps(charts_data)
-        print("Combox selection...")
+        logger.debug("Combobox selection")
         self.view.page().runJavaScript(f"handleComboxChange('{charts_data}')")
 
     def handleJavaScriptLog(self, result):
-        print(f"JavaScript log: {result}")
+        logger.debug("JavaScript log: %s", result)
+
 
     @Slot(str)
     def receiveData(self, data):
-        print("Received data from frontend:", data)
+        logger.debug("Received data from frontend: %s", data)
 
     @Slot()
     def triggerUpdate(self):
@@ -223,19 +220,19 @@ class BackendMap(QObject):
     # 点击折线图高亮地图散点，没有则添加新点
     @Slot(str, float, float)
     def triggeLineMapHighlightDotByIndex(self, index, lat, lon):
-        print(f"Triggering highlight dot({index})...")
+        logger.debug("Triggering highlight dot(%s)", index)
         # self.view.page().runJavaScript(f"highlightByIndexAndLatLng('{index}, {lat}, {lon}')")
         self.view.page().runJavaScript(f"highlightByIndexAndLatLng('{index}', {lat}, {lon})")
 
     # 点击地图高亮折线图散点
     @Slot(int)
     def handleHighlightLineDotByIndex(self, index):
-        print("handleing highlight dot...")
+        logger.debug("Handling highlight dot")
         self.highlightLineChartDotByindex.emit(index)
 
     @Slot()
     def highlightLineChartTwoDots(self, id1, lon1, lat1, id2, lon2, lat2):
-        print("highlightLineChartTwoDots...")
+        logger.debug("Highlighting two line-chart dots")
         self.view.page().runJavaScript(f"highlightTwoMarkers('{id1}', {lat1}, {lon1}, '{id2}', {lat2}, {lon2})")
 
     # 在data display之后读取gps边界，然后作为初始地图
@@ -244,7 +241,7 @@ class BackendMap(QObject):
         if isinstance(data, pd.DataFrame):
             # 将列名转换为列表
             columns_list = data.columns.tolist()
-            logging.debug(f"columns_list: {columns_list}")
+            logger.debug("columns_list: %s", columns_list)
             # 选择需要的列 index、latitude 和 longitude，并去除 latitude 和 longitude 中的缺失值。
             data = data[['index', 'latitude', 'longitude']].dropna(subset=['latitude', 'longitude'])
             # 使用 iloc 按索引进行降采样, 一万个条目取一个。
@@ -256,4 +253,4 @@ class BackendMap(QObject):
         self.view.page().runJavaScript(f"displayMapData('{data}')")
 
     def handleJavaScriptLog(self, result):
-        print(f"JavaScript log: {result}")
+        logger.debug("JavaScript log: %s", result)

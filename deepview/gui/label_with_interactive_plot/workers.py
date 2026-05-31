@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 
 import numpy as np
@@ -10,6 +11,9 @@ from deepview.gui.label_with_interactive_plot.utils import (
     featureExtraction,
     find_data_columns,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 # 定义一个QObject来保存各种后台线程信号
@@ -34,8 +38,8 @@ class SaveCsvTask(QRunnable):
         # Parse the area data
         try:
             area_data = json.loads(self.area_data)
-        except json.JSONDecodeError as e:
-            print("Failed to decode JSON:", e)
+        except json.JSONDecodeError:
+            logger.exception("Failed to decode JSON")
             return
 
         for reg in area_data:
@@ -61,10 +65,10 @@ class SaveCsvTask(QRunnable):
             else:
                 new_path = edit_data_path
                 self.data.to_csv(edit_data_path)
-        except Exception as e:
-            print('Save data error:', e)
+        except Exception:
+            logger.exception("Save data error")
         else:
-            print(f'File saved at {new_path}')
+            logger.info("File saved at %s", new_path)
             if self.is_timer == 0:
                 self.signals.save_csv_finished.emit(new_path)
 

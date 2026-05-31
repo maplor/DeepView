@@ -9,8 +9,7 @@ from deepview.gui.label_with_interactive_plot.workers import HandleComputeWorker
 class ComputeMixin:
     # 处理计算的方法
     def handleCompute(self):
-        # 打印开始训练
-        print('start training...')
+        self.logger.info("Start training")
         # 设置训练状态为True
         self.isTraining = True
         # 更新按钮状态
@@ -52,8 +51,7 @@ class ComputeMixin:
         self.start_handle_compute()
 
     def start_handle_compute(self):
-        # 打印开始训练
-        print('start training...')
+        self.logger.info("Start training")
         # 设置训练状态为True
         self.isTraining = True
         # 更新按钮状态
@@ -83,7 +81,7 @@ class ComputeMixin:
         # self.stop_button.setEnabled(False)
         self.isTraining = False
         self.updateBtn()
-        print("Training was stopped.")
+        self.logger.info("Training was stopped")
 
     def compute_data_changed(self, data):
         self.data = data

@@ -28,16 +28,10 @@ class RightSettingsMixin:
         saveButton = QPushButton('Save')
         saveButton.clicked.connect(self.handleSaveButton)
         self.settingPannel.addWidget(saveButton)
-
-
-
     # def getSelectedAreaToSave(self, area_data):
-    #     # print(areaData)
     #     try:
     #         area_data = json.loads(area_data)  # 解析 JSON 字符串
-    #         # print("Parsed data:", areaData)
     #     except json.JSONDecodeError as e:
-    #         print("Failed to decode JSON:", e)
     #         return
     #     for reg in area_data:
     #         name = reg[0].get("name")
@@ -48,7 +42,7 @@ class RightSettingsMixin:
     #     self.handleSaveButton()
 
     def getSelectedAreaToSave(self, area_data):
-        print("Saving CSV in the background.")
+        self.logger.info("Saving CSV in the background")
         combo_box_text = self.RawDatacomboBox.currentText()
         save_task = SaveCsvTask(area_data, self.data, self.cfg, combo_box_text, 0)
         save_task.signals.save_csv_finished.connect(self.on_save_finished)
@@ -58,7 +52,7 @@ class RightSettingsMixin:
         QMessageBox.information(None, "保存CSV", f"文件已保存于 {new_path}", QMessageBox.Ok)
     
     def getSelectedAreaToSaveTimer(self, area_data):
-        print("Saving CSV in the background.")
+        self.logger.info("Saving CSV in the background")
         combo_box_text = self.RawDatacomboBox.currentText()
         save_task = SaveCsvTask(area_data, self.data, self.cfg, combo_box_text, 1)
         self.save_csv_thread_pool.start(save_task)
@@ -84,10 +78,10 @@ class RightSettingsMixin:
             else:
                 new_path = edit_data_path
                 self.data.to_csv(edit_data_path)
-        except:
-            print('save data error!')
+        except Exception:
+            self.logger.exception("Save data error")
         else:
-            print(f'文件已经保存在{new_path}')
+            self.logger.info("File saved at %s", new_path)
 
     # 创建标签按钮
     def createLabelButton(self):
@@ -112,7 +106,7 @@ class RightSettingsMixin:
 
     # 改变模式
     def _change_mode(self, mode: str):
-        print(f'Change mode to "{mode}"')
+        self.logger.info('Change mode to "%s"', mode)
         self.mode = mode
 
     # 创建区域按钮
@@ -178,7 +172,7 @@ class RightSettingsMixin:
     # 处理反射到标签的方法
     def handleToLabel(self):
         if not hasattr(self, 'rightRegionRoi'):  # 如果没有右侧区域ROI，提示用户先添加区域
-            print('Add region first.')
+            self.logger.warning("Add region first")
             return
 
         pos: pg.Point = self.rightRegionRoi.pos()
@@ -202,7 +196,6 @@ class RightSettingsMixin:
         # 传递combined_rectangles到backend
         markData = []
         for startT, endT in combined_rectangles:
-            # print(startT, endT)
             start_id, end_id = self._to_idx(startT, endT)
             start_timestamp = self.data.loc[start_id, 'timestamp']
             end_timestamp = self.data.loc[end_id, 'timestamp']
@@ -221,7 +214,6 @@ class RightSettingsMixin:
             newArray = [start_Area, end_Area]
 
             markData.append(newArray)
-        # print(markData)
         # 将 markData 转换为 JSON 字符串
         mark_data = json.dumps(markData)
         # 传递markData到backend
