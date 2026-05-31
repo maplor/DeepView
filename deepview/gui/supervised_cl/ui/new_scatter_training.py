@@ -71,10 +71,9 @@ class NewScatterTrainingMixin:
 
     def on_stop(self):
         self.clean_up()
-        print("Thread stopped")
+        self.main_window.root.logger.info("Thread stopped")
 
     def on_progress(self, value):
-        # print(f"Progress: {value}%")
         pass
 
     def get_unsup_model_path(self):
@@ -129,7 +128,7 @@ class NewScatterTrainingMixin:
             adjust_learning_rate(optimizer, epoch, nepochs)
             # loss = train(train_loader, model, criterion, optimizer, epoch, nepochs, opt)
             loss = train(train_loader, model, method, criterion, optimizer, epoch, nepochs, device)
-            print('SimCLR loss of the ' + str(epoch) + '-th training epoch is :' + loss.__str__())
+            self.main_window.root.logger.info("SimCLR loss of the %s-th training epoch is: %s", epoch, loss)
             QCoreApplication.processEvents()
         # evaluate and plot
         # train_loader, _ = set_loader(augment=AUGMENT, labeled_flag=False)
@@ -143,7 +142,7 @@ class NewScatterTrainingMixin:
         method = 'Supervised_SimCLR'
         for epoch in range(1, nepochs + 1):
             loss = train(train_loader, model, method, criterion, optimizer, epoch, nepochs, device)
-            print('Supervised_SimCLR loss of the ' + str(epoch) + '-th training epoch is :' + loss.__str__())
+            self.main_window.root.logger.info("Supervised_SimCLR loss of the %s-th training epoch is: %s", epoch, loss)
             QCoreApplication.processEvents()
         # evaluate and plot
         '''
@@ -192,9 +191,8 @@ class NewScatterTrainingMixin:
                 'epoch': self.epoch,
             }
             torch.save(state, full_model_path_new)
-        except Exception as e:
-            # print(e)
-            pass
+        except Exception:
+            self.main_window.root.logger.exception("Failed to save SCL model")
 
     def generate_test_data(self, data, model_name, data_length, column_names):
         # 首先生成模型训representation，再生成tsne结果

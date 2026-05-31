@@ -293,38 +293,32 @@ class DataAttributesWidget(QWidget):
     def update_selected_items(self):
         # 更新当前选中的选项
         selected_items = [checkbox.text() for checkbox in self.display_dataset_cb_list if checkbox.isChecked()]
-        print(f"当前选中的选项: {selected_items}")
+        self.main_window.root.logger.debug(f"Selected dataset items: {selected_items}")
 
 
     def log_augmentation_CLR_choice(self, augmentation):
         self.main_window.root.logger.info(f"CLR augmentation set to {self.augmentationComboBox_CLR.currentText()}")
-        print(self.augmentationComboBox_CLR.currentText())
         self.augmentation_CLR_choice = self.augmentationComboBox_CLR.currentText()
 
     def log_augmentation_SimCLR_choice(self, augmentation):
         self.main_window.root.logger.info(f"SimCLR augmentation set to {self.augmentationComboBox_SimCLR.currentText()}")
-        print(self.augmentationComboBox_SimCLR.currentText())
         self.augmentation_SimCLR_choice = self.augmentationComboBox_SimCLR.currentText()
 
     def log_method_choice(self, method):
         self.main_window.root.logger.info(f"Method set to {self.display_method_type.currentText()}")
-        print(self.display_method_type.currentText())
         self.method = self.display_method_type.currentText()
 
 
     def log_display_iters(self, value):
         self.main_window.root.logger.info(f"Run iters (epochs) set to {value}")
-        print(int(value))
         self.max_iter = int(value)
 
     def log_init_lr(self, value):
         self.main_window.root.logger.info(f"Learning rate set to {value}")
-        print(float(value))
         self.learning_rate = float(value)
 
     def log_batch_size(self, value):
         self.main_window.root.logger.info(f"Batch size set to {value}")
-        print(int(value))
         self.batch_size = int(value)
 
 

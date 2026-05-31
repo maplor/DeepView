@@ -211,7 +211,7 @@ class TrainNetworkUiMixin:
     def update_selected_items(self):
         # 更新当前选中的选项
         selected_items = [checkbox.text() for checkbox in self.display_dataset_cb_list if checkbox.isChecked()]
-        print(f"当前选中的选项: {selected_items}")
+        self.root.logger.debug(f"Selected dataset items: {selected_items}")
 
     def log_data_columns(self, value):
         self.root.logger.info(f"Select input data columns to {self.select_column}")
@@ -222,31 +222,25 @@ class TrainNetworkUiMixin:
         else:
             if sender.text() in self.select_column:
                 self.select_column.remove(sender.text())
-        print(self.select_column)
 
     def log_display_datalen(self, value):
         self.root.logger.info(f"Display input data length set to {value}")
-        print(int(value))
         self.data_length = int(value)
 
     def log_net_choice(self, net):
         self.root.logger.info(f"Network type set to {self.display_net_type.currentText()}")
-        print(self.display_net_type.currentText())
         self.net_type = self.display_net_type.currentText()
 
     def log_display_iters(self, value):
         self.root.logger.info(f"Run iters (epochs) set to {value}")
-        print(int(value))
         self.max_iter = int(value)
 
     def log_init_lr(self, value):
         self.root.logger.info(f"Learning rate set to {value}")
-        print(float(value))
         self.learning_rate = float(value)
 
     def log_batch_size(self, value):
         self.root.logger.info(f"Batch size set to {value}")
-        print(int(value))
         self.batch_size = int(value)
 
     def log_save_iters(self, value):

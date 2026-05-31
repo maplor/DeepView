@@ -11,7 +11,7 @@ class TrainNetworkTrainingMixin:
     def start_training(self):
         # TODO: check if training is already in progress
         if hasattr(self, 'training_in_progress') and self.training_in_progress:
-            print("Training is already in progress.")
+            self.root.logger.info("Training is already in progress")
             return
 
         config = self.root.config
