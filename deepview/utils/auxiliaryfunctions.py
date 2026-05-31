@@ -1,5 +1,6 @@
 
 import os
+import logging
 from glob import glob
 # import typing
 # import pickle
@@ -10,6 +11,9 @@ from pathlib import Path
 # import ruamel.yaml.representer
 import yaml
 from ruamel.yaml import YAML
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_config_template(multianimal=False):
@@ -329,9 +333,9 @@ def create_folders_from_string(folder_string):
         # Check if the folder already exists; if not, create it
         if not os.path.exists(base_path):
             os.mkdir(base_path)
-            print(f"Created folder: {base_path}")
+            logger.info("Created folder: %s", base_path)
         else:
-            print(f"Folder already exists: {base_path}")
+            logger.info("Folder already exists: %s", base_path)
 
 # # Example usage:
 # folder_string = "root_folder/subfolder1/subfolder2"

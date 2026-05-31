@@ -18,6 +18,7 @@ https://github.com/DeepLabCut/DeepLabCut/blob/master/AUTHORS
 Licensed under GNU Lesser General Public License v3.0
 """
 import os
+import logging
 import pandas as pd
 from deepview.utils import auxiliaryfunctions
 from itertools import islice
@@ -25,6 +26,7 @@ from pathlib import Path
 
 
 SUPPORTED_FILETYPES = "csv", "nwb"
+logger = logging.getLogger(__name__)
 
 
 def convertcsv2h5(config, userfeedback=True, scorer=None):
@@ -62,8 +64,7 @@ def convertcsv2h5(config, userfeedback=True, scorer=None):
     for folder in folders:
         try:
             if userfeedback:
-                print("Do you want to convert the csv file in folder:", folder, "?")
-                askuser = input("yes/no")
+                askuser = input(f"Do you want to convert the csv file in folder: {folder}? yes/no")
             else:
                 askuser = "yes"
 
@@ -89,7 +90,7 @@ def convertcsv2h5(config, userfeedback=True, scorer=None):
                 data.to_hdf(fn.replace(".csv", ".h5"), key="df_with_missing", mode="w")
                 data.to_csv(fn)
         except FileNotFoundError:
-            print("Attention:", folder, "does not appear to have labeled data!")
+            logger.warning("Attention: %s does not appear to have labeled data", folder)
 
 
 def analyze_videos_converth5_to_csv(video_folder, videotype=".mp4", listofvideos=False):
@@ -209,15 +210,15 @@ def _convert_h5_files_to(filetype, config, h5_files, videos):
             if vname in file:
                 scorer = file.split(vname)[1].split(".h5")[0]
                 if "DLC" in scorer or "DeepCut" in scorer:
-                    print("Found output file for scorer:", scorer)
-                    print(f"Converting {file}...")
+                    logger.info("Found output file for scorer: %s", scorer)
+                    logger.info("Converting %s", file)
                     if filetype == "csv":
                         df = pd.read_hdf(file)
                         df.to_csv(file.replace(".h5", ".csv"))
                     else:
                         convert_h5_to_nwb(config, file)
 
-    print(f"All H5 files were converted to {filetype.upper()}.")
+    logger.info("All H5 files were converted to %s", filetype.upper())
 
 
 def merge_windowsannotationdataONlinuxsystem(cfg):
@@ -231,7 +232,7 @@ def merge_windowsannotationdataONlinuxsystem(cfg):
     for elem in auxiliaryfunctions.grab_files_in_folder(data_path, relative=False):
         if os.path.isdir(elem):
             annotationfolders.append(elem)
-    print("The following folders were found:", annotationfolders)
+    logger.info("The following folders were found: %s", annotationfolders)
     for folder in annotationfolders:
         filename = os.path.join(folder, "CollectedData_" + cfg["scorer"] + ".h5")
         try:
@@ -239,7 +240,7 @@ def merge_windowsannotationdataONlinuxsystem(cfg):
             guarantee_multiindex_rows(data)
             AnnotationData.append(data)
         except FileNotFoundError:
-            print(filename, " not found (perhaps not annotated)")
+            logger.warning("%s not found (perhaps not annotated)", filename)
 
     return AnnotationData
 
