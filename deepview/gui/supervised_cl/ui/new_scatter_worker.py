@@ -1,3 +1,5 @@
+import logging
+
 import torch
 from PySide6.QtCore import QCoreApplication, QObject, Signal
 
@@ -11,6 +13,9 @@ from deepview.gui.supervised_cl.train.utils import (
     load_model_parameters,
     train,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class Scl2ClWorker(QObject):
@@ -62,7 +67,7 @@ class Scl2ClWorker(QObject):
                 return
             adjust_learning_rate(optimizer, epoch, nepochs)
             loss = train(train_loader, model, method, criterion, optimizer, epoch, nepochs, device)
-            print(f'SimCLR loss of the {epoch}-th training epoch is : {loss}')
+            logger.info("SimCLR loss of the %s-th training epoch is: %s", epoch, loss)
             self.progress.emit(int((epoch / nepochs) * 100))
             QCoreApplication.processEvents()
 
@@ -74,7 +79,7 @@ class Scl2ClWorker(QObject):
                 self.stopped.emit()
                 return
             loss = train(train_loader, model, method, criterion, optimizer, epoch, nepochs, device)
-            print(f'Supervised_SimCLR loss of the {epoch}-th training epoch is : {loss}')
+            logger.info("Supervised_SimCLR loss of the %s-th training epoch is: %s", epoch, loss)
             self.progress.emit(int((epoch / nepochs) * 100))
             QCoreApplication.processEvents()
 

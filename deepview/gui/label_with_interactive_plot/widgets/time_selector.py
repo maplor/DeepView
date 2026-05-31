@@ -151,7 +151,6 @@ class TimeSelectorWidget(QLabel):
     def reset_green_blocks(self, video_time_list, hourly_data):
         self.video_time_list = video_time_list #[('2024-05-28 06:20:29', '2024-05-28 06:21:29'), ('2024-05-28 06:27:33', '2024-05-28 06:28:33'), ('2024-05-28 07:41:39', '2024-05-28 07:42:39'), ('2024-05-28 07:55:24', '2024-05-28 07:56:24')]
         self.hourly_data = hourly_data
-        # print(self.hourly_data)
         # 重新设置预定义的时间段
         self.update()
 
@@ -162,7 +161,6 @@ class TimeSelectorWidget(QLabel):
             end_str = end_str.split()[1]
             start_time = QTime.fromString(start_str, "HH:mm:ss")
             end_time = QTime.fromString(end_str, "HH:mm:ss")
-            # print(start_time, end_time)
             if start_time.isValid() and end_time.isValid():
                 segments.append((start_time, end_time))
         return segments
@@ -272,9 +270,6 @@ class DateTimeSelector(QWidget):
         start_of_day = datetime.strptime(date.toString('yyyy-MM-dd'), '%Y-%m-%d')
         end_of_day = start_of_day + timedelta(days=1)
 
-        # print(start_of_day) # 2024-05-28 00:00:00
-        # print(end_of_day) # 2024-05-29 00:00:00
-
         # 查询特定日期的数据
         cursor.execute('''
         SELECT video_stt, video_stp FROM videos
@@ -283,7 +278,6 @@ class DateTimeSelector(QWidget):
 
         # 获取查询结果
         results = cursor.fetchall()
-        # print(results)
 
         # 将结果转换为包含开始和结束时间的列表
         self.video_time_list = [(row[0], row[1]) for row in results]
@@ -327,7 +321,6 @@ class DateTimeSelector(QWidget):
 
         # 将结果添加到text_edit里
         self.text_edit.clear()
-        # print(time_list)
         for start_time, end_time, label in time_list:
             start_time_str = start_time.split()[1]  # Extract time part
             end_time_str = end_time.split()[1]  # Extract time part

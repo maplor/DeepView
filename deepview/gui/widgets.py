@@ -1,5 +1,6 @@
 
 import ast
+import logging
 import os
 # import warnings
 
@@ -22,6 +23,9 @@ from PySide6.QtGui import QStandardItemModel, QStandardItem, QCursor, QAction
 # from skimage import io  # scikit-image is a collection of algorithms for image processing
 
 from deepview.utils import auxiliaryfunctions
+
+
+logger = logging.getLogger(__name__)
 
 #--------------own packages------------------
 # from deeplabcut.utils import auxiliaryfunctions
@@ -319,7 +323,7 @@ class DictViewer(QtWidgets.QWidget):
         except SyntaxError:
             # Slashes also raise the error, but no need to print anything since it is then likely to be a path
             if os.path.sep not in val:
-                print("Consider removing leading zeros or spaces in the string.")
+                logger.warning("Consider removing leading zeros or spaces in the string")
         return val
 
     @staticmethod
@@ -381,7 +385,7 @@ class DictViewer(QtWidgets.QWidget):
             for i, val in enumerate(data):
                 self.add_row(str(i), val, tree_widget)
         else:
-            print("This should never be reached!")
+            logger.error("Unexpected non-container data reached populate_tree")
 
     def add_row(self, key, val, tree_widget):
         if isinstance(val, dict) or isinstance(val, list):

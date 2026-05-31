@@ -1,9 +1,13 @@
 from __future__ import print_function
 
+import logging
 import math
 import numpy as np
 import torch
 import torch.optim as optim
+
+
+logger = logging.getLogger(__name__)
 
 
 class TwoCropTransform:
@@ -53,7 +57,7 @@ def accuracy(output, target, topk=(1,)):
 
 
 def save_model(model, optimizer, opt, epoch, save_file):
-    print('==> Saving...')
+    logger.info("Saving model to %s", save_file)
     state = {
         'opt': opt,
         'model': model.state_dict(),

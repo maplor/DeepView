@@ -1,4 +1,5 @@
 import os
+import logging
 from pathlib import Path
 import pickle
 import pandas as pd
@@ -43,6 +44,9 @@ from deepview.gui.components import (
 
 from deepview.utils import auxiliaryfunctions
 from deepview.gui.supervised_cl.ui import styles
+
+
+logger = logging.getLogger(__name__)
 
 
 class SelectModelWidget(QWidget):
@@ -308,6 +312,6 @@ class SelectModelWidget(QWidget):
     def update_selected_items(self):
         # 更新当前选中的选项
         selected_items = [checkbox.text() for checkbox in self.display_dataset_cb_list if checkbox.isChecked()]
-        print(f"当前选中的选项: {selected_items}")
+        logger.debug("Selected items: %s", selected_items)
 
 

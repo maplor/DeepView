@@ -97,7 +97,6 @@ class EvaluateNetwork(DefaultTab):
 
         if file_name:
             self.file_path_edit.setText(file_name)  # file_name为全路径
-            # print(f"Selected File Path: {file_name}")
 
     def _generate_additional_attributes(self, layout):
         tmp_layout = _create_horizontal_layout(margins=(0, 0, 0, 0))
@@ -142,7 +141,6 @@ class EvaluateNetwork(DefaultTab):
             plotting=plotting,
             show_errors=True,
         )
-        # print('evaluation finished...')
         msg = QtWidgets.QMessageBox()
         msg.setIcon(QtWidgets.QMessageBox.Information)
         msg.setText("The meta data is successfully created and ready to plot.")

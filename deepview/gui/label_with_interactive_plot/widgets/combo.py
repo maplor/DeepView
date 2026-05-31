@@ -61,8 +61,6 @@ class ReComboBox:
                 # Remove the item from the dictionary
                 if i in self.label_dict:
                     del self.label_dict[i]
-                    # print(self.label_dict)
-                    # print(f"Removed {i} from dictionary")
 
 
 # 定义LabelOption类，继承自QDialog

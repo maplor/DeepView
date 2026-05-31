@@ -4,6 +4,7 @@
 
 #
 import os
+import logging
 import matplotlib.image as mpimg
 from matplotlib.backends.backend_qt5agg import (
     FigureCanvasQTAgg as FigureCanvas,
@@ -31,6 +32,9 @@ import deepview
 from deepview.utils.auxiliaryfunctions import (
     get_unsupervised_set_folder,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 '''
@@ -96,7 +100,7 @@ class SupervisedLearningNewLabels(DefaultTab):
                 relative=False,
             )
 
-        print("Calculate supervised learning result")
+        logger.info("Calculate supervised learning result")
         newSelectFilename = []
         for cb in self.display_dataset_train_list:
             if cb.isChecked():

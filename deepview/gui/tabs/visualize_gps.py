@@ -1,4 +1,6 @@
 
+import logging
+
 from deepview.gui.components import (
     DefaultTab,
     _create_grid_layout,
@@ -23,6 +25,9 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 import pandas as pd
 import contextily as ctx
+
+
+logger = logging.getLogger(__name__)
 
 
 class GPSDisplayer(DefaultTab):
@@ -104,11 +109,9 @@ class GPSDisplayer(DefaultTab):
                             tmpdf = pickle.load(f)
                     elif file.endswith('.csv'):
                         tmpdf = pd.read_csv(file, low_memory=False)
-                        # print('1')
                     else:
-                        print('Cannot load GPS data, please check file type, should be csv or pkl files.')
+                        logger.warning("Cannot load GPS data; file type should be csv or pkl")
                         tmpdf = []
-                    # print('2')
                     df = tmpdf[['latitude', 'longitude']].copy()
                     df = df.dropna()
                     latitudes = df['latitude']
@@ -136,7 +139,7 @@ class GPSDisplayer(DefaultTab):
 
                     # Validate the data
                     if latitudes.isnull().any() or longitudes.isnull().any():
-                        print(f"Data in {file} contains null values. Please check the pkl file.")
+                        logger.warning("Data in %s contains null values. Please check the pkl file.", file)
                         continue
 
                     # Add the QWebEngineView to the grid layout
@@ -152,8 +155,5 @@ class GPSDisplayer(DefaultTab):
                     if col >= 3:
                         col = 0
                         row += 1
-
-                    # print(f"Trajectory map saved to {output_file}")
-
-                except Exception as e:
-                    print(f"An error occurred while processing {file}: {e}")
+                except Exception:
+                    logger.exception("An error occurred while processing %s", file)

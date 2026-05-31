@@ -36,8 +36,7 @@ class SupervisedClDataMixin:
                 'epoch': self.new_scatter_map_widget.epoch,
             }
             torch.save(state, full_model_path_new)
-        except Exception as e:
-            # print(e)
+        except Exception:
             pass
 
     def display_old_scatter_data(self):

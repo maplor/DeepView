@@ -26,12 +26,16 @@ from deepview.utils.auxiliaryfunctions import (
 from pathlib import Path
 import os
 import pickle
+import logging
 import geopandas as gpd
 import pandas as pd
 import contextily as ctx
 from shapely.geometry import Point
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+
+
+logger = logging.getLogger(__name__)
 from PySide6.QtGui import QShowEvent
 
 class GPSIMU_Interaction(DefaultTab):
@@ -231,4 +235,4 @@ class GPSIMU_Interaction(DefaultTab):
 
     def update_result(self, result):
         # self.result_label.setText(f"Result: {result}")
-        print(result)
+        logger.debug("Result: %s", result)

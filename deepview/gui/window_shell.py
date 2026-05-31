@@ -93,7 +93,7 @@ class WindowShellMixin:
         self.loc_default = str(Path.home())
 
     def closeEvent(self, event):
-        print("Exiting...")
+        self.logger.info("Exiting")
         answer = QtWidgets.QMessageBox.question(
             self,
             "Quit",
@@ -107,4 +107,3 @@ class WindowShellMixin:
             self.save_settings()
         else:
             event.ignore()
-            print("")

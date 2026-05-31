@@ -329,7 +329,6 @@ def main():
         # time1 = time.time()
         loss = train(train_loader, model, criterion, optimizer, epoch, opt)
         # time2 = time.time()
-        # print('epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
     # evaluate and plot
     evaluate(model, epoch)
 

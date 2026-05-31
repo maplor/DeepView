@@ -1,4 +1,5 @@
 import math
+import logging
 from PySide6.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QCheckBox
 from PySide6.QtCore import QTimer, QRectF, Qt
 import numpy as np
@@ -6,6 +7,7 @@ import pandas as pd
 import pyqtgraph as pg
 
 clickedPen = pg.mkPen('b', width=2)
+logger = logging.getLogger(__name__)
 
 class PlotWithInteraction(QWidget):
     def __init__(self, data: pd.DataFrame) -> None:
@@ -69,7 +71,7 @@ class PlotWithInteraction(QWidget):
             if self.checkboxList[i].isChecked():
                 newSelectColumn.append(column)
         self.selectColumn = newSelectColumn
-        print('selectColumn: %s'%(newSelectColumn))
+        logger.debug("Selected columns: %s", newSelectColumn)
 
         self.renderLeftPlot()
         self.updateBtn()
@@ -132,7 +134,7 @@ class PlotWithInteraction(QWidget):
         self.computeBtn = btn
 
     def handleCompute(self):
-        print('start train...')
+        logger.info("Start training")
         self.isTarining = True
         self.updateBtn()
 
@@ -140,7 +142,7 @@ class PlotWithInteraction(QWidget):
         self.computeTimer.singleShot(1500, self.handleComputeFinish)
 
     def handleComputeFinish(self):
-        print('finish train')
+        logger.info("Finish training")
         self.isTarining = False
         self.updateBtn()
 
@@ -235,7 +237,6 @@ class PlotWithInteraction(QWidget):
 
         self.selectRect.setRect(pos.x(), pos.y(), size.x(), size.y())
         points = self.scatterItem.pointsAt(self.selectRect)
-        # print('points: %s'%([i.data() for i in points]))
 
         # reset last change points
         for p in self.lastChangePoint:
@@ -253,7 +254,7 @@ class PlotWithInteraction(QWidget):
 
         self.selectRect.setRect(pos.x(), pos.y(), size.x(), size.y())
         points = self.scatterItem.pointsAt(self.selectRect)
-        print('roi select points data: %s'%([i.data() for i in points]))
+        logger.debug("ROI selected points data: %s", [i.data() for i in points])
 
         # remove last marks, removeItem() will ignore item not add
         for mark in self.lastMarkList:

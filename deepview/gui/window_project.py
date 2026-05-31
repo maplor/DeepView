@@ -119,7 +119,6 @@ class WindowProjectMixin:
             open_project.config,
             open_project.loaded,
         )
-        # print('Todo: open an existing project...')
 
     # def _goto_superanimal(self):
     #     self.tab_widget = QtWidgets.QTabWidget()
@@ -133,4 +132,4 @@ class WindowProjectMixin:
     def load_config(self, config):
         self.config = config
         self.config_loaded.emit()
-        print(f'Project "{self.cfg["Task"]}" successfully loaded.')
+        self.logger.info('Project "%s" successfully loaded.', self.cfg["Task"])

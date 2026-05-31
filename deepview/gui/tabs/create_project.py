@@ -152,7 +152,7 @@ class ProjectCreator(QtWidgets.QDialog):
         try:
             files = list(self.file_frame.selected_items)
             if not len(files):
-                print("Add at least a file to the project.")
+                self.parent.logger.warning("Add at least a file to the project")
                 self.file_frame.fancy_list.setStyleSheet("border: 1px solid red")
                 return
             else:
@@ -175,7 +175,7 @@ class ProjectCreator(QtWidgets.QDialog):
                 loaded=True,
             )
         except FileExistsError:
-            print('Project "{}" already exists!'.format(self.proj_default))
+            self.parent.logger.warning('Project "%s" already exists', self.proj_default)
             return
 
         msg = QtWidgets.QMessageBox(text=f"New project created")

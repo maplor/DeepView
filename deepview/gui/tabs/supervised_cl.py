@@ -1,4 +1,5 @@
 import os
+import logging
 import pandas as pd
 from pathlib import Path
 
@@ -24,6 +25,9 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineSettings
 from PySide6.QtWidgets import QSizePolicy
+
+
+logger = logging.getLogger(__name__)
 
 
 class SupervisedCLTab(DefaultTab):
@@ -88,7 +92,7 @@ def get_plot_data(config):
     )[0]
 
     if not rawdata_file:
-        print('can not find raw data')
+        logger.warning("Cannot find raw data")
         return
 
     edit_data_path = os.path.join(cfg["project_path"], "edit-data", rawdata_file.name)

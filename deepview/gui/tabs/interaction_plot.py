@@ -1,4 +1,5 @@
 import os
+import logging
 from pathlib import Path
 from PySide6.QtWidgets import QLabel
 import pandas as pd
@@ -11,6 +12,9 @@ from deepview.gui.components import (
     _create_vertical_layout,
 )
 from deepview.gui.plot import PlotWithInteraction
+
+
+logger = logging.getLogger(__name__)
 
 class InteractionPlot(DefaultTab):
     def __init__(self, root, parent, h1_description):
@@ -50,7 +54,7 @@ def get_plot_data(config):
     )[0]
 
     if not rawdata_file:
-        print('can not find raw data')
+        logger.warning("Cannot find raw data")
         return
     
     df = pd.read_csv(rawdata_file)
