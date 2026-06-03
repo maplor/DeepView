@@ -1,0 +1,38 @@
+# DeepView dependencies — Apple Silicon (MPS) build
+# Generated for Python 3.9, macOS arm64
+
+# GUI
+PySide6==6.3.1
+pyqtgraph
+qdarkstyle
+
+# ML / Deep Learning (Apple Silicon MPS)
+torch==2.4.0
+torchvision==0.19.0
+timm==1.0.8
+einops
+safetensors==0.4.4
+huggingface-hub==0.24.6
+
+# Scientific computing
+numpy==1.26.4
+pandas==2.2.2
+scipy
+scikit-learn
+matplotlib
+seaborn
+umap-learn
+shapely
+
+# Config / utils
+omegaconf
+ruamel.yaml
+pyyaml
+tqdm
+psutil
+requests
+
+# Annotation tool
+# mad-gui: conflicts with PySide6 (requires PySide2). The project uses
+# mad_gui_main which should be cloned separately and placed in the project root.
+# See: https://github.com/mad-lab-fau/mad-gui
