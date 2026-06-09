@@ -132,8 +132,12 @@ dmypy.json
 Thumbs.db
 
 # Project specific
-deepview/calculate_results/
 test-data/
+
+# Raw data (too large for git, store locally or in Box)
+data/*/raw/
+# Allow directory markers
+!data/*/raw/.gitkeep
 
 # Large data / model files
 *.npz
@@ -145,3 +149,21 @@ test-data/
 *.hdf5
 *.onnx
 *.bin
+
+# Project-local virtual environments
+albe/
+
+# Analysis — generated figures and output files
+analysis/*/figures/
+analysis/model_check_point/
+analysis/pape_results/fig_*/
+analysis/pape_results/panelB_final/
+analysis/pape_results/figures/
+analysis/pape_results/*.html
+analysis/pape_results/*.png
+analysis/pape_results/*.pdf
+analysis/pape_results/*.svg
+analysis/pape_results/*.pptx
+analysis/pape_results/*.txt
+analysis/pape_results/*.csv
+analysis/models/*.csv

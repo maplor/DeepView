@@ -119,10 +119,11 @@ DeepView/
 │   │   ├── myexporter.py                       # BaseExporter 实现
 │   │   └── __init__.py
 │   │
-│   └── calculate_results/                      # 研究结果分析（实验脚本）
-│       ├── models/
-│       ├── GUIcode/
-│       └── data/                               # 各数据集实验代码
+│
+├── analysis/                                   # 研究分析（Nature figure 脚本，独立于 GUI）
+│   ├── models/                                 # 实验模型脚本与 notebooks
+│   ├── pape_results/                           # 论文图表与结果
+│   └── GUIcode/                                # 独立 GUI 实验代码
 │
 ├── test-data/                                  # 测试数据集
 ├── conda-env/                                  # Conda 环境配置
