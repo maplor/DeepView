@@ -552,7 +552,10 @@ class BaseDataset(Dataset):
 
 
 class DatasetLogbot2(Dataset):
-    def __init__(self, samples, labels, device='cuda'):
+    def __init__(self, samples, labels, device=None):
+        if device is None:
+            from deepview.utils.device import get_device
+            device = get_device()  # cuda > mps (Apple Silicon) > cpu
         self.samples = torch.from_numpy(samples.astype(float))  # activity label of the sensor segment
         self.labels = torch.tensor(np.array(labels).astype(int))  # filename of the data belongs to
         # self.label = torch.tensor(label)  # filename of the data belongs to

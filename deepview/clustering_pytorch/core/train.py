@@ -83,8 +83,8 @@ def train(
     from deepview.utils import auxiliaryfunctions
     data_path = os.path.join(project_path, auxiliaryfunctions.get_unsupervised_set_folder())
 
-    # device = 'cpu'
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    from deepview.utils.device import get_device
+    device = get_device()  # cuda > mps (Apple Silicon) > cpu
     # xia, dataloader,将Train network tab中选中的文件传入这个函数， todo 目前写死了
     if net_type in ['AE_CNN', 'shortAE']:
         augment = False
@@ -94,13 +94,16 @@ def train(
         augment = False
     if not stop_callback():
         return
+    # Keep the dataset on CPU; the train loops move each batch to `device` with
+    # the model's dtype. (MPS cannot hold float64 tensors, so we must not
+    # preload float64 data onto the GPU here.)
     train_dataloader, num_channel = prepare_all_data(data_path,
                                                      select_filenames,
                                                      data_len,
                                                      data_column,
                                                      batch_size,
                                                      augment,
-                                                     device)
+                                                     'cpu')
 
     if not stop_callback():
         return

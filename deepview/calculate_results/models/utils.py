@@ -1391,11 +1391,14 @@ def AE_train_time_series(train_loader, model, criterion, optimizer):
     # print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
     return losses
 
-def AE_train_time_series_resnet(train_loader, model, criterion, optimizer, epoch, scheduler, device='cuda'):
+def AE_train_time_series_resnet(train_loader, model, criterion, optimizer, epoch, scheduler, device=None):
     """
     Train according to the scheme from SimCLR
     https://arxiv.org/abs/2002.05709
     """
+    if device is None:
+        from deepview.utils.device import get_device
+        device = get_device()  # cuda > mps (Apple Silicon) > cpu
     # losses = AverageMeter('Loss', ':.4e')
     losses = []
 
@@ -1428,11 +1431,14 @@ def AE_train_time_series_resnet(train_loader, model, criterion, optimizer, epoch
     # print('loss of the ' + str(epoch) + '-th training epoch is :' + losses.__str__())
     return losses
 
-def Classify_train_time_series_resnet(train_loader, model, criterion, optimizer, epoch, scheduler, device='cuda'):
+def Classify_train_time_series_resnet(train_loader, model, criterion, optimizer, epoch, scheduler, device=None):
     """
     Train according to the scheme from SimCLR
     https://arxiv.org/abs/2002.05709
     """
+    if device is None:
+        from deepview.utils.device import get_device
+        device = get_device()  # cuda > mps (Apple Silicon) > cpu
     losses = AverageMeter('Loss', ':.4e')
 
     model.train()

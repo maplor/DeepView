@@ -83,7 +83,12 @@ def get_model(p_backbone, p_setup, num_channel=3, data_len=180, pretrain_path=No
             'backbone': backbone,
             'dim': 2816  #out_channels*22
         }
-        model = ContrastiveModel(backbone, 'mlp', 128).double()
+        from deepview.utils.device import get_device
+        model = ContrastiveModel(backbone, 'mlp', 128)
+        # MPS (Apple Silicon) has no float64 support; keep the legacy float64
+        # precision on CPU/CUDA but stay float32 on MPS.
+        if get_device().type != 'mps':
+            model = model.double()
     else:
         raise ValueError('Invalid setup {}'.format(p_setup))
 

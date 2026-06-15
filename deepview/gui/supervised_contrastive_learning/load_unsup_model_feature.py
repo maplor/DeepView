@@ -20,7 +20,7 @@ from deepview.clustering_pytorch.nnet.common_config import get_model
 from deepview.clustering_pytorch.datasets.factory import prepare_unsup_dataset
 from deepview.clustering_pytorch.nnet.train_utils import AE_eval_time_series, AE_eval_time_series_labelflag
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu'))
 
 #-----------------prepare data-------------------------------
 def set_loader(labeled_flag):

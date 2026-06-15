@@ -297,7 +297,7 @@ print("X_test shape:", X_test.shape)
 1 - initFramework()
 传入传感器类型，生成模型框架
 '''
-device =  'cuda:0' if torch.cuda.is_available() else 'cpu'
+device =  'cuda:0' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu')
 # sensor_types = ['accelerometer', 'gyroscope', 'magnetometer',
 #                'pressure', 'temperature', 'light', 'sound', 'depth']
 

@@ -34,7 +34,7 @@ try:
 except ImportError:
     pass
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu'))
 p_setup = 'simclr'
 if p_setup == 'simclr':
     AUGMENT = True  # 也存到yaml文件或者opt里
@@ -209,8 +209,8 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
     losses = AverageMeter()
 
     for idx, (aug_sample1, aug_sample2, timestamp, labels, label_flags) in enumerate(tqdm(train_loader)):
-        aug_sample1 = aug_sample1.to(dtype=torch.double)
-        aug_sample2 = aug_sample2.to(dtype=torch.double)
+        aug_sample1 = aug_sample1.to(dtype=next(model.parameters()).dtype)  # float32 on MPS, float64 on CPU/CUDA
+        aug_sample2 = aug_sample2.to(dtype=next(model.parameters()).dtype)  # float32 on MPS, float64 on CPU/CUDA
 
         images = torch.cat([aug_sample1, aug_sample2], dim=0)
         images = images.to(device, non_blocking=True)
@@ -256,8 +256,8 @@ def evaluate(model, epoch, train_loader, fig_name):
     representation_list, flag_list, label_list = [], [], []
 
     for idx, (aug_sample1, aug_sample2, timestamp, labels, label_flags) in enumerate(tqdm(train_loader)):
-        aug_sample1 = aug_sample1.to(dtype=torch.double)
-        aug_sample2 = aug_sample2.to(dtype=torch.double)
+        aug_sample1 = aug_sample1.to(dtype=next(model.parameters()).dtype)  # float32 on MPS, float64 on CPU/CUDA
+        aug_sample2 = aug_sample2.to(dtype=next(model.parameters()).dtype)  # float32 on MPS, float64 on CPU/CUDA
         images = torch.cat([aug_sample1, aug_sample2], dim=0)
         images = images.to(device, non_blocking=True)
         features, backboneout = model(images)

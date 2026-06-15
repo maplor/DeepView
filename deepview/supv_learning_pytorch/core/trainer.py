@@ -313,7 +313,7 @@ def load_and_setup_test_config(config_path, TEST_CUDA_ID, checkpoints_fname=None
     print(cfg.dataset.labelled.animal_id_list.test)
 
     cfg.train.cuda = TEST_CUDA_ID
-    DEVICE = torch.device('cuda:' + str(cfg.train.cuda) if torch.cuda.is_available() else 'cpu')
+    DEVICE = torch.device('cuda:' + str(cfg.train.cuda) if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu'))
     print(f"DEVICE: {DEVICE}")
     
     cfg.train.data_augmentation = False

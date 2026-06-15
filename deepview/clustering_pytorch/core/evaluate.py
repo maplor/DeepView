@@ -67,7 +67,8 @@ def evaluate_network(
             cfg["project_path"], str(modelfoldername), "train")
         ).glob('*.pth')
     )[0]
-    device = 'cpu'
+    from deepview.utils.device import get_device
+    device = get_device()  # cuda > mps (Apple Silicon) > cpu
     model = get_model(p_backbone=net_type, p_setup='autoencoder')  # set backbone model=ResNet18, SSL=simclr, weight
     model = model.to(device)
     print('Restart from checkpoint')

@@ -150,7 +150,7 @@ def train_sup_network(
         test_filenames
 ):
     # DEVICE = 'cpu'
-    DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    DEVICE = torch.device('cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu'))
     print('device using %s' % DEVICE)
 
     root_cfg = read_config(root.config)

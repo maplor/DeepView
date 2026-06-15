@@ -75,8 +75,8 @@ def train(train_loader, model, method, criterion, optimizer, epoch, num_epochs, 
     losses = AverageMeter()
 
     for idx, (aug_sample1, aug_sample2, timestamp, labels, label_flags) in enumerate(tqdm(train_loader)):
-        aug_sample1 = aug_sample1.to(dtype=torch.double)
-        aug_sample2 = aug_sample2.to(dtype=torch.double)
+        aug_sample1 = aug_sample1.to(dtype=next(model.parameters()).dtype)  # float32 on MPS, float64 on CPU/CUDA
+        aug_sample2 = aug_sample2.to(dtype=next(model.parameters()).dtype)  # float32 on MPS, float64 on CPU/CUDA
 
         images = torch.cat([aug_sample1, aug_sample2], dim=0)
         images = images.to(device, non_blocking=True)
@@ -123,8 +123,8 @@ def evaluate(model, train_loader, device):
     representation_list, flag_list, label_list = [], [], []
 
     for idx, (aug_sample1, aug_sample2, timestamp, labels, label_flags) in enumerate(tqdm(train_loader)):
-        aug_sample1 = aug_sample1.to(dtype=torch.double)
-        aug_sample2 = aug_sample2.to(dtype=torch.double)
+        aug_sample1 = aug_sample1.to(dtype=next(model.parameters()).dtype)  # float32 on MPS, float64 on CPU/CUDA
+        aug_sample2 = aug_sample2.to(dtype=next(model.parameters()).dtype)  # float32 on MPS, float64 on CPU/CUDA
         images = torch.cat([aug_sample1, aug_sample2], dim=0)
         images = images.to(device, non_blocking=True)
         features, backboneout = model(images)

@@ -223,7 +223,8 @@ with open('../data.pkl', 'rb') as f:
     df_ready = pickle.load(f)
 sensor_type = 'accel'
 batch_size = 512
-device = 'cuda'
+from deepview.utils.device import get_device
+device = get_device()
 len_sw = 180
 selected_columns = ['acc_x', 'acc_y', 'acc_z',
                    'label_id']  # without timestamps
@@ -240,7 +241,8 @@ train_loader = DataLoader(train_set_r, batch_size=batch_size,
 ### %------------
 
 out_channels = 32
-device = 'cuda'
+from deepview.utils.device import get_device
+device = get_device()
 model = Autoencoder(len_sw)
 model = model.to(device)
 

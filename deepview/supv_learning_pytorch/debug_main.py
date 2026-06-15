@@ -48,7 +48,7 @@ all_animal_id_list = ["OM1802"
             )
 def main(cfg: DictConfig):
     # DEVICE = 'cpu'
-    DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu'))
     print('device using %s' % DEVICE)
     # initialization of train, val, and test animal id list
     test_animal_id_list = ["OM2214"]

@@ -32,10 +32,9 @@ class DeepConvLSTMSelfAttn(nn.Module): # DCLSA
         self.num_attn_layers = cfg.model.num_attn_layers
         self.out_layer_type = cfg.model.out_layer_type
         self.out_dropout_rate = cfg.model.out_dropout_rate  
-        if 'cuda:' in str(cfg.train.cuda):
-            self.cuda_device = cfg.train.cuda
-        else:
-            self.cuda_device = 'cuda:' + str(cfg.train.cuda)
+        from deepview.utils.device import get_device
+        # cuda:N if CUDA present, else MPS (Apple Silicon) / CPU
+        self.cuda_device = get_device(cfg.train.cuda)
 
         # Added for experiment 06 model params (hyperparameter tuning)
         # if cfg.metadata.approach == "experiment-06-model-params" and cfg.metadata.task == "model-params":

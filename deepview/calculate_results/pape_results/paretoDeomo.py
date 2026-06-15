@@ -87,7 +87,7 @@ def accuracy_class(predict_labels, true_labels):
 
 #-------------------------parameters---------------------------
 
-device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
+device = 'cuda:1' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu')
 len_sw = 50
 batch_size = 2000
 num_epochs = 50
@@ -127,7 +127,7 @@ WEIGHT_IDX = -1                     # 从 results.pkl 的 weight_list 里取第�
 # LEN_SW = 50                         # 滑窗长度，需与训练一致
 TEST_SIZE = 0.2                     # 测试集比例
 SEED = 42                           # train_test_split 的随机种子（与训练保持一致）
-# DEVICE = "cuda:0"                   # 自动：'cuda:0' if torch.cuda.is_available() else 'cpu'
+# DEVICE = "cuda:0"                   # 自动：'cuda:0' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu')
 
 
 sensors = ["ACC","GYRO","MAG","TEMP","PRES","ILLU","GPS"]

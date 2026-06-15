@@ -63,9 +63,10 @@ def fill_memory_bank(loader, model, memory_bank):
     model.eval()
     memory_bank.reset()
 
+    device = next(model.parameters()).device
     for i, batch in enumerate(loader):
-        images = batch['image'].cuda(non_blocking=True)
-        targets = batch['target'].cuda(non_blocking=True)
+        images = batch['image'].to(device, non_blocking=True)
+        targets = batch['target'].to(device, non_blocking=True)
         output = model(images)
         memory_bank.update(output, targets)
         if i % 100 == 0:

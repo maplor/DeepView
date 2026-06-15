@@ -30,10 +30,9 @@ class ResNetLSTMSelfAttn(nn.Module): # RNLSA (DCLSA-RN in the study paper)
         self.num_attn_layers = cfg.model.num_attn_layers
         self.out_layer_type = cfg.model.out_layer_type
         self.out_dropout_rate = cfg.model.out_dropout_rate  
-        if 'cuda:' in str(cfg.train.cuda):
-            self.cuda_device = cfg.train.cuda
-        else:
-            self.cuda_device = 'cuda:' + str(cfg.train.cuda)
+        from deepview.utils.device import get_device
+        # cuda:N if CUDA present, else MPS (Apple Silicon) / CPU
+        self.cuda_device = get_device(cfg.train.cuda)
             
         # -- [1] First Conv Layer --
         self.first_conv_layer = nn.Sequential(

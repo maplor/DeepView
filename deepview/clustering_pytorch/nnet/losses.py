@@ -53,7 +53,7 @@ class ConfidenceBasedCE(nn.Module):
         if self.apply_class_balancing:
             idx, counts = torch.unique(target_masked, return_counts=True)
             freq = 1 / (counts.float() / n)
-            weight = torch.ones(c).cuda()
+            weight = torch.ones(c, device=anchors_weak.device)
             weight[idx] = freq
 
         else:
@@ -139,7 +139,7 @@ class SimCLRLoss(nn.Module):
 
         b, n, dim = features.size()
         assert (n == 2)
-        mask = torch.eye(b, dtype=torch.float32).cuda()
+        mask = torch.eye(b, dtype=torch.float32, device=features.device)
 
         contrast_features = torch.cat(torch.unbind(features, dim=1), dim=0)
         anchor = features[:, 0]
@@ -152,7 +152,7 @@ class SimCLRLoss(nn.Module):
         logits = dot_product - logits_max.detach()
 
         mask = mask.repeat(1, 2)
-        logits_mask = torch.scatter(torch.ones_like(mask), 1, torch.arange(b).view(-1, 1).cuda(), 0)
+        logits_mask = torch.scatter(torch.ones_like(mask), 1, torch.arange(b, device=features.device).view(-1, 1), 0)
         mask = mask * logits_mask
 
         # Log-softmax

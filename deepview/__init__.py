@@ -1,6 +1,9 @@
 
 
 import os
+# Let MPS (Apple Silicon GPU) fall back to CPU for ops not yet implemented for
+# Metal, instead of crashing. Must be set before torch is first used.
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 DEBUG = True and "DEBUG" in os.environ and os.environ["DEBUG"]
 # from deepview.version import __version__, VERSION
 

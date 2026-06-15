@@ -362,7 +362,7 @@ with open('all_norm_data.pkl', 'rb') as file:  # 'rb'表示以二进制读取模
 
 
 len_sw = 50
-device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
+device = 'cuda:1' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu')
 batch_size = 4000
 all_dataset = data_loader_umineko(data_b.astype(float), vote_label)
 all_loader = DataLoader(all_dataset, batch_size=batch_size, shuffle=False, drop_last=False)

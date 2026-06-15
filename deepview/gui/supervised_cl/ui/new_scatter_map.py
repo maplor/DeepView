@@ -41,7 +41,7 @@ from deepview.utils.auxiliaryfunctions import (
 )
 
 
-# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# device = torch.device('cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu'))
 p_setup = 'simclr'
 if p_setup == 'simclr':
     AUGMENT = True  # 也存到yaml文件或者opt里
@@ -72,10 +72,12 @@ class Scl2ClWorker(QObject):
             self.data, self.column_names, self.data_length
         )
 
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device = torch.device('cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu'))
+        # keep the dataset on CPU; the training loop moves each batch to `device`
+        # (MPS cannot hold float64 tensors, so don't preload data onto the GPU)
         train_loader = generate_dataloader(
             selected_data, label, timestamp, self.batch_size,
-            True, device, label_flag, self.aug1, self.aug2
+            True, 'cpu', label_flag, self.aug1, self.aug2
         )
 
         num_channel = selected_data.shape[-1]
@@ -243,9 +245,11 @@ class NewScatterMapWidget(QWidget):
                                                                           column_names,
                                                                           data_length)
 
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device = torch.device('cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu'))
+        # keep the dataset on CPU; the training loop moves each batch to `device`
+        # (MPS cannot hold float64 tensors, so don't preload data onto the GPU)
         train_loader = generate_dataloader(selected_data, label, timestamp, batch_size,
-                                           True, device, label_flag, aug1, aug2)
+                                           True, 'cpu', label_flag, aug1, aug2)
 
         # get model input channel
         num_channel = selected_data.shape[-1]

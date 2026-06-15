@@ -83,7 +83,7 @@ except Exception:
 TURTLE_PKL_PATH    = r"D:\code\DeepView\deepview\calculate_results\data\turtle\turtle.pkl"   # 数据文件路径（与你之前一致）
 SENSOR_TYPE        = "AccelGyroDepth"  # 备选: Accel / AccelDepth / GyroDepth / AccelGyro / AccelGyroDepth
 
-DEVICE             = "cuda:0" if torch.cuda.is_available() else "cpu"
+DEVICE             = "cuda:0" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
 BATCH_SIZE         = 4000            # 与原脚本一致的推理 batch
 UMAP_N_NEIGHBORS   = 15
 UMAP_MIN_DIST      = 0.1

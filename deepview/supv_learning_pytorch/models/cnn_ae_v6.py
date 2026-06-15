@@ -23,10 +23,9 @@ class CNN_AE6(nn.Module): # CNN-AE or AE5
 
         self.out_layer_type = cfg.model.out_layer_type
         self.out_dropout_rate = cfg.model.out_dropout_rate        
-        if 'cuda:' in str(cfg.train.cuda):
-            self.cuda_device = cfg.train.cuda
-        else:
-            self.cuda_device = 'cuda:' + str(cfg.train.cuda)
+        from deepview.utils.device import get_device
+        # cuda:N if CUDA present, else MPS (Apple Silicon) / CPU
+        self.cuda_device = get_device(cfg.train.cuda)
             
         if self.double_conv_filters == True:
             self.num_conv2_filters = self.num_conv1_filters * 2

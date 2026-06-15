@@ -24,10 +24,9 @@ class Transformer(nn.Module):
         self.dropout = cfg.model.dropout
         self.out_layer_type = cfg.model.out_layer_type
         self.out_dropout_rate = cfg.model.out_dropout_rate  
-        if 'cuda:' in str(cfg.train.cuda):
-            self.cuda_device = cfg.train.cuda
-        else:
-            self.cuda_device = 'cuda:' + str(cfg.train.cuda)
+        from deepview.utils.device import get_device
+        # cuda:N if CUDA present, else MPS (Apple Silicon) / CPU
+        self.cuda_device = get_device(cfg.train.cuda)
 
         self.transformer = Seq_Transformer(
             n_channel=self.in_ch,
